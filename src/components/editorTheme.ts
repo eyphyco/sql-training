@@ -55,10 +55,13 @@ const baseTheme = EditorView.theme({
     outline: 'none',
   },
   '.cm-tooltip': {
-    backgroundColor: 'var(--c-surface)',
+    // 画面に浮くものはヘッダ等と同じ「ガラス」に揃える
+    backgroundColor: 'var(--c-chrome)',
+    backdropFilter: 'blur(var(--blur-chrome)) saturate(1.8)',
+    WebkitBackdropFilter: 'blur(var(--blur-chrome)) saturate(1.8)',
     border: '1px solid var(--c-line)',
     borderRadius: 'var(--r-md)',
-    boxShadow: 'var(--shadow-pop)',
+    boxShadow: 'var(--shadow-pop), inset 0 1px 0 0 var(--c-glass-edge)',
     overflow: 'hidden',
   },
   '.cm-tooltip-autocomplete > ul > li': {

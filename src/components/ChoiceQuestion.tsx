@@ -20,7 +20,7 @@ export default function ChoiceQuestion({ problem }: { problem: MultipleChoicePro
         {problem.options.map((opt) => {
           const isPicked = selected === opt.id;
           const isAnswer = opt.id === problem.correct_option_id;
-          let tone = 'border-line bg-surface hover:border-line-strong hover:bg-raised';
+          let tone = 'glass-edge border-line bg-surface hover:border-line-strong hover:bg-raised';
           let markTone = 'border-line text-subtle';
           if (judged && isAnswer) {
             tone = 'border-success-line bg-success-soft';

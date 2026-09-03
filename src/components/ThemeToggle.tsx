@@ -15,7 +15,7 @@ export default function ThemeToggle() {
     <div
       role="radiogroup"
       aria-label="配色テーマ"
-      className="inline-flex items-center gap-0.5 rounded-md border border-line bg-raised p-0.5"
+      className="inline-flex items-center gap-0.5 rounded-full border border-line bg-sunken p-0.5"
     >
       {OPTIONS.map(({ value, label, Icon }) => {
         const active = choice === value;
@@ -27,10 +27,9 @@ export default function ThemeToggle() {
             aria-label={label}
             title={label}
             onClick={() => setChoice(value)}
-            className={`flex h-6 w-7 items-center justify-center rounded-sm transition-colors ${
-              active
-                ? 'bg-surface text-fg shadow-card'
-                : 'text-subtle hover:text-muted'
+            // 選択中だけ不透明なつまみを乗せる（溝の上を滑る物理的な操作子に見せる）
+            className={`flex h-6 w-7 items-center justify-center rounded-full transition-colors ${
+              active ? 'glass-edge bg-solid text-fg shadow-card' : 'text-subtle hover:text-muted'
             }`}
           >
             <Icon size={14} />

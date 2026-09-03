@@ -44,10 +44,10 @@ export default function ProblemList() {
   );
 
   const chip = (active: boolean) =>
-    `rounded-sm border px-2 py-1 text-[11.5px] font-medium transition-colors ${
+    `rounded-full border px-2.5 py-1 text-[11.5px] font-medium transition-colors ${
       active
         ? 'border-accent-line bg-accent-soft text-accent'
-        : 'border-line bg-surface text-muted hover:border-line-strong hover:text-fg'
+        : 'glass-edge border-line bg-surface text-muted hover:border-line-strong hover:text-fg'
     }`;
 
   return (
@@ -59,7 +59,7 @@ export default function ProblemList() {
         </span>
       </div>
 
-      <div className="space-y-2.5 rounded-lg border border-line bg-surface p-4">
+      <div className="glass space-y-2.5 rounded-lg border border-line bg-surface p-4">
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="w-14 shrink-0 text-[11px] text-subtle">フェーズ</span>
           {PHASES.map((p) => (
@@ -94,7 +94,7 @@ export default function ProblemList() {
           <select
             value={tag ?? ''}
             onChange={(e) => setParam('tag', e.target.value === '' ? null : e.target.value)}
-            className="rounded-sm border border-line bg-surface px-2 py-1 text-[11.5px] text-fg"
+            className="glass-edge rounded-full border border-line bg-surface px-3 py-1 text-[11.5px] text-fg"
           >
             <option value="">すべて</option>
             {ALL_TAGS.map((t) => (
@@ -114,7 +114,7 @@ export default function ProblemList() {
         </div>
       </div>
 
-      <ul className="overflow-hidden rounded-lg border border-line bg-surface">
+      <ul className="glass overflow-hidden rounded-lg border border-line bg-surface">
         {filtered.map((p) => {
           const solved = isSolved(p.id);
           return (

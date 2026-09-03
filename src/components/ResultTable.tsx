@@ -15,7 +15,7 @@ export default function ResultTable({ columns, rows, maxRows = 200, emptyMessage
   return (
     <div className="overflow-auto">
       <table className="tnum w-full border-collapse text-left text-[12.5px]">
-        <thead className="sticky top-0 z-10 bg-raised">
+        <thead className="glass-sticky sticky top-0 z-10">
           <tr>
             <th className="w-10 border-b border-line px-2 py-1.5 text-right font-mono text-[10.5px] font-normal text-subtle">
               #

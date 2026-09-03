@@ -15,7 +15,7 @@ const NAV = [
 
 function Header() {
   return (
-    <header className="sticky top-0 z-20 border-b border-line bg-canvas/85 backdrop-blur-md">
+    <header className="glass-chrome sticky top-0 z-20 border-b border-line">
       <div className="mx-auto flex h-14 max-w-5xl items-center gap-6 px-5">
         <Link
           to="/"

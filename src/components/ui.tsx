@@ -1,22 +1,23 @@
 import type { ReactNode } from 'react';
 
-/* ボタン: バリアントとサイズを固定し、画面ごとに書き分けないようにする */
+/* ボタン: バリアントとサイズを固定し、画面ごとに書き分けないようにする。
+   形はすべて角丸いっぱい（ピル）で統一する */
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
 type Size = 'sm' | 'md' | 'lg';
 
 const VARIANT: Record<Variant, string> = {
   primary:
-    'bg-accent-solid text-on-accent hover:bg-accent-solid-hover border border-transparent',
-  secondary: 'bg-surface text-fg border border-line hover:bg-raised hover:border-line-strong',
+    'bg-accent-solid text-on-accent hover:bg-accent-solid-hover border border-transparent raised-edge',
+  secondary: 'bg-surface text-fg border border-line hover:border-line-strong glass-edge',
   ghost: 'bg-transparent text-muted border border-transparent hover:bg-raised hover:text-fg',
   danger: 'bg-transparent text-danger border border-danger-line hover:bg-danger-soft',
 };
 
 const SIZE: Record<Size, string> = {
-  sm: 'h-7 px-2.5 text-xs gap-1.5 rounded-sm',
-  md: 'h-8 px-3 text-[13px] gap-1.5 rounded-sm',
-  lg: 'h-10 px-5 text-sm gap-2 rounded-md',
+  sm: 'h-7 px-3 text-xs gap-1.5',
+  md: 'h-8 px-3.5 text-[13px] gap-1.5',
+  lg: 'h-10 px-5 text-sm gap-2',
 };
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -34,7 +35,7 @@ export function Button({
 }: ButtonProps) {
   return (
     <button
-      className={`inline-flex shrink-0 items-center justify-center font-medium whitespace-nowrap transition-colors disabled:pointer-events-none disabled:opacity-45 ${VARIANT[variant]} ${SIZE[size]} ${className}`}
+      className={`inline-flex shrink-0 items-center justify-center rounded-full font-medium whitespace-nowrap transition-colors disabled:pointer-events-none disabled:opacity-45 ${VARIANT[variant]} ${SIZE[size]} ${className}`}
       {...rest}
     >
       {children}
@@ -42,7 +43,10 @@ export function Button({
   );
 }
 
-/** 面を1段持ち上げる箱。影ではなく境界と背景で層を作る */
+/**
+ * 面を1段持ち上げる箱。背後をぼかして色を拾う「ガラス」。
+ * 影と縁のハイライトは .glass が持つので、ここでは指定しない。
+ */
 export function Card({
   children,
   className = '',
@@ -53,9 +57,7 @@ export function Card({
   as?: 'div' | 'section' | 'article';
 }) {
   return (
-    <Tag className={`rounded-lg border border-line bg-surface shadow-card ${className}`}>
-      {children}
-    </Tag>
+    <Tag className={`glass rounded-lg border border-line bg-surface ${className}`}>{children}</Tag>
   );
 }
 
@@ -109,7 +111,7 @@ export function Tag({
   } as const;
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-xs border px-1.5 py-0.5 text-[11px] leading-4 font-medium ${tones[tone]} ${className}`}
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] leading-4 font-medium ${tones[tone]} ${className}`}
     >
       {children}
     </span>

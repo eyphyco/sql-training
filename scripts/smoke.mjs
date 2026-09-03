@@ -52,12 +52,24 @@ try {
   await page.click('button[aria-label="ライト"]');
   check('ライトに切り替わる', (await themeOf()) === 'light');
   const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-  check('ライトの背景色が明るい', bg === 'rgb(250, 249, 247)', bg);
+  check('ライトの背景色が明るい', bg === 'rgb(233, 237, 245)', bg);
   await page.click('button[aria-label="システム設定に従う"]');
   check(
     'システム追従に戻せる',
     (await page.evaluate(() => localStorage.getItem('sql-training:theme'))) === null,
   );
+
+  // 1c. ガラス（背後をぼかす面）が実際に効いていること
+  const glass = await page.evaluate(() => {
+    const panel = document.querySelector('.glass');
+    const chrome = document.querySelector('.glass-chrome');
+    return {
+      panel: panel ? getComputedStyle(panel).backdropFilter : '',
+      chrome: chrome ? getComputedStyle(chrome).backdropFilter : '',
+    };
+  });
+  check('カードの背後がぼける', /blur/.test(glass.panel), glass.panel);
+  check('ヘッダの背後がぼける', /blur/.test(glass.chrome), glass.chrome);
 
   // 2. 問題一覧
   await page.goto(`${base}#/problems`, { waitUntil: 'networkidle' });
