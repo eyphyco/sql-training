@@ -31,7 +31,8 @@ export default function ProblemDetail() {
 
   return (
     <div className="space-y-5">
-      <div>
+      {/* 見出しと問題文は読みやすい幅で止める。左端は作業領域と揃える */}
+      <div className="max-w-prose-wide">
         <div className="flex flex-wrap items-center gap-2 text-[12px]">
           <Link to="/problems" className="text-muted hover:text-fg">
             問題
@@ -69,7 +70,7 @@ export default function ProblemDetail() {
         </div>
       </div>
 
-      <Card className="p-5">
+      <Card className="max-w-prose-wide p-5">
         <Markdown>{problem.prompt_md}</Markdown>
       </Card>
 
@@ -77,7 +78,7 @@ export default function ProblemDetail() {
       {problem.type === 'multiple_choice' && <ChoiceQuestion key={problem.id} problem={problem} />}
       {problem.type === 'written' && <WrittenQuestion key={problem.id} problem={problem} />}
 
-      <nav className="flex items-center justify-between border-t border-line pt-4">
+      <nav className="flex max-w-prose-wide items-center justify-between border-t border-line pt-4">
         {prev ? (
           <Link
             to={`/problems/${prev}`}

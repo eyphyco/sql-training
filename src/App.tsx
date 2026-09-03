@@ -16,7 +16,7 @@ const NAV = [
 function Header() {
   return (
     <header className="glass-chrome sticky top-0 z-20 border-b border-line">
-      <div className="mx-auto flex h-14 max-w-5xl items-center gap-6 px-5">
+      <div className="mx-auto flex h-14 w-full max-w-page items-center gap-6 px-5 lg:px-8">
         <Link
           to="/"
           className="flex items-center gap-2 text-[13.5px] font-semibold tracking-tight text-fg"
@@ -57,7 +57,7 @@ export default function App() {
       <HashRouter>
         <div className="min-h-full">
           <Header />
-          <main className="mx-auto max-w-5xl px-5 py-8">
+          <main className="mx-auto w-full max-w-page px-5 py-8 lg:px-8">
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/problems" element={<ProblemList />} />

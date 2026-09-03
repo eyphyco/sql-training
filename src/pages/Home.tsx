@@ -33,7 +33,7 @@ export default function Home() {
   }, [isSolved]);
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_15rem]">
+    <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_16rem] xl:gap-10 xl:grid-cols-[minmax(0,1fr)_19rem]">
       <div className="space-y-8">
         {/* 進捗の概観 */}
         <Card className="overflow-hidden">
@@ -89,7 +89,7 @@ export default function Home() {
           >
             カリキュラム
           </SectionTitle>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {PHASES.map((phase) => {
               const stat = phaseStats[phase.id] ?? { solved: 0, total: 0 };
               const done = stat.total > 0 && stat.solved === stat.total;
@@ -97,8 +97,10 @@ export default function Home() {
                 <Link
                   key={phase.id}
                   to={`/problems?phase=${phase.id}`}
-                  // 7 フェーズは 2 列だと最後が余るので、最終カードを全幅にして収める
-                  className={`group ${phase.id === PHASES[PHASES.length - 1].id ? 'sm:col-span-2' : ''}`}
+                  // 7 フェーズは列数で割り切れないので、最終カードを全幅にして収める
+                  className={`group ${
+                    phase.id === PHASES[PHASES.length - 1].id ? 'sm:col-span-2 xl:col-span-3' : ''
+                  }`}
                 >
                   <Card className="flex h-full flex-col p-4 transition-colors group-hover:border-line-strong group-hover:bg-raised">
                     <div className="flex items-center gap-2">

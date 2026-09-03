@@ -129,7 +129,14 @@ export default function ProblemList() {
                 <span className="hidden shrink-0 font-mono text-[10.5px] text-subtle sm:inline">
                   {p.id}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-[13.5px] text-fg">{p.title}</span>
+                {/* 題名とタグをひとまとまりで伸ばす。広い画面で題名と右の情報が
+                    離れて間延びするのを、タグで埋める */}
+                <span className="flex min-w-0 flex-1 items-baseline gap-3">
+                  <span className="min-w-0 truncate text-[13.5px] text-fg">{p.title}</span>
+                  <span className="hidden min-w-0 truncate text-[11px] text-subtle xl:inline">
+                    {p.tags.map((t) => `#${t}`).join('  ')}
+                  </span>
+                </span>
                 <span className="hidden shrink-0 text-[11px] text-subtle md:inline">
                   {PHASE_BY_ID.get(p.phase as PhaseId)?.name}
                 </span>

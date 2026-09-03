@@ -28,6 +28,8 @@ export default function ResultTable({ columns, rows, maxRows = 200, emptyMessage
                 {c}
               </th>
             ))}
+            {/* 余白を吸わせる列。これが無いと列が横いっぱいに引き伸ばされる */}
+            <th className="w-full border-b border-line" />
           </tr>
         </thead>
         <tbody>
@@ -44,11 +46,12 @@ export default function ResultTable({ columns, rows, maxRows = 200, emptyMessage
                   {displayCell(cell)}
                 </td>
               ))}
+              <td />
             </tr>
           ))}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={columns.length + 1} className="px-3 py-5 text-[13px] text-muted">
+              <td colSpan={columns.length + 2} className="px-3 py-5 text-[13px] text-muted">
                 {emptyMessage}
               </td>
             </tr>

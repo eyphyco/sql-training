@@ -291,7 +291,7 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
 
       {/* 左：エディタ / 右：DB の状態 */}
       <div className="grid gap-3 lg:grid-cols-2">
-        <Card as="section" className="flex min-h-[400px] flex-col overflow-hidden">
+        <Card as="section" className="flex min-h-[520px] flex-col overflow-hidden lg:h-[clamp(460px,calc(100vh-34rem),820px)]">
           <header className="flex h-9 shrink-0 items-center justify-between border-b border-line bg-raised pr-1.5 pl-3">
             <span className="text-[11.5px] font-medium tracking-tight text-muted">SQL エディタ</span>
             <div className="flex gap-1.5">
@@ -313,12 +313,12 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
               </Button>
             </div>
           </header>
-          <div className="min-h-[360px] flex-1 bg-sunken">
+          <div className="min-h-[480px] flex-1 bg-sunken">
             <QueryEditor value={sqlText} onChange={setSqlText} schema={schema} />
           </div>
         </Card>
 
-        <Card as="section" className="flex min-h-[400px] flex-col overflow-hidden">
+        <Card as="section" className="flex min-h-[520px] flex-col overflow-hidden lg:h-[clamp(460px,calc(100vh-34rem),820px)]">
           <header className="flex h-9 shrink-0 items-stretch gap-4 border-b border-line bg-raised px-3">
             {TABS.map(([key, label]) => (
               <button
@@ -481,7 +481,7 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
       )}
 
       {canReveal && (
-        <div className="space-y-3">
+        <div className="max-w-prose-wide space-y-3">
           <Card className="overflow-hidden">
             <p className="border-b border-line bg-raised px-4 py-2 text-[11.5px] font-medium text-muted">
               模範解答
