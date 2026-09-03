@@ -45,6 +45,12 @@ npm run dev        # http://localhost:5173
 - **`multiple_choice`**（11 問）… 選択式。正誤を即判定
 - **`written`**（4 問）… 記述式。模範解答と採点観点を表示して自己採点
 
+## 表示
+
+ヘッダー右のセグメンテッドコントロールで **ライト / ダーク / システム設定に従う** を切り替えられる（既定はシステム追従）。選択はブラウザに保存され、`system` のときは OS 側の変更にその場で追従する。描画前に配色を確定させているので、リロード時に白く光ることはない。
+
+配色は [src/index.css](src/index.css) の CSS 変数 1 か所で定義している。`--c-canvas` / `--c-surface` / `--c-line` / `--c-fg` のような役割ベースのトークンを `@theme inline` で Tailwind ユーティリティ（`bg-surface`、`text-muted` など）に流し込む構成なので、**色を変えたいときは変数の値だけを書き換えればよい**。エディタのシンタックスハイライトも同じ変数を参照しており、テーマ切り替えに自動で追従する。
+
 ## 演習画面の使い方
 
 - **左ペイン**: SQL エディタ（CodeMirror。テーブル名・列名の補完が効く）
@@ -148,6 +154,8 @@ DuckDB の WebAssembly バイナリを 2 つ同梱するため `dist/` は約 80
 ```
 src/
 ├── components/   QueryEditor / ResultTable / SchemaPanel / SqlWorkbench / ChoiceQuestion / WrittenQuestion
+│                 ui.tsx（Button・Card・Meter・Tag）、icons.tsx、editorTheme.ts
+├── theme/        ライト/ダーク切り替え（ThemeProvider / themeContext / theme.ts）
 ├── data/         problems/*.json（問題データ）、phases.ts（カリキュラム定義）、problems.ts（ローダ）
 ├── engine/       duckdb.ts（初期化・実行・EXPLAIN）、judge.ts（採点・エラー解説）
 ├── storage/      progress.ts（localStorage）、progressContext.ts / ProgressProvider.tsx

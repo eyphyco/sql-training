@@ -1,8 +1,9 @@
 import { Link, useParams } from 'react-router-dom';
 import { getProblem, nextProblemId, prevProblemId } from '../data/problems';
-import { LEVEL_COLOR, LEVEL_LABEL, PHASE_BY_ID } from '../data/phases';
+import { LEVEL_FULL_LABEL, LEVEL_TONE, PHASE_BY_ID } from '../data/phases';
 import Markdown from '../components/Markdown';
-import Badge from '../components/Badge';
+import { Card, Tag } from '../components/ui';
+import { IconCheck, IconChevronLeft, IconChevronRight } from '../components/icons';
 import SqlWorkbench from '../components/SqlWorkbench';
 import ChoiceQuestion from '../components/ChoiceQuestion';
 import WrittenQuestion from '../components/WrittenQuestion';
@@ -15,12 +16,12 @@ export default function ProblemDetail() {
 
   if (!problem) {
     return (
-      <div className="rounded-xl border border-slate-700 bg-slate-900 p-6">
-        <p className="text-slate-300">問題 {id} が見つかりません。</p>
-        <Link to="/problems" className="mt-3 inline-block text-sky-400 underline">
+      <Card className="p-6">
+        <p className="text-[13.5px] text-fg">問題 {id} が見つかりません。</p>
+        <Link to="/problems" className="mt-3 inline-block text-[13px] text-accent underline">
           問題一覧へ戻る
         </Link>
-      </div>
+      </Card>
     );
   }
 
@@ -30,46 +31,71 @@ export default function ProblemDetail() {
 
   return (
     <div className="space-y-5">
-      <div className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Link to={`/problems?phase=${problem.phase}`} className="text-xs text-sky-400 hover:underline">
-            Phase {problem.phase}. {phase?.name}
+      <div>
+        <div className="flex flex-wrap items-center gap-2 text-[12px]">
+          <Link to="/problems" className="text-muted hover:text-fg">
+            問題
           </Link>
-          <Badge className={LEVEL_COLOR[problem.level]}>{LEVEL_LABEL[problem.level]}</Badge>
-          {isSolved(problem.id) && (
-            <Badge className="border-emerald-500/40 bg-emerald-500/10 text-emerald-300">正解済み</Badge>
-          )}
-          <span className="ml-auto font-mono text-[11px] text-slate-600">{problem.id}</span>
+          <span className="text-subtle">/</span>
+          <Link to={`/problems?phase=${problem.phase}`} className="text-muted hover:text-fg">
+            {phase?.name}
+          </Link>
+          <span className="ml-auto font-mono text-[10.5px] text-subtle">{problem.id}</span>
         </div>
-        <h1 className="text-xl font-bold text-white">{problem.title}</h1>
-        <div className="flex flex-wrap gap-1.5">
+
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <h1 className="text-[19px] leading-snug font-semibold tracking-tight text-fg">
+            {problem.title}
+          </h1>
+          <Tag tone={LEVEL_TONE[problem.level]}>{LEVEL_FULL_LABEL[problem.level]}</Tag>
+          {isSolved(problem.id) && (
+            <Tag tone="success">
+              <IconCheck size={11} />
+              正解済み
+            </Tag>
+          )}
+        </div>
+
+        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
           {problem.tags.map((t) => (
-            <Badge key={t} className="border-slate-700 bg-slate-800 text-slate-400">
+            <Link
+              key={t}
+              to={`/problems?tag=${encodeURIComponent(t)}`}
+              className="text-[11.5px] text-subtle hover:text-accent"
+            >
               #{t}
-            </Badge>
+            </Link>
           ))}
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-700 bg-slate-900 p-5">
+      <Card className="p-5">
         <Markdown>{problem.prompt_md}</Markdown>
-      </div>
+      </Card>
 
       {problem.type === 'sql_query' && <SqlWorkbench key={problem.id} problem={problem} />}
       {problem.type === 'multiple_choice' && <ChoiceQuestion key={problem.id} problem={problem} />}
       {problem.type === 'written' && <WrittenQuestion key={problem.id} problem={problem} />}
 
-      <nav className="flex items-center justify-between border-t border-slate-800 pt-4">
+      <nav className="flex items-center justify-between border-t border-line pt-4">
         {prev ? (
-          <Link to={`/problems/${prev}`} className="text-sm text-slate-400 hover:text-sky-300">
-            ← 前の問題
+          <Link
+            to={`/problems/${prev}`}
+            className="flex items-center gap-1 text-[12.5px] text-muted hover:text-fg"
+          >
+            <IconChevronLeft size={14} />
+            前の問題
           </Link>
         ) : (
           <span />
         )}
         {next ? (
-          <Link to={`/problems/${next}`} className="text-sm text-slate-400 hover:text-sky-300">
-            次の問題 →
+          <Link
+            to={`/problems/${next}`}
+            className="flex items-center gap-1 text-[12.5px] text-muted hover:text-fg"
+          >
+            次の問題
+            <IconChevronRight size={14} />
           </Link>
         ) : (
           <span />

@@ -1,13 +1,191 @@
 @import 'tailwindcss';
 
-@theme {
-  --font-sans: 'Inter', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Noto Sans Mono', monospace;
-}
+/* ------------------------------------------------------------------
+   デザイントークン
+   ライト/ダークで入れ替わる値は --c-* / --r-* に持ち、
+   @theme inline 経由で Tailwind ユーティリティへ流し込む。
+   ------------------------------------------------------------------ */
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
+
+  /* 面: canvas（最背面）→ surface（カード）→ raised（ヘッダ・見出し帯）→ sunken（コード・入力） */
+  --c-canvas: #faf9f7;
+  --c-surface: #ffffff;
+  --c-raised: #f6f5f2;
+  --c-sunken: #f2f1ed;
+
+  /* 境界はヘアライン。strong は押し出したいときだけ */
+  --c-line: #e6e3dd;
+  --c-line-strong: #d4d0c8;
+
+  --c-fg: #1a1917;
+  --c-fg-muted: #6f6a62;
+  --c-fg-subtle: #9c968c;
+
+  --c-accent: #3f4ab8;
+  --c-accent-solid: #434ec2;
+  --c-accent-solid-hover: #363fa3;
+  --c-on-accent: #ffffff;
+  --c-accent-soft: #eceefb;
+  --c-accent-line: #c8ccf0;
+
+  --c-success: #17795e;
+  --c-success-soft: #e8f5f0;
+  --c-success-line: #b8dfd1;
+
+  --c-danger: #b3261e;
+  --c-danger-soft: #fceceb;
+  --c-danger-line: #f0c4c1;
+
+  --c-warning: #9a6300;
+  --c-warning-soft: #fdf3e2;
+  --c-warning-line: #ecd4a8;
+
+  /* 角丸スケール: 小さい要素ほど小さく */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+
+  --shadow-card: 0 1px 2px rgb(26 25 23 / 0.04);
+  --shadow-pop: 0 4px 16px -4px rgb(26 25 23 / 0.12);
+
+  /* シンタックスハイライト（CodeMirror と共有） */
+  --c-syn-keyword: #4b56d2;
+  --c-syn-string: #1f7a4d;
+  --c-syn-number: #a35b12;
+  --c-syn-comment: #9c968c;
+  --c-syn-fn: #7b3fa0;
+  --c-syn-type: #0f6f78;
+  --c-syn-punct: #8b857c;
 }
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --c-canvas: #0d0c0b;
+  --c-surface: #161514;
+  --c-raised: #1c1b19;
+  --c-sunken: #121110;
+
+  --c-line: #292725;
+  --c-line-strong: #3b3835;
+
+  --c-fg: #f2f0ec;
+  --c-fg-muted: #a09a92;
+  --c-fg-subtle: #6f6a63;
+
+  --c-accent: #a3aaf5;
+  --c-accent-solid: #4b56d2;
+  --c-accent-solid-hover: #5a64de;
+  --c-on-accent: #ffffff;
+  --c-accent-soft: #191a2e;
+  --c-accent-line: #333a6b;
+
+  --c-success: #5cc9a3;
+  --c-success-soft: #10201b;
+  --c-success-line: #234c3f;
+
+  --c-danger: #f08b83;
+  --c-danger-soft: #241413;
+  --c-danger-line: #57302c;
+
+  --c-warning: #e0ac5c;
+  --c-warning-soft: #211a0f;
+  --c-warning-line: #4d3d20;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-pop: 0 8px 24px -6px rgb(0 0 0 / 0.5);
+
+  --c-syn-keyword: #a3aaf5;
+  --c-syn-string: #6fcf97;
+  --c-syn-number: #e2b07a;
+  --c-syn-comment: #6f6a63;
+  --c-syn-fn: #c3a0e8;
+  --c-syn-type: #6ec9d0;
+  --c-syn-punct: #857f77;
+}
+
+/* JS が data-theme を付ける前（初回描画）の保険 */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --c-canvas: #0d0c0b;
+    --c-surface: #161514;
+    --c-raised: #1c1b19;
+    --c-sunken: #121110;
+    --c-line: #292725;
+    --c-line-strong: #3b3835;
+    --c-fg: #f2f0ec;
+    --c-fg-muted: #a09a92;
+    --c-fg-subtle: #6f6a63;
+    --c-accent: #a3aaf5;
+    --c-accent-solid: #4b56d2;
+    --c-accent-solid-hover: #5a64de;
+    --c-accent-soft: #191a2e;
+    --c-accent-line: #333a6b;
+    --c-success: #5cc9a3;
+    --c-success-soft: #10201b;
+    --c-success-line: #234c3f;
+    --c-danger: #f08b83;
+    --c-danger-soft: #241413;
+    --c-danger-line: #57302c;
+    --c-warning: #e0ac5c;
+    --c-warning-soft: #211a0f;
+    --c-warning-line: #4d3d20;
+    --c-syn-keyword: #a3aaf5;
+    --c-syn-string: #6fcf97;
+    --c-syn-number: #e2b07a;
+    --c-syn-comment: #6f6a63;
+    --c-syn-fn: #c3a0e8;
+    --c-syn-type: #6ec9d0;
+    --c-syn-punct: #857f77;
+  }
+}
+
+@theme inline {
+  --color-canvas: var(--c-canvas);
+  --color-surface: var(--c-surface);
+  --color-raised: var(--c-raised);
+  --color-sunken: var(--c-sunken);
+  --color-line: var(--c-line);
+  --color-line-strong: var(--c-line-strong);
+  --color-fg: var(--c-fg);
+  --color-muted: var(--c-fg-muted);
+  --color-subtle: var(--c-fg-subtle);
+  --color-accent: var(--c-accent);
+  --color-accent-solid: var(--c-accent-solid);
+  --color-accent-solid-hover: var(--c-accent-solid-hover);
+  --color-on-accent: var(--c-on-accent);
+  --color-accent-soft: var(--c-accent-soft);
+  --color-accent-line: var(--c-accent-line);
+  --color-success: var(--c-success);
+  --color-success-soft: var(--c-success-soft);
+  --color-success-line: var(--c-success-line);
+  --color-danger: var(--c-danger);
+  --color-danger-soft: var(--c-danger-soft);
+  --color-danger-line: var(--c-danger-line);
+  --color-warning: var(--c-warning);
+  --color-warning-soft: var(--c-warning-soft);
+  --color-warning-line: var(--c-warning-line);
+
+  --radius-xs: var(--r-xs);
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+
+  --shadow-card: var(--shadow-card);
+  --shadow-pop: var(--shadow-pop);
+
+  --font-sans:
+    system-ui, -apple-system, 'Segoe UI', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI',
+    'Noto Sans JP', sans-serif;
+  --font-mono:
+    ui-monospace, 'SF Mono', 'Cascadia Mono', 'JetBrains Mono', Consolas, 'Noto Sans Mono', monospace;
+}
+
+/* ------------------------------------------------------------------ */
 
 html,
 body,
@@ -17,47 +195,128 @@ body,
 
 body {
   margin: 0;
-  background-color: #0b1020;
-  color: #e2e8f0;
+  background-color: var(--c-canvas);
+  color: var(--c-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-/* CodeMirror の高さをコンテナに合わせる */
+/* 数値は桁を揃える */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* テーマ切り替え時の色のちらつきを抑える */
+:where(a, button, input, select, textarea) {
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+
+::selection {
+  background: var(--c-accent-soft);
+  color: var(--c-fg);
+}
+
+/* CodeMirror はコンテナ高に追従させる */
 .cm-editor {
   height: 100%;
+  background: transparent;
+}
+.cm-editor.cm-focused {
+  outline: none !important;
 }
 .cm-scroller {
   font-family: var(--font-mono);
   font-size: 13px;
+  line-height: 1.7;
 }
 
-/* Markdown 本文の最低限のタイポグラフィ */
-.md :where(h1) { font-size: 1.25rem; font-weight: 700; margin: 0.6em 0 0.4em; }
-.md :where(h2) { font-size: 1.1rem; font-weight: 700; margin: 1em 0 0.4em; color: #93c5fd; }
-.md :where(h3) { font-size: 1rem; font-weight: 600; margin: 0.9em 0 0.3em; }
-.md :where(p) { margin: 0.5em 0; line-height: 1.75; }
-.md :where(ul) { list-style: disc; padding-left: 1.4em; margin: 0.5em 0; }
-.md :where(ol) { list-style: decimal; padding-left: 1.6em; margin: 0.5em 0; }
-.md :where(li) { margin: 0.2em 0; line-height: 1.7; }
-.md :where(strong) { color: #fbbf24; font-weight: 700; }
+/* ------------------------------------------------------------------
+   Markdown 本文
+   ------------------------------------------------------------------ */
+.md {
+  color: var(--c-fg);
+  font-size: 0.9375rem;
+}
+.md > :first-child { margin-top: 0; }
+.md > :last-child { margin-bottom: 0; }
+.md :where(h1) { font-size: 1.125rem; font-weight: 650; letter-spacing: -0.01em; margin: 1.4em 0 0.5em; }
+.md :where(h2) {
+  font-size: 1rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  margin: 1.6em 0 0.6em;
+  padding-bottom: 0.4em;
+  border-bottom: 1px solid var(--c-line);
+}
+.md :where(h3) { font-size: 0.9375rem; font-weight: 650; margin: 1.3em 0 0.4em; color: var(--c-fg); }
+.md :where(p) { margin: 0.7em 0; line-height: 1.85; }
+.md :where(ul) { list-style: disc; padding-left: 1.3em; margin: 0.7em 0; }
+.md :where(ol) { list-style: decimal; padding-left: 1.5em; margin: 0.7em 0; }
+.md :where(li) { margin: 0.3em 0; line-height: 1.8; }
+.md :where(li)::marker { color: var(--c-fg-subtle); }
+.md :where(strong) { font-weight: 650; color: var(--c-fg); }
 .md :where(code) {
   font-family: var(--font-mono);
   font-size: 0.85em;
-  background: #1e293b;
-  border: 1px solid #334155;
-  border-radius: 4px;
+  background: var(--c-sunken);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-xs);
   padding: 0.1em 0.35em;
 }
 .md :where(pre) {
-  background: #0f172a;
-  border: 1px solid #334155;
-  border-radius: 8px;
-  padding: 0.8em 1em;
+  background: var(--c-sunken);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+  padding: 0.9em 1em;
   overflow-x: auto;
-  margin: 0.7em 0;
+  margin: 0.9em 0;
 }
-.md :where(pre code) { background: none; border: none; padding: 0; font-size: 0.82rem; line-height: 1.6; }
-.md :where(table) { border-collapse: collapse; margin: 0.7em 0; font-size: 0.85rem; display: block; overflow-x: auto; }
-.md :where(th, td) { border: 1px solid #334155; padding: 0.35em 0.7em; text-align: left; }
-.md :where(th) { background: #1e293b; }
-.md :where(blockquote) { border-left: 3px solid #475569; padding-left: 0.9em; color: #94a3b8; margin: 0.6em 0; }
-.md :where(a) { color: #60a5fa; text-decoration: underline; }
+.md :where(pre code) {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.8125rem;
+  line-height: 1.75;
+}
+.md :where(table) {
+  border-collapse: collapse;
+  margin: 0.9em 0;
+  font-size: 0.85rem;
+  display: block;
+  overflow-x: auto;
+  font-variant-numeric: tabular-nums;
+}
+.md :where(th, td) {
+  border-bottom: 1px solid var(--c-line);
+  padding: 0.45em 0.9em 0.45em 0;
+  text-align: left;
+  vertical-align: top;
+}
+.md :where(th) {
+  font-weight: 600;
+  color: var(--c-fg-muted);
+  font-size: 0.8125rem;
+  border-bottom-color: var(--c-line-strong);
+}
+.md :where(blockquote) {
+  border-left: 2px solid var(--c-line-strong);
+  padding-left: 1em;
+  color: var(--c-fg-muted);
+  margin: 0.9em 0;
+}
+.md :where(a) {
+  color: var(--c-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.md :where(hr) { border: none; border-top: 1px solid var(--c-line); margin: 1.6em 0; }

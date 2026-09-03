@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import type { MultipleChoiceProblem } from '../types';
 import Markdown from './Markdown';
+import { Button, Card } from './ui';
+import { IconBook, IconBulb, IconCheck, IconX } from './icons';
 import { useProgress } from '../storage/progressContext';
 
 export default function ChoiceQuestion({ problem }: { problem: MultipleChoiceProblem }) {
@@ -18,67 +20,88 @@ export default function ChoiceQuestion({ problem }: { problem: MultipleChoicePro
         {problem.options.map((opt) => {
           const isPicked = selected === opt.id;
           const isAnswer = opt.id === problem.correct_option_id;
-          let tone = 'border-slate-700 bg-slate-900 hover:border-slate-500';
-          if (judged && isAnswer) tone = 'border-emerald-500/60 bg-emerald-500/10';
-          else if (judged && isPicked) tone = 'border-rose-500/60 bg-rose-500/10';
-          else if (isPicked) tone = 'border-sky-500/60 bg-sky-500/10';
+          let tone = 'border-line bg-surface hover:border-line-strong hover:bg-raised';
+          let markTone = 'border-line text-subtle';
+          if (judged && isAnswer) {
+            tone = 'border-success-line bg-success-soft';
+            markTone = 'border-success text-success';
+          } else if (judged && isPicked) {
+            tone = 'border-danger-line bg-danger-soft';
+            markTone = 'border-danger text-danger';
+          } else if (isPicked) {
+            tone = 'border-accent-line bg-accent-soft';
+            markTone = 'border-accent text-accent';
+          }
           return (
             <button
               key={opt.id}
               onClick={() => !judged && setSelected(opt.id)}
               disabled={judged}
-              className={`flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left transition ${tone}`}
+              className={`flex w-full items-start gap-3 rounded-md border px-4 py-3 text-left transition-colors ${tone}`}
             >
-              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-slate-600 font-mono text-xs text-slate-300">
-                {opt.id.toUpperCase()}
+              <span
+                className={`mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full border font-mono text-[10.5px] ${markTone}`}
+              >
+                {judged && isAnswer ? (
+                  <IconCheck size={11} />
+                ) : judged && isPicked ? (
+                  <IconX size={11} />
+                ) : (
+                  opt.id.toUpperCase()
+                )}
               </span>
-              <span className="text-sm leading-relaxed text-slate-200">{opt.text}</span>
+              <span className="text-[13.5px] leading-relaxed text-fg">{opt.text}</span>
             </button>
           );
         })}
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <button
+      <div className="flex flex-wrap items-center gap-2.5">
+        <Button
+          size="lg"
+          variant="primary"
           onClick={() => {
             if (!selected || judged) return;
             setJudged(true);
             attempt(problem.id, selected === problem.correct_option_id);
           }}
           disabled={!selected || judged}
-          className="rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-bold tracking-wide text-white shadow-lg shadow-emerald-900/40 hover:bg-emerald-500 disabled:opacity-40"
         >
           ANSWER
-        </button>
+        </Button>
         {judged && (
-          <button
+          <Button
+            size="lg"
             onClick={() => {
               setJudged(false);
               setSelected(null);
             }}
-            className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800"
           >
             もう一度解く
-          </button>
+          </Button>
         )}
         {hints.length > 0 && hintLevel < hints.length && !judged && (
-          <button
-            onClick={() => setHintLevel((n) => n + 1)}
-            className="rounded-lg border border-amber-500/40 px-4 py-2 text-sm text-amber-300 hover:bg-amber-500/10"
-          >
-            ヒントを見る（{hintLevel} / {hints.length}）
-          </button>
+          <Button size="lg" onClick={() => setHintLevel((n) => n + 1)}>
+            <IconBulb size={14} className="text-warning" />
+            ヒント
+            <span className="tnum text-[11px] text-subtle">
+              {hintLevel} / {hints.length}
+            </span>
+          </Button>
         )}
-        <span className="text-xs text-slate-500">挑戦回数: {attempts}</span>
+        <span className="tnum ml-auto text-[11.5px] text-subtle">挑戦 {attempts} 回</span>
       </div>
 
       {hintLevel > 0 && !judged && (
         <div className="space-y-2">
           {hints.slice(0, hintLevel).map((h, i) => (
-            <div key={i} className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
-              <p className="mb-1 text-xs font-semibold text-amber-300">ヒント {i + 1}</p>
+            <Card key={i} className="border-warning-line bg-warning-soft p-4">
+              <p className="mb-1 flex items-center gap-1.5 text-[11.5px] font-semibold text-warning">
+                <IconBulb size={13} />
+                ヒント {i + 1}
+              </p>
               <Markdown>{h}</Markdown>
-            </div>
+            </Card>
           ))}
         </div>
       )}
@@ -86,20 +109,24 @@ export default function ChoiceQuestion({ problem }: { problem: MultipleChoicePro
       {judged && (
         <>
           <div
-            className={`rounded-xl border p-4 font-semibold ${
+            className={`flex items-center gap-2 rounded-lg border p-4 text-[13.5px] font-semibold ${
               correct
-                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
-                : 'border-rose-500/40 bg-rose-500/10 text-rose-300'
+                ? 'border-success-line bg-success-soft text-success'
+                : 'border-danger-line bg-danger-soft text-danger'
             }`}
           >
-            {correct
-              ? '◯ 正解！'
-              : `× 不正解。正解は ${problem.correct_option_id.toUpperCase()} です。`}
+            {correct ? <IconCheck size={15} /> : <IconX size={15} />}
+            {correct ? '正解' : `不正解。正解は ${problem.correct_option_id.toUpperCase()} です。`}
           </div>
-          <div className="rounded-xl border border-sky-500/30 bg-sky-500/5 p-4">
-            <p className="mb-2 text-xs font-semibold tracking-wide text-sky-300">解説</p>
-            <Markdown>{problem.explanation_md}</Markdown>
-          </div>
+          <Card className="overflow-hidden">
+            <p className="flex items-center gap-1.5 border-b border-line bg-raised px-4 py-2 text-[11.5px] font-medium text-muted">
+              <IconBook size={13} />
+              解説
+            </p>
+            <div className="p-5">
+              <Markdown>{problem.explanation_md}</Markdown>
+            </div>
+          </Card>
         </>
       )}
     </div>

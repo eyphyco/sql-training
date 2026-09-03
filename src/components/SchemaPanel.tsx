@@ -1,23 +1,25 @@
 import type { TableSchema } from '../engine/duckdb';
+import { IconTable } from './icons';
 
 export default function SchemaPanel({ schema }: { schema: TableSchema[] }) {
   if (schema.length === 0) {
-    return <p className="p-4 text-sm text-slate-400">テーブルがありません。</p>;
+    return <p className="p-4 text-[13px] text-muted">テーブルがありません。</p>;
   }
   return (
-    <div className="space-y-4 p-3">
+    <div className="divide-y divide-line">
       {schema.map((t) => (
-        <div key={t.name} className="rounded-lg border border-slate-700 bg-slate-900/60">
-          <div className="flex items-baseline justify-between border-b border-slate-700 px-3 py-2">
-            <span className="font-mono text-sm font-semibold text-sky-300">{t.name}</span>
-            <span className="text-[11px] text-slate-500">{t.rowCount} 行</span>
+        <div key={t.name}>
+          <div className="flex items-center gap-2 bg-raised px-3 py-1.5">
+            <IconTable size={13} className="text-subtle" />
+            <span className="font-mono text-[12.5px] font-medium text-fg">{t.name}</span>
+            <span className="tnum ml-auto text-[11px] text-subtle">{t.rowCount} 行</span>
           </div>
           <table className="w-full text-left text-[12px]">
             <tbody>
               {t.columns.map((c) => (
-                <tr key={c.name} className="border-b border-slate-800 last:border-0">
-                  <td className="px-3 py-1 font-mono text-slate-200">{c.name}</td>
-                  <td className="px-3 py-1 text-right font-mono text-[11px] text-slate-500">{c.type}</td>
+                <tr key={c.name}>
+                  <td className="py-1 pr-3 pl-3 font-mono text-fg">{c.name}</td>
+                  <td className="py-1 pr-3 text-right font-mono text-[11px] text-subtle">{c.type}</td>
                 </tr>
               ))}
             </tbody>

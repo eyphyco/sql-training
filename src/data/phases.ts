@@ -49,13 +49,20 @@ export const PHASES: PhaseInfo[] = [
 export const PHASE_BY_ID = new Map<PhaseId, PhaseInfo>(PHASES.map((p) => [p.id, p]));
 
 export const LEVEL_LABEL: Record<LevelId, string> = {
+  1: 'Lv1',
+  2: 'Lv2',
+  3: 'Lv3',
+};
+
+export const LEVEL_FULL_LABEL: Record<LevelId, string> = {
   1: 'Lv1 易',
   2: 'Lv2 標準',
   3: 'Lv3 難',
 };
 
-export const LEVEL_COLOR: Record<LevelId, string> = {
-  1: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
-  2: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
-  3: 'bg-rose-500/15 text-rose-300 border-rose-500/30',
+/** 難易度は明度差だけで示す。彩度の高い色は正誤の表示に取っておく */
+export const LEVEL_TONE: Record<LevelId, 'neutral' | 'warning' | 'danger'> = {
+  1: 'neutral',
+  2: 'warning',
+  3: 'danger',
 };

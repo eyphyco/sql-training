@@ -1,13 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
 import type { SqlQueryProblem } from '../types';
-import {
-  connect,
-  describeTables,
-  explainQuery,
-  resetEnvironment,
-  runQuery,
-} from '../engine/duckdb';
+import { connect, describeTables, explainQuery, resetEnvironment, runQuery } from '../engine/duckdb';
 import type { QueryResult, TableSchema } from '../engine/duckdb';
 import { checkPatterns, explainSqlError, judgeResultSet } from '../engine/judge';
 import type { JudgeResult } from '../engine/judge';
@@ -15,6 +9,8 @@ import QueryEditor from './QueryEditor';
 import ResultTable from './ResultTable';
 import SchemaPanel from './SchemaPanel';
 import Markdown from './Markdown';
+import { Button, Card } from './ui';
+import { IconBook, IconBulb, IconCheck, IconLayers, IconPlay, IconX } from './icons';
 import { useProgress } from '../storage/progressContext';
 
 type RightTab = 'result' | 'schema' | 'plan';
@@ -24,12 +20,18 @@ interface LastRun {
   result: QueryResult;
 }
 
+const TABS: [RightTab, string][] = [
+  ['result', '実行結果'],
+  ['schema', 'スキーマ'],
+  ['plan', '実行計画'],
+];
+
 export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) {
   const { attempt, progress } = useProgress();
   const connRef = useRef<AsyncDuckDBConnection | null>(null);
 
   const [status, setStatus] = useState<'booting' | 'ready' | 'error'>('booting');
-  const [bootError, setBootError] = useState<string>('');
+  const [bootError, setBootError] = useState('');
   const [schema, setSchema] = useState<TableSchema[]>([]);
   const [sqlText, setSqlText] = useState(problem.starter_sql ?? '');
   const [lastRun, setLastRun] = useState<LastRun | null>(null);
@@ -104,6 +106,7 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
       setTab('plan');
     } catch (e) {
       setRunError(e instanceof Error ? e.message : String(e));
+      setTab('result');
     } finally {
       setBusy(false);
     }
@@ -117,7 +120,9 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
       setJudgement({
         correct: false,
         message: 'まず「実行」してください',
-        details: ['採点は「直近の実行結果」に対して行います。左のエディタで SQL を実行してから ANSWER を押してください。'],
+        details: [
+          '採点は「直近の実行結果」に対して行います。左のエディタで SQL を実行してから ANSWER を押してください。',
+        ],
       });
       return;
     }
@@ -125,7 +130,9 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
       setJudgement({
         correct: false,
         message: 'エディタの内容が実行後に変更されています',
-        details: ['いま表示されている結果は古い SQL のものです。もう一度「実行」してから ANSWER を押してください。'],
+        details: [
+          'いま表示されている結果は古い SQL のものです。もう一度「実行」してから ANSWER を押してください。',
+        ],
       });
       return;
     }
@@ -181,19 +188,19 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
 
   if (status === 'booting') {
     return (
-      <div className="flex h-64 items-center justify-center text-slate-400">
-        <div className="text-center">
-          <div className="mx-auto mb-3 h-6 w-6 animate-spin rounded-full border-2 border-sky-400 border-t-transparent" />
+      <Card className="flex h-72 items-center justify-center">
+        <div className="flex items-center gap-3 text-[13px] text-muted">
+          <span className="h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-line-strong border-t-accent" />
           DuckDB を初期化しています…
         </div>
-      </div>
+      </Card>
     );
   }
   if (status === 'error') {
     return (
-      <div className="rounded-lg border border-rose-500/40 bg-rose-500/10 p-4 text-sm text-rose-200">
+      <div className="rounded-lg border border-danger-line bg-danger-soft p-4 text-[13px] text-danger">
         <p className="font-semibold">DuckDB の初期化に失敗しました</p>
-        <pre className="mt-2 whitespace-pre-wrap text-xs">{bootError}</pre>
+        <pre className="mt-2 font-mono text-[12px] whitespace-pre-wrap">{bootError}</pre>
       </div>
     );
   }
@@ -202,53 +209,44 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
     <div className="space-y-4">
       {/* 左：エディタ / 右：DB の状態 */}
       <div className="grid gap-3 lg:grid-cols-2">
-        <section className="flex min-h-[380px] flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-900">
-          <header className="flex items-center justify-between border-b border-slate-700 px-3 py-2">
-            <span className="text-xs font-semibold tracking-wide text-slate-400">SQL エディタ</span>
-            <div className="flex gap-2">
-              <button
-                onClick={handleExplain}
-                disabled={busy}
-                className="rounded border border-slate-600 px-2.5 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-40"
-              >
+        <Card as="section" className="flex min-h-[400px] flex-col overflow-hidden">
+          <header className="flex h-9 shrink-0 items-center justify-between border-b border-line bg-raised pr-1.5 pl-3">
+            <span className="text-[11.5px] font-medium tracking-tight text-muted">SQL エディタ</span>
+            <div className="flex gap-1.5">
+              <Button size="sm" variant="ghost" onClick={handleExplain} disabled={busy} data-testid="explain">
+                <IconLayers size={13} />
                 EXPLAIN
-              </button>
-              <button
-                onClick={handleRun}
-                disabled={busy}
-                className="rounded bg-sky-600 px-3 py-1 text-xs font-semibold text-white hover:bg-sky-500 disabled:opacity-40"
-              >
-                実行 (Ctrl+Enter)
-              </button>
+              </Button>
+              <Button size="sm" variant="primary" onClick={handleRun} disabled={busy} data-testid="run">
+                <IconPlay size={12} />
+                実行
+                <kbd className="ml-0.5 hidden font-mono text-[10px] opacity-70 sm:inline">⌘↵</kbd>
+              </Button>
             </div>
           </header>
-          <div className="min-h-[320px] flex-1">
+          <div className="min-h-[360px] flex-1 bg-sunken">
             <QueryEditor value={sqlText} onChange={setSqlText} onRun={handleRun} schema={schema} />
           </div>
-        </section>
+        </Card>
 
-        <section className="flex min-h-[380px] flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-900">
-          <header className="flex items-center gap-1 border-b border-slate-700 px-2 py-1.5">
-            {(
-              [
-                ['result', '実行結果'],
-                ['schema', 'スキーマ'],
-                ['plan', '実行計画'],
-              ] as [RightTab, string][]
-            ).map(([key, label]) => (
+        <Card as="section" className="flex min-h-[400px] flex-col overflow-hidden">
+          <header className="flex h-9 shrink-0 items-stretch gap-4 border-b border-line bg-raised px-3">
+            {TABS.map(([key, label]) => (
               <button
                 key={key}
                 onClick={() => setTab(key)}
-                className={`rounded px-2.5 py-1 text-xs font-medium ${
-                  tab === key ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-slate-200'
+                className={`relative text-[11.5px] font-medium transition-colors ${
+                  tab === key
+                    ? 'text-fg after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:bg-accent'
+                    : 'text-subtle hover:text-muted'
                 }`}
               >
                 {label}
               </button>
             ))}
-            {lastRun && tab === 'result' && (
-              <span className="ml-auto pr-2 text-[11px] text-slate-500">
-                {lastRun.result.rows.length} 行 / {lastRun.result.elapsedMs.toFixed(1)} ms
+            {lastRun && tab === 'result' && !runError && (
+              <span className="tnum ml-auto self-center text-[11px] text-subtle">
+                {lastRun.result.rows.length} 行 · {lastRun.result.elapsedMs.toFixed(1)} ms
               </span>
             )}
           </header>
@@ -256,29 +254,36 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
             {tab === 'schema' && <SchemaPanel schema={schema} />}
             {tab === 'plan' &&
               (planText ? (
-                <pre className="p-3 font-mono text-[11px] leading-relaxed whitespace-pre text-slate-300">
+                <pre className="p-3 font-mono text-[11px] leading-relaxed whitespace-pre text-fg">
                   {planText}
                 </pre>
               ) : (
-                <p className="p-4 text-sm text-slate-400">
-                  「EXPLAIN」ボタンを押すと、いまエディタにある SQL の実行計画を表示します。
+                <p className="p-4 text-[13px] leading-relaxed text-muted">
+                  「EXPLAIN」を押すと、いまエディタにある SQL の実行計画を表示します。
                 </p>
               ))}
             {tab === 'result' && (
               <>
                 {runError && (
-                  <div className="m-3 rounded-lg border border-rose-500/40 bg-rose-500/10 p-3">
-                    <p className="font-mono text-xs whitespace-pre-wrap text-rose-200">{runError}</p>
+                  <div className="m-3 overflow-hidden rounded-md border border-danger-line">
+                    <pre className="bg-danger-soft p-3 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap text-danger">
+                      {runError}
+                    </pre>
                     {errorHint && (
-                      <div className="mt-3 border-t border-rose-500/30 pt-2">
-                        <p className="text-xs font-semibold text-amber-300">よくあるミス: {errorHint.title}</p>
-                        <p className="mt-1 text-xs leading-relaxed text-slate-300">{errorHint.advice}</p>
+                      <div className="border-t border-danger-line bg-surface p-3">
+                        <p className="flex items-center gap-1.5 text-[12px] font-semibold text-warning">
+                          <IconBulb size={13} />
+                          よくあるミス: {errorHint.title}
+                        </p>
+                        <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
+                          {errorHint.advice}
+                        </p>
                       </div>
                     )}
                   </div>
                 )}
                 {!runError && !lastRun && (
-                  <p className="p-4 text-sm text-slate-400">
+                  <p className="p-4 text-[13px] leading-relaxed text-muted">
                     左のエディタで SQL を書いて「実行」を押すと、ここに結果が表示されます。
                   </p>
                 )}
@@ -288,61 +293,64 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
               </>
             )}
           </div>
-        </section>
+        </Card>
       </div>
 
       {/* 採点 */}
-      <div className="flex flex-wrap items-center gap-3">
-        <button
-          onClick={handleAnswer}
-          disabled={busy}
-          className="rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-bold tracking-wide text-white shadow-lg shadow-emerald-900/40 hover:bg-emerald-500 disabled:opacity-40"
-        >
-          ANSWER（この実行結果で提出）
-        </button>
+      <div className="flex flex-wrap items-center gap-2.5">
+        <Button size="lg" variant="primary" onClick={handleAnswer} disabled={busy} data-testid="answer">
+          ANSWER
+          <span className="text-[11px] font-normal opacity-75">この実行結果で提出</span>
+        </Button>
         {hints.length > 0 && hintLevel < hints.length && (
-          <button
-            onClick={() => setHintLevel((n) => n + 1)}
-            className="rounded-lg border border-amber-500/40 px-4 py-2 text-sm text-amber-300 hover:bg-amber-500/10"
-          >
-            ヒントを見る（{hintLevel} / {hints.length}）
-          </button>
+          <Button size="lg" onClick={() => setHintLevel((n) => n + 1)}>
+            <IconBulb size={14} className="text-warning" />
+            ヒント
+            <span className="tnum text-[11px] text-subtle">
+              {hintLevel} / {hints.length}
+            </span>
+          </Button>
         )}
         {!canReveal && (
-          <button
-            onClick={() => setRevealed(true)}
-            className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-400 hover:bg-slate-800"
-          >
+          <Button size="lg" variant="ghost" onClick={() => setRevealed(true)}>
+            <IconBook size={14} />
             解答・解説を見る
-          </button>
+          </Button>
         )}
-        <span className="text-xs text-slate-500">挑戦回数: {attempts}</span>
+        <span className="tnum ml-auto text-[11.5px] text-subtle">挑戦 {attempts} 回</span>
       </div>
 
       {judgement && (
         <div
-          className={`rounded-xl border p-4 ${
+          className={`rounded-lg border p-4 ${
             judgement.correct
-              ? 'border-emerald-500/40 bg-emerald-500/10'
-              : 'border-amber-500/40 bg-amber-500/10'
+              ? 'border-success-line bg-success-soft'
+              : 'border-warning-line bg-warning-soft'
           }`}
         >
-          <p className={`font-semibold ${judgement.correct ? 'text-emerald-300' : 'text-amber-300'}`}>
-            {judgement.correct ? '◯ ' : '× '}
+          <p
+            className={`flex items-center gap-2 text-[13.5px] font-semibold ${
+              judgement.correct ? 'text-success' : 'text-warning'
+            }`}
+          >
+            {judgement.correct ? <IconCheck size={15} /> : <IconX size={15} />}
             {judgement.message}
           </p>
           {judgement.details.length > 0 && (
-            <ul className="mt-2 space-y-1 text-sm text-slate-300">
+            <ul className="mt-2 space-y-1 text-[13px] leading-relaxed text-fg">
               {judgement.details.map((d, i) => (
-                <li key={i}>・{d}</li>
+                <li key={i} className="flex gap-2">
+                  <span className="text-subtle">·</span>
+                  {d}
+                </li>
               ))}
             </ul>
           )}
           {Boolean(judgement.missingRows?.length || judgement.extraRows?.length) && (
             <div className="mt-3 grid gap-3 md:grid-cols-2">
               {judgement.missingRows && judgement.missingRows.length > 0 && (
-                <div className="overflow-hidden rounded-lg border border-slate-700">
-                  <p className="bg-slate-800 px-3 py-1.5 text-xs font-semibold text-sky-300">
+                <div className="overflow-hidden rounded-md border border-line bg-surface">
+                  <p className="border-b border-line bg-raised px-3 py-1.5 text-[11.5px] font-medium text-muted">
                     足りない行（期待にあるが結果に無い）
                   </p>
                   <ResultTable
@@ -353,8 +361,8 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
                 </div>
               )}
               {judgement.extraRows && judgement.extraRows.length > 0 && (
-                <div className="overflow-hidden rounded-lg border border-slate-700">
-                  <p className="bg-slate-800 px-3 py-1.5 text-xs font-semibold text-rose-300">
+                <div className="overflow-hidden rounded-md border border-line bg-surface">
+                  <p className="border-b border-line bg-raised px-3 py-1.5 text-[11.5px] font-medium text-muted">
                     余分な行（結果にあるが期待に無い）
                   </p>
                   <ResultTable
@@ -372,31 +380,41 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
       {hintLevel > 0 && (
         <div className="space-y-2">
           {hints.slice(0, hintLevel).map((h, i) => (
-            <div key={i} className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
-              <p className="mb-1 text-xs font-semibold text-amber-300">ヒント {i + 1}</p>
+            <Card key={i} className="border-warning-line bg-warning-soft p-4">
+              <p className="mb-1 flex items-center gap-1.5 text-[11.5px] font-semibold text-warning">
+                <IconBulb size={13} />
+                ヒント {i + 1}
+              </p>
               <Markdown>{h}</Markdown>
-            </div>
+            </Card>
           ))}
         </div>
       )}
 
       {canReveal && (
-        <div className="space-y-4">
-          <div className="rounded-xl border border-slate-700 bg-slate-900 p-4">
-            <p className="mb-2 text-xs font-semibold tracking-wide text-slate-400">模範解答</p>
-            <pre className="overflow-x-auto rounded-lg border border-slate-700 bg-slate-950 p-3 font-mono text-xs leading-relaxed text-emerald-200">
+        <div className="space-y-3">
+          <Card className="overflow-hidden">
+            <p className="border-b border-line bg-raised px-4 py-2 text-[11.5px] font-medium text-muted">
+              模範解答
+            </p>
+            <pre className="overflow-x-auto bg-sunken p-4 font-mono text-[12.5px] leading-relaxed text-fg">
               {problem.expected_query.trim()}
             </pre>
             {problem.alternative_md && (
-              <div className="mt-3 border-t border-slate-700 pt-3">
+              <div className="border-t border-line p-4">
                 <Markdown>{problem.alternative_md}</Markdown>
               </div>
             )}
-          </div>
-          <div className="rounded-xl border border-sky-500/30 bg-sky-500/5 p-4">
-            <p className="mb-2 text-xs font-semibold tracking-wide text-sky-300">解説</p>
-            <Markdown>{problem.explanation_md}</Markdown>
-          </div>
+          </Card>
+          <Card className="overflow-hidden">
+            <p className="flex items-center gap-1.5 border-b border-line bg-raised px-4 py-2 text-[11.5px] font-medium text-muted">
+              <IconBook size={13} />
+              解説
+            </p>
+            <div className="p-5">
+              <Markdown>{problem.explanation_md}</Markdown>
+            </div>
+          </Card>
         </div>
       )}
     </div>

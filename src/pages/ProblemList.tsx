@@ -1,15 +1,16 @@
 import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ALL_TAGS, PROBLEM_METAS } from '../data/problems';
-import { LEVEL_COLOR, LEVEL_LABEL, PHASES, PHASE_BY_ID } from '../data/phases';
+import { LEVEL_LABEL, LEVEL_TONE, PHASES, PHASE_BY_ID } from '../data/phases';
 import { useProgress } from '../storage/progressContext';
-import Badge from '../components/Badge';
-import type { PhaseId, LevelId } from '../types';
+import { Tag } from '../components/ui';
+import { IconCheck, IconDash } from '../components/icons';
+import type { LevelId, PhaseId, ProblemType } from '../types';
 
-const TYPE_LABEL: Record<string, string> = {
-  sql_query: 'SQL実行',
-  multiple_choice: '選択式',
-  written: '記述式',
+const TYPE_LABEL: Record<ProblemType, string> = {
+  sql_query: 'SQL',
+  multiple_choice: '選択',
+  written: '記述',
 };
 
 export default function ProblemList() {
@@ -20,6 +21,7 @@ export default function ProblemList() {
   const level = params.get('level');
   const tag = params.get('tag');
   const status = params.get('status');
+  const hasFilter = Boolean(phase || level || tag || status);
 
   const setParam = (key: string, value: string | null) => {
     const next = new URLSearchParams(params);
@@ -42,35 +44,43 @@ export default function ProblemList() {
   );
 
   const chip = (active: boolean) =>
-    `rounded-full border px-3 py-1 text-xs transition ${
+    `rounded-sm border px-2 py-1 text-[11.5px] font-medium transition-colors ${
       active
-        ? 'border-sky-500 bg-sky-500/15 text-sky-200'
-        : 'border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-500'
+        ? 'border-accent-line bg-accent-soft text-accent'
+        : 'border-line bg-surface text-muted hover:border-line-strong hover:text-fg'
     }`;
 
   return (
     <div className="space-y-5">
-      <h1 className="text-xl font-bold text-white">問題一覧</h1>
+      <div className="flex items-baseline justify-between gap-4">
+        <h1 className="text-lg font-semibold tracking-tight text-fg">問題</h1>
+        <span className="tnum text-[12px] text-subtle">
+          {filtered.length} / {PROBLEM_METAS.length} 問
+        </span>
+      </div>
 
-      <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="w-16 shrink-0 text-xs text-slate-500">フェーズ</span>
+      <div className="space-y-2.5 rounded-lg border border-line bg-surface p-4">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="w-14 shrink-0 text-[11px] text-subtle">フェーズ</span>
           {PHASES.map((p) => (
-            <button key={p.id} onClick={() => setParam('phase', String(p.id))} className={chip(phase === String(p.id))}>
-              {p.id}. {p.name}
+            <button
+              key={p.id}
+              onClick={() => setParam('phase', String(p.id))}
+              className={chip(phase === String(p.id))}
+            >
+              <span className="tnum mr-1 font-mono text-subtle">{p.id}</span>
+              {p.name}
             </button>
           ))}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="w-16 shrink-0 text-xs text-slate-500">レベル</span>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="w-14 shrink-0 text-[11px] text-subtle">レベル</span>
           {([1, 2, 3] as LevelId[]).map((l) => (
             <button key={l} onClick={() => setParam('level', String(l))} className={chip(level === String(l))}>
               {LEVEL_LABEL[l]}
             </button>
           ))}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="w-16 shrink-0 text-xs text-slate-500">状態</span>
+          <span className="ml-4 w-8 shrink-0 text-[11px] text-subtle">状態</span>
           <button onClick={() => setParam('status', 'unsolved')} className={chip(status === 'unsolved')}>
             未正解
           </button>
@@ -78,13 +88,13 @@ export default function ProblemList() {
             正解済み
           </button>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="w-16 shrink-0 text-xs text-slate-500">タグ</span>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="w-14 shrink-0 text-[11px] text-subtle">タグ</span>
           {/* タグは70種類以上あるのでチップではなくセレクトで選ぶ */}
           <select
             value={tag ?? ''}
             onChange={(e) => setParam('tag', e.target.value === '' ? null : e.target.value)}
-            className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-200"
+            className="rounded-sm border border-line bg-surface px-2 py-1 text-[11.5px] text-fg"
           >
             <option value="">すべて</option>
             {ALL_TAGS.map((t) => (
@@ -93,42 +103,48 @@ export default function ProblemList() {
               </option>
             ))}
           </select>
-        </div>
-        <div className="flex items-center justify-between pt-1">
-          <span className="text-xs text-slate-500">{filtered.length} 問</span>
-          <button
-            onClick={() => setParams(new URLSearchParams(), { replace: true })}
-            className="text-xs text-slate-400 underline hover:text-slate-200"
-          >
-            フィルタをクリア
-          </button>
+          {hasFilter && (
+            <button
+              onClick={() => setParams(new URLSearchParams(), { replace: true })}
+              className="ml-auto text-[11.5px] text-muted underline underline-offset-2 hover:text-fg"
+            >
+              フィルタをクリア
+            </button>
+          )}
         </div>
       </div>
 
-      <ul className="divide-y divide-slate-800 overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
+      <ul className="overflow-hidden rounded-lg border border-line bg-surface">
         {filtered.map((p) => {
           const solved = isSolved(p.id);
           return (
-            <li key={p.id}>
-              <Link to={`/problems/${p.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/60">
-                <span className={`w-5 shrink-0 text-center ${solved ? 'text-emerald-400' : 'text-slate-700'}`}>
-                  {solved ? '◯' : '−'}
+            <li key={p.id} className="border-b border-line last:border-0">
+              <Link
+                to={`/problems/${p.id}`}
+                className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-raised"
+              >
+                <span className={`shrink-0 ${solved ? 'text-success' : 'text-subtle/50'}`}>
+                  {solved ? <IconCheck size={14} /> : <IconDash size={14} />}
                 </span>
-                <span className="shrink-0 font-mono text-[11px] text-slate-500">{p.id}</span>
-                <span className="flex-1 truncate text-sm text-slate-100">{p.title}</span>
-                <Badge className="hidden shrink-0 border-slate-700 bg-slate-800 text-slate-400 sm:inline-flex">
-                  P{p.phase} {PHASE_BY_ID.get(p.phase as PhaseId)?.name}
-                </Badge>
-                <Badge className="hidden shrink-0 border-slate-700 bg-slate-800 text-slate-400 md:inline-flex">
+                <span className="hidden shrink-0 font-mono text-[10.5px] text-subtle sm:inline">
+                  {p.id}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-[13.5px] text-fg">{p.title}</span>
+                <span className="hidden shrink-0 text-[11px] text-subtle md:inline">
+                  {PHASE_BY_ID.get(p.phase as PhaseId)?.name}
+                </span>
+                <span className="hidden w-6 shrink-0 text-center text-[11px] text-subtle sm:inline">
                   {TYPE_LABEL[p.type]}
-                </Badge>
-                <Badge className={`shrink-0 ${LEVEL_COLOR[p.level]}`}>{LEVEL_LABEL[p.level]}</Badge>
+                </span>
+                <Tag tone={LEVEL_TONE[p.level]}>{LEVEL_LABEL[p.level]}</Tag>
               </Link>
             </li>
           );
         })}
         {filtered.length === 0 && (
-          <li className="px-4 py-6 text-center text-sm text-slate-500">条件に一致する問題がありません。</li>
+          <li className="px-4 py-8 text-center text-[13px] text-subtle">
+            条件に一致する問題がありません。
+          </li>
         )}
       </ul>
     </div>

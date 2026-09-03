@@ -5,6 +5,21 @@
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SQL Training — 集計・結合・実行計画のハンズオン</title>
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      // 描画前に配色を確定させ、リロード時のちらつきを防ぐ
+      (function () {
+        try {
+          var stored = localStorage.getItem('sql-training:theme');
+          var dark =
+            stored === 'dark' ||
+            (stored !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

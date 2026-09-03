@@ -9,21 +9,21 @@ interface Props {
 
 export default function ResultTable({ columns, rows, maxRows = 200, emptyMessage = '0 行' }: Props) {
   if (columns.length === 0) {
-    return <p className="p-4 text-sm text-slate-400">結果セットを返さない文が実行されました。</p>;
+    return <p className="p-4 text-[13px] text-muted">結果セットを返さない文が実行されました。</p>;
   }
   const shown = rows.slice(0, maxRows);
   return (
     <div className="overflow-auto">
-      <table className="w-full border-collapse text-left text-[13px]">
-        <thead className="sticky top-0 bg-slate-800">
+      <table className="tnum w-full border-collapse text-left text-[12.5px]">
+        <thead className="sticky top-0 z-10 bg-raised">
           <tr>
-            <th className="border-b border-slate-700 px-2 py-1.5 text-right font-mono text-[11px] text-slate-500">
+            <th className="w-10 border-b border-line px-2 py-1.5 text-right font-mono text-[10.5px] font-normal text-subtle">
               #
             </th>
             {columns.map((c, i) => (
               <th
                 key={`${c}-${i}`}
-                className="whitespace-nowrap border-b border-slate-700 px-3 py-1.5 font-mono text-xs font-semibold text-sky-300"
+                className="border-b border-line px-3 py-1.5 font-mono text-[11.5px] font-medium whitespace-nowrap text-muted"
               >
                 {c}
               </th>
@@ -32,13 +32,13 @@ export default function ResultTable({ columns, rows, maxRows = 200, emptyMessage
         </thead>
         <tbody>
           {shown.map((row, r) => (
-            <tr key={r} className="odd:bg-slate-900/40 hover:bg-slate-800/60">
-              <td className="px-2 py-1 text-right font-mono text-[11px] text-slate-600">{r + 1}</td>
+            <tr key={r} className="border-b border-line/60 last:border-0 hover:bg-raised">
+              <td className="px-2 py-1.5 text-right font-mono text-[10.5px] text-subtle">{r + 1}</td>
               {row.map((cell, c) => (
                 <td
                   key={c}
-                  className={`whitespace-nowrap px-3 py-1 font-mono text-xs ${
-                    cell === null ? 'text-slate-600 italic' : 'text-slate-200'
+                  className={`px-3 py-1.5 font-mono text-[12px] whitespace-nowrap ${
+                    cell === null ? 'text-subtle italic' : 'text-fg'
                   }`}
                 >
                   {displayCell(cell)}
@@ -48,7 +48,7 @@ export default function ResultTable({ columns, rows, maxRows = 200, emptyMessage
           ))}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={columns.length + 1} className="px-3 py-4 text-sm text-slate-500">
+              <td colSpan={columns.length + 1} className="px-3 py-5 text-[13px] text-muted">
                 {emptyMessage}
               </td>
             </tr>
@@ -56,7 +56,7 @@ export default function ResultTable({ columns, rows, maxRows = 200, emptyMessage
         </tbody>
       </table>
       {rows.length > maxRows && (
-        <p className="px-3 py-2 text-xs text-slate-500">
+        <p className="border-t border-line px-3 py-2 text-[11.5px] text-subtle">
           先頭 {maxRows} 行のみ表示（全 {rows.length} 行）
         </p>
       )}

@@ -39,11 +39,28 @@ async function typeSql(sql) {
 try {
   // 1. ホーム
   await page.goto(base, { waitUntil: 'networkidle' });
-  check('ホームが表示される', (await page.locator('h1', { hasText: 'SQL Training' }).count()) > 0);
+  const homeText = await page.locator('main').innerText();
+  check('ホームが表示される', homeText.includes('学習の進捗') && homeText.includes('カリキュラム'));
   check('フェーズカードが7枚', (await page.locator('a[href*="/problems?phase="]').count()) === 7);
 
+  // 1b. テーマ切り替え
+  const themeOf = () => page.evaluate(() => document.documentElement.dataset.theme);
+  await page.click('button[aria-label="ダーク"]');
+  check('ダークに切り替わる', (await themeOf()) === 'dark');
+  await page.reload({ waitUntil: 'networkidle' });
+  check('リロード後もダークが保持される', (await themeOf()) === 'dark');
+  await page.click('button[aria-label="ライト"]');
+  check('ライトに切り替わる', (await themeOf()) === 'light');
+  const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  check('ライトの背景色が明るい', bg === 'rgb(250, 249, 247)', bg);
+  await page.click('button[aria-label="システム設定に従う"]');
+  check(
+    'システム追従に戻せる',
+    (await page.evaluate(() => localStorage.getItem('sql-training:theme'))) === null,
+  );
+
   // 2. 問題一覧
-  await page.click('text=問題一覧');
+  await page.goto(`${base}#/problems`, { waitUntil: 'networkidle' });
   await page.waitForSelector('a[href*="#/problems/phase1-lv1-001"]');
   const listed = await page.locator('ul li a[href*="#/problems/"]').count();
   check(
@@ -65,34 +82,34 @@ try {
 
   // 4. クエリ実行
   await typeSql('SELECT class, AVG(score) FROM students GROUP BY class');
-  await page.click('button:has-text("実行")');
+  await page.click('[data-testid="run"]');
   await page.waitForSelector('table tbody tr', { timeout: 30000 });
   const cells = await page.locator('table tbody tr').count();
   check('実行結果が表示される（4クラス）', cells === 4, `${cells} 行`);
 
   // 5. 不正解の採点
-  await page.click('button:has-text("ANSWER")');
+  await page.click('[data-testid="answer"]');
   await page.waitForSelector('text=不正解', { timeout: 30000 });
   check('不正解が正しく判定される', true);
 
   // 6. 正解の採点
   await typeSql('SELECT class, AVG(score) FROM students GROUP BY class HAVING AVG(score) >= 70');
-  await page.click('button:has-text("実行")');
+  await page.click('[data-testid="run"]');
   await page.waitForTimeout(500);
-  await page.click('button:has-text("ANSWER")');
+  await page.click('[data-testid="answer"]');
   await page.waitForSelector('text=正解！', { timeout: 30000 });
   check('正解が正しく判定される', true);
   check('正解後に解説が開示される', (await page.locator('text=模範解答').count()) > 0);
 
   // 7. エディタ変更後の警告
   await typeSql('SELECT 1');
-  await page.click('button:has-text("ANSWER")');
+  await page.click('[data-testid="answer"]');
   await page.waitForSelector('text=エディタの内容が実行後に変更されています', { timeout: 10000 });
   check('未実行の変更を検知して警告する', true);
 
   // 8. EXPLAIN
   await typeSql('SELECT class, count(*) FROM students GROUP BY class');
-  await page.click('button:has-text("EXPLAIN")');
+  await page.click('[data-testid="explain"]');
   await page.waitForSelector('text=SEQ_SCAN', { timeout: 30000 });
   check('EXPLAIN の実行計画が表示される', true);
 
@@ -111,7 +128,7 @@ try {
   const mcCorrect = mcId.options[0].id === mcId.correct_option_id;
   check(
     '選択式問題が採点される',
-    (await page.locator(mcCorrect ? 'text=◯ 正解' : 'text=× 不正解').count()) > 0,
+    (await page.locator(mcCorrect ? 'text=正解' : 'text=不正解').count()) > 0,
   );
 
   // 11. 記述式問題を解く
