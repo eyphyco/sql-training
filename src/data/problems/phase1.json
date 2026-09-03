@@ -1,0 +1,212 @@
+[
+  {
+    "id": "phase1-lv1-001",
+    "type": "sql_query",
+    "phase": 1,
+    "level": 1,
+    "title": "平均点が70点以上のクラスを抽出する",
+    "prompt_md": "`students` テーブルから、**クラスごとの平均点が 70 点以上**のクラスを抽出してください。\n\n### 出力仕様\n- 列: クラス名、そのクラスの平均点（この順）\n- 並び順: 問いません\n- 列名は自由です\n\n> 「70 点以上」なのでちょうど 70 点のクラスも含みます。",
+    "schema_sql": "CREATE TABLE students (id INTEGER, name VARCHAR, class VARCHAR, score INTEGER);",
+    "seed_data_sql": "INSERT INTO students VALUES\n  (1, '青木', 'A組', 80), (2, '井上', 'A組', 72), (3, '上田', 'A組', 68), (4, '遠藤', 'A組', 90),\n  (5, '大野', 'B組', 60), (6, '柏木', 'B組', 55), (7, '木村', 'B組', 70),\n  (8, '工藤', 'C組', 70), (9, '桜井', 'C組', 70), (10, '志村', 'C組', 70), (11, '鈴木', 'C組', 71),\n  (12, '瀬戸', 'D組', 69), (13, '高井', 'D組', 71);",
+    "expected_query": "SELECT class, AVG(score) AS avg_score\nFROM students\nGROUP BY class\nHAVING AVG(score) >= 70;",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": false,
+      "compare_columns": null
+    },
+    "hints_md": [
+      "クラス単位に集計するので `GROUP BY class` が必要です。",
+      "「平均点が70点以上」は**集計した結果**に対する条件です。`WHERE` ではなく `HAVING` を使います。"
+    ],
+    "explanation_md": "## 考え方\n\n```sql\nSELECT class, AVG(score) AS avg_score\nFROM students\nGROUP BY class\nHAVING AVG(score) >= 70;\n```\n\n## WHERE と HAVING の決定的な違い\n\nSQL の評価順序はおおよそ次のとおりです。\n\n```\nFROM → WHERE → GROUP BY → HAVING → SELECT → ORDER BY\n```\n\n- **WHERE** は `GROUP BY` の**前**に働くので、まだグループが存在しない。したがって集約関数（`AVG` / `SUM` / `COUNT` …）を書けない。\n- **HAVING** は `GROUP BY` の**後**に働くので、グループごとの集計値で絞り込める。\n\n`WHERE AVG(score) >= 70` と書くとエラーになるのはこのためです。\n\n## よくある誤り\n\n`WHERE score >= 70` と書いてしまうケース。これは「**70点以上の生徒だけ**を集めて平均を取る」という別の意味になり、A組は 80・72・90 の平均 80.67 になってしまいます。「どの行を対象にするか（WHERE）」と「どのグループを残すか（HAVING）」を明確に分けて考えてください。",
+    "tags": [
+      "group by",
+      "having",
+      "集約関数"
+    ]
+  },
+  {
+    "id": "phase1-lv1-002",
+    "type": "sql_query",
+    "phase": 1,
+    "level": 1,
+    "title": "部署ごとの人数と平均給与を高い順に並べる",
+    "prompt_md": "`employees` テーブルから、**部署ごとの人数と平均給与**を求めてください。\n\n### 出力仕様\n- 列: 部署名、人数、平均給与（この順）\n- 並び順: **平均給与の高い順**（この問題は並び順も採点対象です）\n- 列名は自由です",
+    "schema_sql": "CREATE TABLE employees (\n  emp_id     INTEGER,\n  name       VARCHAR,\n  dept       VARCHAR,\n  salary     INTEGER,\n  hired_on   DATE,\n  manager_id INTEGER\n);",
+    "seed_data_sql": "INSERT INTO employees VALUES\n  (1, '佐藤', '営業', 480000, DATE '2018-04-01', NULL),\n  (2, '鈴木', '営業', 420000, DATE '2019-04-01', 1),\n  (3, '高橋', '営業', 390000, DATE '2021-10-01', 1),\n  (4, '田中', '開発', 520000, DATE '2017-04-01', NULL),\n  (5, '伊藤', '開発', 500000, DATE '2020-04-01', 4),\n  (6, '渡辺', '開発', 460000, DATE '2020-04-01', 4),\n  (7, '山本', '開発', 380000, DATE '2022-04-01', 4),\n  (8, '中村', '人事', 450000, DATE '2019-04-01', NULL),\n  (9, '小林', '人事', 460000, DATE '2023-04-01', 8),\n  (10, '加藤', '総務', 400000, DATE '2016-04-01', NULL);",
+    "expected_query": "SELECT dept, COUNT(*) AS headcount, AVG(salary) AS avg_salary\nFROM employees\nGROUP BY dept\nORDER BY AVG(salary) DESC;",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": true,
+      "compare_columns": null
+    },
+    "hints_md": [
+      "人数は `COUNT(*)`、平均は `AVG(salary)` です。",
+      "`ORDER BY` には集約関数をそのまま書けます（`ORDER BY AVG(salary) DESC`）。SELECT で付けた別名で並べ替えることもできます。"
+    ],
+    "explanation_md": "## 考え方\n\n```sql\nSELECT dept, COUNT(*) AS headcount, AVG(salary) AS avg_salary\nFROM employees\nGROUP BY dept\nORDER BY AVG(salary) DESC;\n```\n\n## ポイント\n\n- `GROUP BY dept` によって、結果は「部署 1 行」になります。`SELECT` に書けるのは **GROUP BY に指定した列** か **集約関数** だけです。\n- `ORDER BY` は `SELECT` より後に評価されるため、`ORDER BY avg_salary DESC` のように**別名**でも並べ替えられます（`WHERE` では別名を使えないのと対照的）。\n- `COUNT(*)` は行数、`COUNT(salary)` は「salary が NULL でない行数」です。この問題では NULL がないので同じ結果になりますが、意味は違います（→ 問題 phase1-lv2-004）。\n\n## 実務での注意\n\n金額の平均を `AVG` で出すと浮動小数点の丸め誤差が問題になることがあります。実務では `ROUND(AVG(salary), 0)` としたり、金額を `DECIMAL` 型で保持したりします。",
+    "tags": [
+      "group by",
+      "集約関数",
+      "order by"
+    ]
+  },
+  {
+    "id": "phase1-lv1-003",
+    "type": "sql_query",
+    "phase": 1,
+    "level": 1,
+    "title": "WHERE と HAVING を併用して対象期間の売れている店舗を出す",
+    "prompt_md": "`sales` テーブルには複数年の売上明細が入っています。売上金額は `qty * unit_price` で求めます。\n\n**2024 年の売上だけ**を対象に、**店舗ごとの売上金額合計が 100,000 円以上**の店舗を抽出してください。\n\n### 出力仕様\n- 列: 店舗名、2024年の売上金額合計（この順）\n- 並び順: 問いません\n- 列名は自由です",
+    "schema_sql": "CREATE TABLE sales (\n  sale_id    INTEGER,\n  sale_date  DATE,\n  store      VARCHAR,\n  product    VARCHAR,\n  qty        INTEGER,\n  unit_price INTEGER\n);",
+    "seed_data_sql": "INSERT INTO sales VALUES\n  (1, DATE '2024-01-15', '新宿', 'ノートPC',    1, 90000),\n  (2, DATE '2024-03-02', '新宿', 'マウス',      10, 3000),\n  (3, DATE '2024-02-10', '渋谷', 'モニター',    2, 25000),\n  (4, DATE '2024-05-20', '渋谷', 'キーボード',  5, 9000),\n  (5, DATE '2024-04-01', '池袋', 'モニター',    4, 25000),\n  (6, DATE '2023-11-05', '渋谷', 'ノートPC',    1, 60000),\n  (7, DATE '2023-06-01', '池袋', 'マウス',      5, 3000),\n  (8, DATE '2023-09-09', '新宿', 'キーボード',  3, 9000),\n  (9, DATE '2023-12-01', '上野', 'ノートPC',    2, 90000);",
+    "expected_query": "SELECT store, SUM(qty * unit_price) AS total_amount\nFROM sales\nWHERE sale_date >= DATE '2024-01-01' AND sale_date < DATE '2025-01-01'\nGROUP BY store\nHAVING SUM(qty * unit_price) >= 100000;",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": false,
+      "compare_columns": null
+    },
+    "hints_md": [
+      "「2024 年の売上だけを対象」は行を選ぶ条件なので `WHERE`、「合計が 100,000 以上」はグループを選ぶ条件なので `HAVING` です。",
+      "年の絞り込みは `EXTRACT(YEAR FROM sale_date) = 2024` でも `sale_date >= DATE '2024-01-01' AND sale_date < DATE '2025-01-01'` でも構いません。"
+    ],
+    "explanation_md": "## 考え方\n\n```sql\nSELECT store, SUM(qty * unit_price) AS total_amount\nFROM sales\nWHERE sale_date >= DATE '2024-01-01'\n  AND sale_date <  DATE '2025-01-01'\nGROUP BY store\nHAVING SUM(qty * unit_price) >= 100000;\n```\n\n## この問題の罠\n\nこのデータには、**2023 年を含めれば 100,000 円を超えるが、2024 年だけなら超えない**店舗（渋谷: 2024年は 95,000 円、2023年を足すと 155,000 円）と、**2023 年にしか売上がない**店舗（上野）が入っています。\n\n`WHERE` を書き忘れると渋谷と上野が混ざり込みます。「対象行の絞り込み（WHERE）」を先に済ませてから集計する、という順序を意識してください。\n\n## 日付範囲の書き方\n\n`EXTRACT(YEAR FROM sale_date) = 2024` は読みやすい一方、**列に関数を適用しているためインデックスが効かなくなる**（sargable でなくなる）という欠点があります。実務では\n\n```sql\nWHERE sale_date >= DATE '2024-01-01' AND sale_date < DATE '2025-01-01'\n```\n\nのように**範囲で書く**のが定石です。`BETWEEN '2024-01-01' AND '2024-12-31'` は、列が `TIMESTAMP` 型のときに 12/31 の 00:00:00 より後を取りこぼすため避けたほうが安全です。この話はフェーズ 4 でもう一度扱います。",
+    "tags": [
+      "group by",
+      "having",
+      "where",
+      "集約関数"
+    ]
+  },
+  {
+    "id": "phase1-lv2-004",
+    "type": "sql_query",
+    "phase": 1,
+    "level": 2,
+    "title": "COUNT(*) と COUNT(列) の違いを使い分ける",
+    "prompt_md": "`survey_responses` はアンケートの回答テーブルです。`rating`（5段階評価）は未入力のことがあり、その場合は `NULL` が入ります。\n\nチャネル (`channel`) ごとに、次の 3 つを求めてください。\n\n1. 回答件数（`rating` が未入力のものも含む全件）\n2. `rating` が入力されている件数\n3. `rating` の平均\n\n### 出力仕様\n- 列: channel、回答件数、評価入力件数、平均評価（この順）\n- 並び順: 問いません\n- 列名は自由です",
+    "schema_sql": "CREATE TABLE survey_responses (\n  id      INTEGER,\n  user_id INTEGER,\n  channel VARCHAR,\n  rating  INTEGER,\n  comment VARCHAR\n);",
+    "seed_data_sql": "INSERT INTO survey_responses VALUES\n  (1, 101, 'web',   5,    '使いやすい'),\n  (2, 102, 'web',   4,    NULL),\n  (3, 103, 'web',   NULL, '特になし'),\n  (4, 104, 'web',   3,    NULL),\n  (5, 105, 'app',   NULL, 'アプリが落ちる'),\n  (6, 106, 'app',   NULL, NULL),\n  (7, 107, 'store', 5,    '店員が親切'),\n  (8, 108, 'store', 5,    NULL);",
+    "expected_query": "SELECT channel,\n       COUNT(*)      AS response_count,\n       COUNT(rating) AS rated_count,\n       AVG(rating)   AS avg_rating\nFROM survey_responses\nGROUP BY channel;",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": false,
+      "compare_columns": null
+    },
+    "hints_md": [
+      "`COUNT(*)` は行数を数えます。`COUNT(列)` はその列が NULL でない行だけを数えます。",
+      "`AVG` も NULL を無視します。すべて NULL のグループでは平均は 0 ではなく NULL になります。"
+    ],
+    "explanation_md": "## 考え方\n\n```sql\nSELECT channel,\n       COUNT(*)      AS response_count,\n       COUNT(rating) AS rated_count,\n       AVG(rating)   AS avg_rating\nFROM survey_responses\nGROUP BY channel;\n```\n\n## 集約関数と NULL\n\n| 書き方 | 意味 |\n|---|---|\n| `COUNT(*)` | グループ内の**行数**。NULL も数える |\n| `COUNT(col)` | `col` が **NULL でない行数** |\n| `COUNT(DISTINCT col)` | `col` の**異なる値の個数**（NULL は数えない） |\n| `SUM` / `AVG` / `MAX` / `MIN` | NULL を**無視**して計算する |\n\n`app` チャネルは 2 件とも `rating` が NULL なので、`COUNT(*)` は 2、`COUNT(rating)` は 0、`AVG(rating)` は **NULL**（0 ではない）になります。\n\n## 平均を 0 として扱いたいとき\n\n```sql\nCOALESCE(AVG(rating), 0)\n```\n\nただし「評価が 0 点」と「評価が無い」は意味が違います。安易に 0 で埋めるとレポートの平均値が歪むので、**分母を明示する**（`AVG` ではなく `SUM(rating) / COUNT(rating)` と書き下す）ほうが意図が伝わることもあります。\n\n## 試験でのポイント\n\n`COUNT(*)` と `COUNT(列)` の差は、基本情報・応用情報でも頻出です。「NULL は値ではなく『不明』を表すマーカー」であり、`NULL = NULL` すら真にならない（`UNKNOWN` になる）点をあわせて押さえておいてください。",
+    "tags": [
+      "group by",
+      "集約関数",
+      "NULL"
+    ]
+  },
+  {
+    "id": "phase1-lv2-005",
+    "type": "sql_query",
+    "phase": 1,
+    "level": 2,
+    "title": "店舗別・月別に売上を集計する（複数キーの GROUP BY）",
+    "prompt_md": "2024 年の売上について、**店舗別・月別**の売上金額合計を求めてください。\n\n### 出力仕様\n- 列: 店舗名、年月（`2024-01` のような `YYYY-MM` 形式の文字列）、売上金額合計（この順）\n- 並び順: 店舗名の昇順、同じ店舗の中では年月の昇順（**並び順も採点対象です**）\n- 列名は自由です\n\n> 年月の文字列化には `strftime(sale_date, '%Y-%m')` が使えます。",
+    "schema_sql": "CREATE TABLE sales (\n  sale_id    INTEGER,\n  sale_date  DATE,\n  store      VARCHAR,\n  product    VARCHAR,\n  qty        INTEGER,\n  unit_price INTEGER\n);",
+    "seed_data_sql": "INSERT INTO sales VALUES\n  (1, DATE '2024-01-15', '新宿', 'ノートPC',    1, 90000),\n  (2, DATE '2024-03-02', '新宿', 'マウス',      10, 3000),\n  (3, DATE '2024-02-10', '渋谷', 'モニター',    2, 25000),\n  (4, DATE '2024-05-20', '渋谷', 'キーボード',  5, 9000),\n  (5, DATE '2024-04-01', '池袋', 'モニター',    4, 25000),\n  (6, DATE '2023-11-05', '渋谷', 'ノートPC',    1, 60000),\n  (7, DATE '2023-06-01', '池袋', 'マウス',      5, 3000),\n  (8, DATE '2023-09-09', '新宿', 'キーボード',  3, 9000),\n  (9, DATE '2023-12-01', '上野', 'ノートPC',    2, 90000);",
+    "expected_query": "SELECT store,\n       strftime(sale_date, '%Y-%m') AS ym,\n       SUM(qty * unit_price) AS total_amount\nFROM sales\nWHERE sale_date >= DATE '2024-01-01' AND sale_date < DATE '2025-01-01'\nGROUP BY store, strftime(sale_date, '%Y-%m')\nORDER BY store, ym;",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": true,
+      "compare_columns": null
+    },
+    "hints_md": [
+      "グループ化のキーが 2 つになります。`GROUP BY store, <年月の式>` のようにカンマで並べます。",
+      "SELECT で計算した式は、多くの DBMS では GROUP BY にも同じ式を書く必要があります（DuckDB や PostgreSQL では別名や序数での指定も可能です）。"
+    ],
+    "explanation_md": "## 考え方\n\n```sql\nSELECT store,\n       strftime(sale_date, '%Y-%m') AS ym,\n       SUM(qty * unit_price) AS total_amount\nFROM sales\nWHERE sale_date >= DATE '2024-01-01' AND sale_date < DATE '2025-01-01'\nGROUP BY store, strftime(sale_date, '%Y-%m')\nORDER BY store, ym;\n```\n\n## 複数キーの GROUP BY\n\n`GROUP BY a, b` は「a と b の**組み合わせ**ごとに 1 行」を作ります。店舗が 3 つ・月が 5 種類あっても、実際にデータが存在する組み合わせの数だけ行が出ます（データが無い月は行が出ない、という点は注意。「売上ゼロの月も表示したい」場合はカレンダー表と外部結合します → フェーズ 3）。\n\n## 式によるグループ化\n\n`GROUP BY` にはカラムだけでなく**式**も書けます。DuckDB / PostgreSQL では\n\n```sql\nGROUP BY store, ym        -- SELECT の別名を参照（PostgreSQL は不可、DuckDB は可）\nGROUP BY 1, 2             -- 出力列の序数を参照\nGROUP BY ALL              -- DuckDB 独自。集約でない列すべてでグループ化\n```\n\nも使えますが、**移植性が高いのは式をそのまま書き下す形**です。試験でも「SELECT の別名は GROUP BY / WHERE では使えない」を前提にした出題があります。\n\n## 月次集計の別解\n\n```sql\ndate_trunc('month', sale_date)   -- 2024-01-01 のような DATE が返る\n```\n\nこちらは文字列でなく日付型のまま扱えるので、期間比較や並べ替えに強いという利点があります。",
+    "tags": [
+      "group by",
+      "日付関数",
+      "集約関数"
+    ]
+  },
+  {
+    "id": "phase1-lv2-006",
+    "type": "sql_query",
+    "phase": 1,
+    "level": 2,
+    "title": "条件付き集計で部署ごとの高給与者比率を出す",
+    "prompt_md": "部署ごとに、次の 3 つを求めてください。\n\n1. 在籍人数\n2. 給与が 450,000 円以上の人数\n3. その比率（2 ÷ 1）を**小数第 2 位に丸めた値**\n\n### 出力仕様\n- 列: 部署名、在籍人数、高給与者数、比率（この順）\n- 並び順: 問いません\n- 列名は自由です",
+    "schema_sql": "CREATE TABLE employees (\n  emp_id     INTEGER,\n  name       VARCHAR,\n  dept       VARCHAR,\n  salary     INTEGER,\n  hired_on   DATE,\n  manager_id INTEGER\n);",
+    "seed_data_sql": "INSERT INTO employees VALUES\n  (1, '佐藤', '営業', 480000, DATE '2018-04-01', NULL),\n  (2, '鈴木', '営業', 420000, DATE '2019-04-01', 1),\n  (3, '高橋', '営業', 390000, DATE '2021-10-01', 1),\n  (4, '田中', '開発', 520000, DATE '2017-04-01', NULL),\n  (5, '伊藤', '開発', 500000, DATE '2020-04-01', 4),\n  (6, '渡辺', '開発', 460000, DATE '2020-04-01', 4),\n  (7, '山本', '開発', 380000, DATE '2022-04-01', 4),\n  (8, '中村', '人事', 450000, DATE '2019-04-01', NULL),\n  (9, '小林', '人事', 460000, DATE '2023-04-01', 8),\n  (10, '加藤', '総務', 400000, DATE '2016-04-01', NULL);",
+    "expected_query": "SELECT dept,\n       COUNT(*) AS headcount,\n       SUM(CASE WHEN salary >= 450000 THEN 1 ELSE 0 END) AS high_paid,\n       ROUND(SUM(CASE WHEN salary >= 450000 THEN 1 ELSE 0 END) * 1.0 / COUNT(*), 2) AS ratio\nFROM employees\nGROUP BY dept;",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": false,
+      "compare_columns": null
+    },
+    "hints_md": [
+      "「条件に合う行だけ数える」には `SUM(CASE WHEN 条件 THEN 1 ELSE 0 END)` が定番です。",
+      "DuckDB / PostgreSQL では `COUNT(*) FILTER (WHERE 条件)` とも書けます。整数同士の割り算に注意（`* 1.0` を掛けるか CAST します）。"
+    ],
+    "explanation_md": "## 考え方\n\nいわゆる **条件付き集計（conditional aggregation）** です。\n\n```sql\nSUM(CASE WHEN salary >= 450000 THEN 1 ELSE 0 END)\n```\n\n`CASE` 式は行ごとに評価され、条件に合えば 1、合わなければ 0 を返します。それを `SUM` すれば「条件に合う行数」になります。\n\n`COUNT(CASE WHEN salary >= 450000 THEN 1 END)` でも同じ結果です（`ELSE` を書かないと NULL になり、`COUNT` は NULL を数えないため）。\n\n## なぜ WHERE ではダメなのか\n\n`WHERE salary >= 450000` としてしまうと、**分母（在籍人数）まで絞られてしまい**、比率が常に 1.0 になります。「全体を数えつつ、一部だけ別に数える」ときは WHERE ではなく条件付き集計、と覚えてください。1 回のスキャンで複数の条件を同時に数えられるので、性能面でも有利です。\n\n## 整数同士の割り算\n\n多くの DBMS（PostgreSQL、Oracle、SQL Server など）では `1 / 3` は **0**（整数除算）になります。`* 1.0` を掛けるか `CAST(x AS DECIMAL)` で明示的に型を上げてください。DuckDB や MySQL は `/` が実数除算ですが、移植性を考えると明示するのが安全です。\n\n## 横持ち集計（クロス集計）への応用\n\n```sql\nSELECT dept,\n       SUM(CASE WHEN salary >= 500000 THEN 1 ELSE 0 END) AS \"50万以上\",\n       SUM(CASE WHEN salary BETWEEN 400000 AND 499999 THEN 1 ELSE 0 END) AS \"40万台\",\n       SUM(CASE WHEN salary <  400000 THEN 1 ELSE 0 END) AS \"40万未満\"\nFROM employees GROUP BY dept;\n```\n\nこのように、CASE を並べるだけで**行持ちのデータを列持ち（クロス集計表）に変換**できます。実務のレポート作成で頻出のテクニックです。",
+    "tags": [
+      "group by",
+      "条件付き集計",
+      "case"
+    ],
+    "alternative_md": "**別解（FILTER 句 / SQL:2003 標準）**\n\n```sql\nSELECT dept,\n       COUNT(*) AS headcount,\n       COUNT(*) FILTER (WHERE salary >= 450000) AS high_paid,\n       ROUND(COUNT(*) FILTER (WHERE salary >= 450000) * 1.0 / COUNT(*), 2) AS ratio\nFROM employees\nGROUP BY dept;\n```"
+  },
+  {
+    "id": "phase1-lv3-007",
+    "type": "sql_query",
+    "phase": 1,
+    "level": 3,
+    "title": "全社平均を上回る部署だけを抽出する（HAVING とサブクエリ）",
+    "prompt_md": "**部署の平均給与が、全社員の平均給与を上回る**部署を抽出してください。\n\n### 出力仕様\n- 列: 部署名、その部署の平均給与（この順）\n- 並び順: 平均給与の**降順**（並び順も採点対象です）\n- 列名は自由です",
+    "schema_sql": "CREATE TABLE employees (\n  emp_id     INTEGER,\n  name       VARCHAR,\n  dept       VARCHAR,\n  salary     INTEGER,\n  hired_on   DATE,\n  manager_id INTEGER\n);",
+    "seed_data_sql": "INSERT INTO employees VALUES\n  (1, '佐藤', '営業', 480000, DATE '2018-04-01', NULL),\n  (2, '鈴木', '営業', 420000, DATE '2019-04-01', 1),\n  (3, '高橋', '営業', 390000, DATE '2021-10-01', 1),\n  (4, '田中', '開発', 520000, DATE '2017-04-01', NULL),\n  (5, '伊藤', '開発', 500000, DATE '2020-04-01', 4),\n  (6, '渡辺', '開発', 460000, DATE '2020-04-01', 4),\n  (7, '山本', '開発', 380000, DATE '2022-04-01', 4),\n  (8, '中村', '人事', 450000, DATE '2019-04-01', NULL),\n  (9, '小林', '人事', 460000, DATE '2023-04-01', 8),\n  (10, '加藤', '総務', 400000, DATE '2016-04-01', NULL);",
+    "expected_query": "SELECT dept, AVG(salary) AS avg_salary\nFROM employees\nGROUP BY dept\nHAVING AVG(salary) > (SELECT AVG(salary) FROM employees)\nORDER BY AVG(salary) DESC;",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": true,
+      "compare_columns": null
+    },
+    "hints_md": [
+      "全社平均は「1 行 1 列だけを返すクエリ」＝スカラサブクエリで求められます。",
+      "`HAVING AVG(salary) > (SELECT AVG(salary) FROM employees)` のように、HAVING の中にサブクエリを書けます。"
+    ],
+    "explanation_md": "## 考え方\n\n```sql\nSELECT dept, AVG(salary) AS avg_salary\nFROM employees\nGROUP BY dept\nHAVING AVG(salary) > (SELECT AVG(salary) FROM employees)\nORDER BY AVG(salary) DESC;\n```\n\n全社平均は 446,000 円。部署平均は 開発 465,000 / 人事 455,000 / 営業 430,000 / 総務 400,000 なので、**開発と人事**が該当します。\n\n## スカラサブクエリ\n\n「1 行 1 列」を返すサブクエリは**値と同じように**扱えます。ここでは相関がない（外側の行に依存しない）ので、DBMS は**一度だけ評価して使い回します**。実行計画上も定数として畳み込まれるため、性能上の心配はほとんどありません。\n\n一方、外側の行を参照する**相関サブクエリ**は行ごとに評価される可能性があり、性能問題の主犯になりがちです。これはフェーズ 5 で本格的に扱います。\n\n## よくある誤り\n\n```sql\n-- NG: WHERE では集約結果を比較できない\nWHERE salary > (SELECT AVG(salary) FROM employees)\n```\n\nこれは「**個人の給与**が全社平均を超える社員」の抽出であり、問われている「**部署の平均**が全社平均を超える部署」とは別物です。粒度（行が何を表すか）を常に意識してください。\n\n## 別解: CTE で意図を明示する\n\n```sql\nWITH dept_avg AS (\n  SELECT dept, AVG(salary) AS avg_salary FROM employees GROUP BY dept\n)\nSELECT dept, avg_salary\nFROM dept_avg\nWHERE avg_salary > (SELECT AVG(salary) FROM employees)\nORDER BY avg_salary DESC;\n```\n\n`WITH`（共通表式 / CTE）でいったん部署平均という中間結果に名前を付けると、外側は素直な `WHERE` で書けます。読みやすさを優先するならこちらです。",
+    "tags": [
+      "having",
+      "サブクエリ",
+      "group by"
+    ]
+  },
+  {
+    "id": "phase1-lv3-008",
+    "type": "sql_query",
+    "phase": 1,
+    "level": 3,
+    "title": "小計と総合計を1つの結果に出す（ROLLUP）",
+    "prompt_md": "2024 年の売上について、**店舗別・商品別の売上金額**に加えて、**店舗ごとの小計**と**全体の総合計**を 1 つの結果セットで出してください。\n\n### 出力仕様\n- 列: 店舗名、商品名、売上金額合計（この順）\n- 小計行は商品名が `NULL`、総合計行は店舗名・商品名がともに `NULL` になるようにしてください\n- 並び順: 問いません\n- 列名は自由です\n\n> `GROUP BY ROLLUP(...)` を使います。",
+    "schema_sql": "CREATE TABLE sales (\n  sale_id    INTEGER,\n  sale_date  DATE,\n  store      VARCHAR,\n  product    VARCHAR,\n  qty        INTEGER,\n  unit_price INTEGER\n);",
+    "seed_data_sql": "INSERT INTO sales VALUES\n  (1, DATE '2024-01-15', '新宿', 'ノートPC',    1, 90000),\n  (2, DATE '2024-03-02', '新宿', 'マウス',      10, 3000),\n  (3, DATE '2024-02-10', '渋谷', 'モニター',    2, 25000),\n  (4, DATE '2024-05-20', '渋谷', 'キーボード',  5, 9000),\n  (5, DATE '2024-04-01', '池袋', 'モニター',    4, 25000),\n  (6, DATE '2023-11-05', '渋谷', 'ノートPC',    1, 60000),\n  (7, DATE '2023-06-01', '池袋', 'マウス',      5, 3000),\n  (8, DATE '2023-09-09', '新宿', 'キーボード',  3, 9000),\n  (9, DATE '2023-12-01', '上野', 'ノートPC',    2, 90000);",
+    "expected_query": "SELECT store, product, SUM(qty * unit_price) AS total_amount\nFROM sales\nWHERE sale_date >= DATE '2024-01-01' AND sale_date < DATE '2025-01-01'\nGROUP BY ROLLUP(store, product);",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": false,
+      "compare_columns": null
+    },
+    "hints_md": [
+      "`GROUP BY ROLLUP(a, b)` は `(a,b)` / `(a)` / `()` の 3 段階の集計をまとめて出します。",
+      "小計行では、集計しなかった列が NULL になります。"
+    ],
+    "explanation_md": "## 考え方\n\n```sql\nSELECT store, product, SUM(qty * unit_price) AS total_amount\nFROM sales\nWHERE sale_date >= DATE '2024-01-01' AND sale_date < DATE '2025-01-01'\nGROUP BY ROLLUP(store, product);\n```\n\n## ROLLUP / CUBE / GROUPING SETS\n\nSQL:1999 で追加された集計拡張です。\n\n| 構文 | 生成されるグループ |\n|---|---|\n| `ROLLUP(a, b)` | `(a,b)`, `(a)`, `()` — **階層的な小計**（左から順に畳んでいく） |\n| `CUBE(a, b)` | `(a,b)`, `(a)`, `(b)`, `()` — **全組み合わせ** |\n| `GROUPING SETS((a,b),(b))` | 指定した組み合わせだけ |\n\n`ROLLUP` は「店舗 → 商品」のような**階層のある集計軸**に対して、小計・総合計を一度のスキャンで出すのに使います。UNION ALL で 3 本のクエリをつなぐより高速で、意図も明確です。\n\n## NULL の見分け方\n\n小計行の NULL と、**元データに入っていた NULL** は見た目では区別できません。区別するには `GROUPING()` 関数を使います。\n\n```sql\nSELECT CASE WHEN GROUPING(store) = 1 THEN '【総合計】' ELSE store END AS store,\n       CASE WHEN GROUPING(product) = 1 AND GROUPING(store) = 0 THEN '【店舗計】'\n            WHEN GROUPING(product) = 1 THEN ''\n            ELSE product END AS product,\n       SUM(qty * unit_price) AS total_amount\nFROM sales\nWHERE sale_date >= DATE '2024-01-01' AND sale_date < DATE '2025-01-01'\nGROUP BY ROLLUP(store, product);\n```\n\n`GROUPING(col)` は「その行が col について集約された（小計行である）」とき 1 を返します。データベーススペシャリスト試験でも、この集計拡張は SQL 問題の題材になります。",
+    "tags": [
+      "group by",
+      "rollup",
+      "集約関数"
+    ]
+  }
+]

@@ -1,0 +1,193 @@
+[
+  {
+    "id": "phase5-lv1-001",
+    "type": "sql_query",
+    "phase": 5,
+    "level": 1,
+    "title": "EXISTS で「注文したことがある顧客」を絞り込む",
+    "prompt_md": "**2024 年に 1 件以上の注文がある顧客**を抽出してください。\n\n### 出力仕様\n- 列: 顧客ID、顧客名（この順）\n- 並び順: 問いません\n- 列名は自由です\n\n> この問題は `EXISTS` を使って解いてください（採点条件に含まれます）。",
+    "schema_sql": "CREATE TABLE customers (\n  customer_id INTEGER,\n  name        VARCHAR,\n  city        VARCHAR\n);\nCREATE TABLE orders (\n  order_id    INTEGER,\n  customer_id INTEGER,\n  order_date  DATE,\n  amount      INTEGER\n);\nCREATE TABLE order_items (\n  order_id   INTEGER,\n  item_no    INTEGER,\n  product_id INTEGER,\n  qty        INTEGER\n);\nCREATE TABLE products (\n  product_id INTEGER,\n  name       VARCHAR,\n  category   VARCHAR,\n  price      INTEGER\n);",
+    "seed_data_sql": "INSERT INTO customers VALUES\n  (1, 'あさひ商事',   '東京'),\n  (2, 'いろは物産',   '大阪'),\n  (3, 'うしお工業',   '東京'),\n  (4, 'えびす商会',   '福岡'),\n  (5, 'おおぞら電機', '東京');\nINSERT INTO orders VALUES\n  (101, 1, DATE '2024-01-10', 50000),\n  (102, 1, DATE '2024-03-05', 30000),\n  (103, 2, DATE '2024-02-20', 80000),\n  (104, 3, DATE '2024-05-01', 20000),\n  (105, 5, DATE '2023-12-15', 60000),\n  (106, 2, DATE '2023-11-11', 15000);\nINSERT INTO order_items VALUES\n  (101, 1, 1, 1),\n  (101, 2, 3, 2),\n  (102, 1, 2, 1),\n  (103, 1, 5, 1),\n  (103, 2, 4, 3),\n  (104, 1, 3, 5),\n  (105, 1, 2, 2),\n  (106, 1, 4, 1);\nINSERT INTO products VALUES\n  (1, 'ノートPC',       'PC',       90000),\n  (2, 'モニター',       '周辺機器', 25000),\n  (3, 'マウス',         '周辺機器',  3000),\n  (4, 'キーボード',     '周辺機器',  9000),\n  (5, 'デスクトップPC', 'PC',      120000);",
+    "expected_query": "SELECT c.customer_id, c.name\nFROM customers c\nWHERE EXISTS (\n  SELECT 1\n  FROM orders o\n  WHERE o.customer_id = c.customer_id\n    AND o.order_date >= DATE '2024-01-01'\n    AND o.order_date <  DATE '2025-01-01'\n);",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": false,
+      "compare_columns": null,
+      "sql_required": [
+        "EXISTS"
+      ],
+      "pattern_hint": "この問題は `EXISTS` を使って解いてください。"
+    },
+    "hints_md": [
+      "`EXISTS (サブクエリ)` は「サブクエリが 1 行でも返せば真」という述語です。返る値の中身は見ないので `SELECT 1` で構いません。",
+      "サブクエリの中で外側の `c.customer_id` を参照します（相関サブクエリ）。"
+    ],
+    "explanation_md": "## 考え方\n\n```sql\nSELECT c.customer_id, c.name\nFROM customers c\nWHERE EXISTS (\n  SELECT 1 FROM orders o\n  WHERE o.customer_id = c.customer_id\n    AND o.order_date >= DATE '2024-01-01'\n    AND o.order_date <  DATE '2025-01-01'\n);\n```\n\n## EXISTS の意味\n\n`EXISTS` は**行が存在するかどうか**だけを判定する述語です。\n\n- サブクエリが何を SELECT しているかは**一切関係ありません**（`SELECT 1` でも `SELECT *` でも同じ）\n- 1 行見つかった時点で判定が確定するので、DBMS は残りを探しません（**semi join** に最適化される）\n\n## IN との使い分け\n\n```sql\n-- IN 版\nWHERE c.customer_id IN (SELECT o.customer_id FROM orders o WHERE ...)\n```\n\n現代の DBMS では `IN` と `EXISTS` はほぼ同じ実行計画（semi join）に最適化されるため、**性能差はほとんどありません**。使い分けの基準は次のとおりです。\n\n| 場面 | 推奨 |\n|---|---|\n| 複数列で照合したい | `EXISTS`（`IN` は行値式が必要で読みにくい） |\n| サブクエリ側に NULL があり得る否定形 | **必ず `NOT EXISTS`**（`NOT IN` は壊れる → 次の問題） |\n| 値のリストが定数 | `IN ('A','B','C')` |\n\n## 相関サブクエリ\n\nサブクエリの中から**外側のクエリの列**（`c.customer_id`）を参照しているものを**相関サブクエリ**と呼びます。\n概念上は「外側の 1 行ごとにサブクエリを実行する」ですが、現代のオプティマイザは**脱相関（decorrelation）**を行い、内部的には結合に書き換えて一括処理します。\n\nただしこの最適化が効くかは DBMS と書き方次第です。フェーズ 5 の残りの問題では、「オプティマイザ任せにせず、最初から結合やウィンドウ関数で書く」パターンを学びます。",
+    "tags": [
+      "exists",
+      "サブクエリ",
+      "相関サブクエリ"
+    ],
+    "alternative_md": "**別解（JOIN + DISTINCT）**\n\n```sql\nSELECT DISTINCT c.customer_id, c.name\nFROM customers c\nJOIN orders o ON o.customer_id = c.customer_id\nWHERE o.order_date >= DATE '2024-01-01' AND o.order_date < DATE '2025-01-01';\n```\n\n結果は同じですが、**結合で行が増えたあとに `DISTINCT` で潰す**という無駄が発生します。「存在するかどうかだけ知りたい」場合は `EXISTS` のほうが意図が明確で、多くの DBMS は最初の 1 件を見つけた時点で探索を打ち切ります（semi join）。"
+  },
+  {
+    "id": "phase5-lv2-002",
+    "type": "sql_query",
+    "phase": 5,
+    "level": 2,
+    "title": "NOT IN が NULL で壊れる（NOT EXISTS へ）",
+    "prompt_md": "`orders` には、担当が未割当で `customer_id` が `NULL` の注文が 1 件混ざっています。\n\nエディタには「一度も注文していない顧客」を `NOT IN` で求めるクエリが入っています。\n**まず実行してみてください。0 件になるはずです。**\n\nなぜそうなるのかを考えたうえで、**正しく「一度も注文していない顧客」を抽出**してください。\n\n### 出力仕様\n- 列: 顧客ID、顧客名（この順）\n- 並び順: 問いません\n- **`NOT IN` の使用は禁止**です（採点条件に含まれます）\n- 列名は自由です",
+    "schema_sql": "CREATE TABLE customers (\n  customer_id INTEGER,\n  name        VARCHAR,\n  city        VARCHAR\n);\nCREATE TABLE orders (\n  order_id    INTEGER,\n  customer_id INTEGER,\n  order_date  DATE,\n  amount      INTEGER\n);\nCREATE TABLE order_items (\n  order_id   INTEGER,\n  item_no    INTEGER,\n  product_id INTEGER,\n  qty        INTEGER\n);\nCREATE TABLE products (\n  product_id INTEGER,\n  name       VARCHAR,\n  category   VARCHAR,\n  price      INTEGER\n);",
+    "seed_data_sql": "INSERT INTO customers VALUES\n  (1, 'あさひ商事',   '東京'),\n  (2, 'いろは物産',   '大阪'),\n  (3, 'うしお工業',   '東京'),\n  (4, 'えびす商会',   '福岡'),\n  (5, 'おおぞら電機', '東京');\nINSERT INTO orders VALUES\n  (101, 1,    DATE '2024-01-10', 50000),\n  (102, 1,    DATE '2024-03-05', 30000),\n  (103, 2,    DATE '2024-02-20', 80000),\n  (104, 3,    DATE '2024-05-01', 20000),\n  (105, 5,    DATE '2023-12-15', 60000),\n  (106, 2,    DATE '2023-11-11', 15000),\n  (107, NULL, DATE '2024-06-01', 40000);\nINSERT INTO order_items VALUES\n  (101, 1, 1, 1),\n  (101, 2, 3, 2),\n  (102, 1, 2, 1),\n  (103, 1, 5, 1),\n  (103, 2, 4, 3),\n  (104, 1, 3, 5),\n  (105, 1, 2, 2),\n  (106, 1, 4, 1);\nINSERT INTO products VALUES\n  (1, 'ノートPC',       'PC',       90000),\n  (2, 'モニター',       '周辺機器', 25000),\n  (3, 'マウス',         '周辺機器',  3000),\n  (4, 'キーボード',     '周辺機器',  9000),\n  (5, 'デスクトップPC', 'PC',      120000);",
+    "expected_query": "SELECT c.customer_id, c.name\nFROM customers c\nWHERE NOT EXISTS (\n  SELECT 1 FROM orders o WHERE o.customer_id = c.customer_id\n);",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": false,
+      "compare_columns": null,
+      "sql_forbidden": [
+        "NOT\\s+IN"
+      ],
+      "pattern_hint": "この問題では `NOT IN` の使用を禁止しています。`NOT EXISTS` または外部結合で書いてください。"
+    },
+    "hints_md": [
+      "`x NOT IN (1, 2, NULL)` は `x <> 1 AND x <> 2 AND x <> NULL` と同じ。最後の比較は必ず UNKNOWN になります。",
+      "AND の中に UNKNOWN が 1 つでもあると、全体は真になりません。つまり結果は常に空です。",
+      "`NOT EXISTS` は「行が存在しない」ことだけを見るので、NULL の影響を受けません。"
+    ],
+    "explanation_md": "## なぜ 0 件になるのか\n\n`NOT IN` は内部的に **`<>` の AND 連結**に展開されます。\n\n```\ncustomer_id NOT IN (1, 1, 2, 3, 5, 2, NULL)\n ≡ customer_id <> 1 AND customer_id <> 2 AND ... AND customer_id <> NULL\n                                                    ~~~~~~~~~~~~~~~~~~~~\n                                                    これは常に UNKNOWN\n```\n\nSQL の比較は **3 値論理（TRUE / FALSE / UNKNOWN）**です。NULL との比較は「等しい」でも「等しくない」でもなく **UNKNOWN**。\n\n```\nTRUE  AND UNKNOWN → UNKNOWN\nFALSE AND UNKNOWN → FALSE\n```\n\n`WHERE` が行を通すのは結果が **TRUE のときだけ**（UNKNOWN は通さない）ので、どの顧客も条件を満たせず**結果は常に空**になります。\n\n## 恐ろしいのは「エラーにならない」こと\n\n構文エラーも実行時エラーも出ません。**静かに 0 件を返すだけ**です。\nそのため「該当データが無いんだな」と誤解され、本番稼働してから発覚することが少なくありません。**`NOT IN` はサブクエリと組み合わせて使わない**、を原則にしてください。\n\n## IN の場合はどうか\n\n`IN` のほうは NULL があっても「TRUE になる行はきちんと TRUE」なので、実害が出にくいです（ただし「該当なし」が FALSE ではなく UNKNOWN になるという違いは残ります）。**壊れるのは否定形（NOT IN）**、と覚えてください。\n\n## まとめ: 3 つの書き方\n\n| 書き方 | NULL 耐性 | 備考 |\n|---|---|---|\n| `NOT EXISTS` | ○ | **第一候補**。意図も明確 |\n| `LEFT JOIN ... IS NULL` | ○ | 古典的な anti join。判定列に NOT NULL 列を選ぶこと |\n| `NOT IN` | **×** | サブクエリ側に NOT NULL 制約がある場合のみ |\n\n## 試験でのポイント\n\n3 値論理と NULL の扱いは、基本情報・応用情報・データベーススペシャリストのいずれでも頻出です。\n`NULL = NULL` は TRUE ではなく UNKNOWN、`NULL <> NULL` も UNKNOWN、`WHERE` は TRUE のみ通す——この 3 点を押さえておけば、たいていの出題に対応できます。",
+    "tags": [
+      "not exists",
+      "NULL",
+      "サブクエリ",
+      "3値論理"
+    ],
+    "starter_sql": "-- 「一度も注文していない顧客」を求めたいクエリですが、\n-- 実行すると 0 件になります。まず実行して確かめてください。\n-- （orders には customer_id が NULL の行が 1 件あります）\nSELECT customer_id, name\nFROM customers\nWHERE customer_id NOT IN (SELECT customer_id FROM orders);",
+    "alternative_md": "**別解（外部結合 + IS NULL）**\n\n```sql\nSELECT c.customer_id, c.name\nFROM customers c\nLEFT JOIN orders o ON o.customer_id = c.customer_id\nWHERE o.order_id IS NULL;\n```\n\n**NOT IN をどうしても使う場合**\n\n```sql\nWHERE customer_id NOT IN (SELECT customer_id FROM orders WHERE customer_id IS NOT NULL)\n```\n\nNULL を除けば正しく動きますが、**「除き忘れたら静かに 0 件を返す」**という危険な性質は変わりません。最初から `NOT EXISTS` を使うのが安全です。"
+  },
+  {
+    "id": "phase5-lv2-003",
+    "type": "sql_query",
+    "phase": 5,
+    "level": 2,
+    "title": "相関サブクエリをウィンドウ関数に書き換える",
+    "prompt_md": "エディタには「各部署で最も給与が高い社員」を**相関サブクエリ**で求めるクエリが入っています。\nこのクエリは正しい結果を返しますが、`employees` を**部署ごとに何度も走査**します。\n\n同じ結果を**ウィンドウ関数**で求めてください。\n\n### 出力仕様\n- 列: 部署名、氏名、給与（この順）\n- 並び順: 問いません\n- ウィンドウ関数（`OVER (...)`）を使うこと（採点条件に含まれます）\n- 列名は自由です",
+    "schema_sql": "CREATE TABLE employees (\n  emp_id     INTEGER,\n  name       VARCHAR,\n  dept       VARCHAR,\n  salary     INTEGER,\n  hired_on   DATE,\n  manager_id INTEGER\n);",
+    "seed_data_sql": "INSERT INTO employees VALUES\n  (1, '佐藤', '営業', 480000, DATE '2018-04-01', NULL),\n  (2, '鈴木', '営業', 420000, DATE '2019-04-01', 1),\n  (3, '高橋', '営業', 390000, DATE '2021-10-01', 1),\n  (4, '田中', '開発', 520000, DATE '2017-04-01', NULL),\n  (5, '伊藤', '開発', 500000, DATE '2020-04-01', 4),\n  (6, '渡辺', '開発', 460000, DATE '2020-04-01', 4),\n  (7, '山本', '開発', 380000, DATE '2022-04-01', 4),\n  (8, '中村', '人事', 450000, DATE '2019-04-01', NULL),\n  (9, '小林', '人事', 460000, DATE '2023-04-01', 8),\n  (10, '加藤', '総務', 400000, DATE '2016-04-01', NULL);",
+    "expected_query": "SELECT dept, name, salary\nFROM (\n  SELECT dept, name, salary,\n         RANK() OVER (PARTITION BY dept ORDER BY salary DESC) AS rnk\n  FROM employees\n) t\nWHERE rnk = 1;",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": false,
+      "compare_columns": null,
+      "sql_required": [
+        "OVER\\s*\\("
+      ],
+      "pattern_hint": "この問題はウィンドウ関数（`OVER (...)`）を使って解いてください。"
+    },
+    "hints_md": [
+      "`RANK() OVER (PARTITION BY dept ORDER BY salary DESC)` で部署内順位を付け、1 位だけを残します。",
+      "「同給与で 1 位が複数いる場合も全員出す」なら `RANK`、「必ず 1 人」なら `ROW_NUMBER` です。元のクエリ（`= MAX`）は前者と同じ挙動です。"
+    ],
+    "explanation_md": "## 何が問題だったのか\n\n```sql\nWHERE e.salary = (SELECT MAX(x.salary) FROM employees x WHERE x.dept = e.dept)\n```\n\nこれは**相関サブクエリ**です。概念的には「外側の 1 行ごとに、内側で部署の最大給与を計算し直す」動作になります。\n10 行なら問題になりませんが、100 万行なら**100 万回の集計**が走りかねません。\n\n## ウィンドウ関数なら 1 回の走査で済む\n\n```sql\nSELECT dept, name, salary\nFROM (\n  SELECT dept, name, salary,\n         RANK() OVER (PARTITION BY dept ORDER BY salary DESC) AS rnk\n  FROM employees\n) t\nWHERE rnk = 1;\n```\n\nテーブルを 1 回読み、部署ごとにソート（またはハッシュ）して順位を振るだけです。計算量は O(n log n) に収まります。\n\n## 書き換えパターン集\n\n| 相関サブクエリ | ウィンドウ関数 |\n|---|---|\n| `= (SELECT MAX(x) FROM t WHERE t.g = o.g)` | `MAX(x) OVER (PARTITION BY g)` と比較 |\n| `= (SELECT MIN(d) FROM t WHERE ... AND d > o.d)` | `LEAD(d) OVER (PARTITION BY g ORDER BY d)` |\n| `(SELECT COUNT(*) FROM t WHERE t.x > o.x)` で順位を出す | `RANK() OVER (ORDER BY x DESC)` |\n| `(SELECT SUM(x) FROM t WHERE t.d <= o.d)` で累計 | `SUM(x) OVER (ORDER BY d)` |\n\n## 実は最近の DBMS は賢い\n\nこのアプリの DuckDB や、PostgreSQL・SQL Server の最近のバージョンは、相関サブクエリを**脱相関（decorrelation）**して結合に書き換えます。実際、元のクエリを `EXPLAIN` してもハッシュ結合が現れ、行ごとのループにはなりません。\n\nとはいえ、\n- 脱相関できない形（サブクエリ内に `LIMIT` や複雑な集計がある等）は依然として存在する\n- MySQL の古いバージョンなど、脱相関が弱い DBMS も現役\n- **人間が読んで意図が明確なのはウィンドウ関数版**\n\nなので、「オプティマイザが何とかしてくれるはず」に頼らず、最初から意図の明確な書き方を選ぶのが実務的です。",
+    "tags": [
+      "相関サブクエリ",
+      "ウィンドウ関数",
+      "最適化"
+    ],
+    "starter_sql": "-- 各部署で最も給与が高い社員を求めるクエリです。\n-- 相関サブクエリを使っているため、社員数が増えると employees を何度も走査します。\n-- これをウィンドウ関数で書き換えてください。\nSELECT e.dept, e.name, e.salary\nFROM employees e\nWHERE e.salary = (SELECT MAX(x.salary) FROM employees x WHERE x.dept = e.dept);",
+    "alternative_md": "**別解（MAX をウィンドウ関数として使う）**\n\n```sql\nSELECT dept, name, salary\nFROM (\n  SELECT dept, name, salary,\n         MAX(salary) OVER (PARTITION BY dept) AS max_salary\n  FROM employees\n) t\nWHERE salary = max_salary;\n```\n\n元のクエリの構造をほぼそのまま保ちながら、テーブル走査を 1 回に減らせます。**相関サブクエリからの機械的な書き換え**としてはこちらのほうが安全です（同点の扱いが元のクエリと完全に一致するため）。"
+  },
+  {
+    "id": "phase5-lv2-004",
+    "type": "sql_query",
+    "phase": 5,
+    "level": 2,
+    "title": "スカラサブクエリの多重評価をやめて結合に集約する",
+    "prompt_md": "エディタには、顧客ごとの「注文件数」と「注文金額合計」を **SELECT 句のスカラサブクエリ 2 つ**で求めるクエリが入っています。\nこの書き方は、顧客 1 行につき `orders` を 2 回走査します。\n\n同じ結果を、**結合と `GROUP BY`** で求めてください。\n\n### 出力仕様\n- 列: 顧客名、注文件数、注文金額合計（この順）\n- **注文が 1 件も無い顧客も、件数 0・金額 0 で出力**してください\n- 並び順: 問いません\n- `GROUP BY` を使うこと（採点条件に含まれます）\n- 列名は自由です",
+    "schema_sql": "CREATE TABLE customers (\n  customer_id INTEGER,\n  name        VARCHAR,\n  city        VARCHAR\n);\nCREATE TABLE orders (\n  order_id    INTEGER,\n  customer_id INTEGER,\n  order_date  DATE,\n  amount      INTEGER\n);\nCREATE TABLE order_items (\n  order_id   INTEGER,\n  item_no    INTEGER,\n  product_id INTEGER,\n  qty        INTEGER\n);\nCREATE TABLE products (\n  product_id INTEGER,\n  name       VARCHAR,\n  category   VARCHAR,\n  price      INTEGER\n);",
+    "seed_data_sql": "INSERT INTO customers VALUES\n  (1, 'あさひ商事',   '東京'),\n  (2, 'いろは物産',   '大阪'),\n  (3, 'うしお工業',   '東京'),\n  (4, 'えびす商会',   '福岡'),\n  (5, 'おおぞら電機', '東京');\nINSERT INTO orders VALUES\n  (101, 1, DATE '2024-01-10', 50000),\n  (102, 1, DATE '2024-03-05', 30000),\n  (103, 2, DATE '2024-02-20', 80000),\n  (104, 3, DATE '2024-05-01', 20000),\n  (105, 5, DATE '2023-12-15', 60000),\n  (106, 2, DATE '2023-11-11', 15000);\nINSERT INTO order_items VALUES\n  (101, 1, 1, 1),\n  (101, 2, 3, 2),\n  (102, 1, 2, 1),\n  (103, 1, 5, 1),\n  (103, 2, 4, 3),\n  (104, 1, 3, 5),\n  (105, 1, 2, 2),\n  (106, 1, 4, 1);\nINSERT INTO products VALUES\n  (1, 'ノートPC',       'PC',       90000),\n  (2, 'モニター',       '周辺機器', 25000),\n  (3, 'マウス',         '周辺機器',  3000),\n  (4, 'キーボード',     '周辺機器',  9000),\n  (5, 'デスクトップPC', 'PC',      120000);",
+    "expected_query": "SELECT c.name,\n       COUNT(o.order_id) AS order_count,\n       COALESCE(SUM(o.amount), 0) AS total_amount\nFROM customers c\nLEFT JOIN orders o ON o.customer_id = c.customer_id\nGROUP BY c.customer_id, c.name;",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": false,
+      "compare_columns": null,
+      "sql_required": [
+        "GROUP\\s+BY"
+      ],
+      "pattern_hint": "この問題は結合と `GROUP BY` を使って解いてください（SELECT 句にサブクエリを並べる書き方は避けてください）。"
+    },
+    "hints_md": [
+      "注文が無い顧客も残すので `LEFT JOIN` です。",
+      "件数は `COUNT(*)` ではなく `COUNT(o.order_id)`。金額は `COALESCE(SUM(o.amount), 0)` で NULL を 0 にします。"
+    ],
+    "explanation_md": "## 考え方\n\n```sql\nSELECT c.name,\n       COUNT(o.order_id) AS order_count,\n       COALESCE(SUM(o.amount), 0) AS total_amount\nFROM customers c\nLEFT JOIN orders o ON o.customer_id = c.customer_id\nGROUP BY c.customer_id, c.name;\n```\n\n## スカラサブクエリを並べる書き方の問題\n\n```sql\nSELECT c.name,\n       (SELECT COUNT(*)   FROM orders o WHERE o.customer_id = c.customer_id),\n       (SELECT SUM(amount) FROM orders o WHERE o.customer_id = c.customer_id)\nFROM customers c;\n```\n\n- **同じテーブルを、同じ条件で、2 回読んでいる**\n- 列を 1 つ増やすたびに走査が 1 回増える（レポート系のクエリでサブクエリが 10 個並ぶ、といった事態になりがち）\n- 顧客が 10 万行なら、最悪 20 万回のサブクエリ実行\n\n結合版なら `customers` と `orders` を**それぞれ 1 回ずつ**読むだけです。\n\n## GROUP BY に主キーを入れる理由\n\n```sql\nGROUP BY c.customer_id, c.name\n```\n\n`c.name` だけでグループ化すると、**同名の顧客が 2 社あったときに合算されてしまいます**。主キーを含めておけば安全です。\n（PostgreSQL や DuckDB では、主キーで `GROUP BY` していれば同じ表の他の列を SELECT に書ける「関数従属性の認識」という機能もあります。）\n\n## 読みやすさとのバランス\n\nスカラサブクエリが常に悪いわけではありません。\n\n- **1 つだけ**、しかも**行数が少ない**なら、意図が明確で読みやすい\n- 集計元が異なる複数のテーブルから 1 値ずつ取る場合、結合よりも素直\n\n「同じテーブルへのスカラサブクエリが 2 つ以上並んだら、結合 + GROUP BY を検討する」——これを判断の目安にしてください。\n\n## さらに大規模なら事前集計\n\n顧客が多く注文が莫大な場合は、**先に注文側だけを集計してから結合**するほうが速いことがあります。\n\n```sql\nWITH agg AS (\n  SELECT customer_id, COUNT(*) AS cnt, SUM(amount) AS total\n  FROM orders GROUP BY customer_id\n)\nSELECT c.name, COALESCE(a.cnt, 0), COALESCE(a.total, 0)\nFROM customers c LEFT JOIN agg a ON a.customer_id = c.customer_id;\n```\n\n結合前に行数を減らせるうえ、フェーズ 3 で学んだファンアウトの心配もありません。",
+    "tags": [
+      "スカラサブクエリ",
+      "left join",
+      "group by",
+      "最適化"
+    ],
+    "starter_sql": "-- 顧客ごとの「注文件数」と「注文金額合計」を出すクエリです。\n-- SELECT 句にスカラサブクエリが 2 つ並んでおり、\n-- 顧客 1 行ごとに orders を 2 回走査します。\n-- 結合 + GROUP BY に書き換えてください。\nSELECT c.name,\n       (SELECT COUNT(*)            FROM orders o WHERE o.customer_id = c.customer_id) AS order_count,\n       (SELECT COALESCE(SUM(amount), 0) FROM orders o WHERE o.customer_id = c.customer_id) AS total_amount\nFROM customers c;"
+  },
+  {
+    "id": "phase5-lv3-005",
+    "type": "sql_query",
+    "phase": 5,
+    "level": 3,
+    "title": "各顧客の最新注文を1件だけ取り出す",
+    "prompt_md": "**顧客ごとに、最も新しい注文を 1 件だけ**取り出してください。注文が 1 件も無い顧客は出力しません。\n\n### 出力仕様\n- 列: 顧客名、注文ID、注文日、金額（この順）\n- 並び順: 問いません\n- ウィンドウ関数（`OVER (...)`）を使うこと（採点条件に含まれます）\n- 列名は自由です",
+    "schema_sql": "CREATE TABLE customers (\n  customer_id INTEGER,\n  name        VARCHAR,\n  city        VARCHAR\n);\nCREATE TABLE orders (\n  order_id    INTEGER,\n  customer_id INTEGER,\n  order_date  DATE,\n  amount      INTEGER\n);\nCREATE TABLE order_items (\n  order_id   INTEGER,\n  item_no    INTEGER,\n  product_id INTEGER,\n  qty        INTEGER\n);\nCREATE TABLE products (\n  product_id INTEGER,\n  name       VARCHAR,\n  category   VARCHAR,\n  price      INTEGER\n);",
+    "seed_data_sql": "INSERT INTO customers VALUES\n  (1, 'あさひ商事',   '東京'),\n  (2, 'いろは物産',   '大阪'),\n  (3, 'うしお工業',   '東京'),\n  (4, 'えびす商会',   '福岡'),\n  (5, 'おおぞら電機', '東京');\nINSERT INTO orders VALUES\n  (101, 1, DATE '2024-01-10', 50000),\n  (102, 1, DATE '2024-03-05', 30000),\n  (103, 2, DATE '2024-02-20', 80000),\n  (104, 3, DATE '2024-05-01', 20000),\n  (105, 5, DATE '2023-12-15', 60000),\n  (106, 2, DATE '2023-11-11', 15000);\nINSERT INTO order_items VALUES\n  (101, 1, 1, 1),\n  (101, 2, 3, 2),\n  (102, 1, 2, 1),\n  (103, 1, 5, 1),\n  (103, 2, 4, 3),\n  (104, 1, 3, 5),\n  (105, 1, 2, 2),\n  (106, 1, 4, 1);\nINSERT INTO products VALUES\n  (1, 'ノートPC',       'PC',       90000),\n  (2, 'モニター',       '周辺機器', 25000),\n  (3, 'マウス',         '周辺機器',  3000),\n  (4, 'キーボード',     '周辺機器',  9000),\n  (5, 'デスクトップPC', 'PC',      120000);",
+    "expected_query": "SELECT name, order_id, order_date, amount\nFROM (\n  SELECT c.name, o.order_id, o.order_date, o.amount,\n         ROW_NUMBER() OVER (PARTITION BY o.customer_id ORDER BY o.order_date DESC, o.order_id DESC) AS rn\n  FROM customers c\n  JOIN orders o ON o.customer_id = c.customer_id\n) t\nWHERE rn = 1;",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": false,
+      "compare_columns": null,
+      "sql_required": [
+        "OVER\\s*\\("
+      ],
+      "pattern_hint": "この問題はウィンドウ関数（`OVER (...)`）を使って解いてください。"
+    },
+    "hints_md": [
+      "「グループごとの上位 1 件」なので `ROW_NUMBER() OVER (PARTITION BY 顧客 ORDER BY 注文日 DESC)` が使えます。",
+      "同じ日に複数注文があっても 1 件に決まるよう、`ORDER BY` に注文IDなどのタイブレークを足しておくと安全です。"
+    ],
+    "explanation_md": "## 考え方\n\n```sql\nSELECT name, order_id, order_date, amount\nFROM (\n  SELECT c.name, o.order_id, o.order_date, o.amount,\n         ROW_NUMBER() OVER (\n           PARTITION BY o.customer_id\n           ORDER BY o.order_date DESC, o.order_id DESC\n         ) AS rn\n  FROM customers c\n  JOIN orders o ON o.customer_id = c.customer_id\n) t\nWHERE rn = 1;\n```\n\n## 相関サブクエリ版との比較\n\n```sql\nSELECT c.name, o.order_id, o.order_date, o.amount\nFROM customers c\nJOIN orders o ON o.customer_id = c.customer_id\nWHERE o.order_date = (\n  SELECT MAX(x.order_date) FROM orders x WHERE x.customer_id = o.customer_id\n);\n```\n\nこのよくある書き方には**2 つの弱点**があります。\n\n1. `orders` を 2 回参照する（脱相関されなければ顧客ごとに再集計）\n2. **同じ日に 2 件注文があると 2 行返る**。「1 件だけ」という要件を満たせない\n\n`ROW_NUMBER()` 版なら、タイブレークを `ORDER BY` に書くことで**必ず 1 行**に決まります。\n\n## 「グループごとの最新 1 件」の 3 つの実装\n\n| 実装 | 特徴 |\n|---|---|\n| `ROW_NUMBER() = 1` | 汎用的で読みやすい。**全行をソート**するのでデータ量に比例 |\n| `LATERAL` + `LIMIT 1` | 外側が少なく内側に索引があるとき最速。DBMS 依存 |\n| `DISTINCT ON`（PostgreSQL） | 最も簡潔。PostgreSQL 専用 |\n\n「顧客 100 万 × 注文 1 億」のような規模では、`(customer_id, order_date DESC)` の複合索引 + `LATERAL` が圧倒的に有利になることがあります。**書き方の選択は、索引設計とデータ分布とセットで考える**——これがフェーズ 4・5 を通じたテーマです。\n\n## タイブレークを忘れない\n\n`ORDER BY o.order_date DESC` だけでは、同日に複数注文がある顧客でどの行が選ばれるか**未定義**です。\nバッチが実行するたびに結果が変わる、という再現性のないバグになります。**順位付けの ORDER BY には必ず一意な列を最後に足す**、を習慣にしてください。",
+    "tags": [
+      "ウィンドウ関数",
+      "相関サブクエリ",
+      "top-n"
+    ],
+    "alternative_md": "**別解（LATERAL / DuckDB・PostgreSQL）**\n\n```sql\nSELECT c.name, o.order_id, o.order_date, o.amount\nFROM customers c\nJOIN LATERAL (\n  SELECT * FROM orders o\n  WHERE o.customer_id = c.customer_id\n  ORDER BY o.order_date DESC, o.order_id DESC\n  LIMIT 1\n) o ON TRUE;\n```\n\n`LATERAL`（横結合）は「外側の行ごとにサブクエリを評価してよい」という宣言で、**顧客ごとに索引で 1 件だけ取る**計画を選びやすくなります。顧客が少なく注文が莫大なケースでは、ウィンドウ関数版（全注文をソートする）より速くなることがあります。"
+  },
+  {
+    "id": "phase5-lv3-006",
+    "type": "sql_query",
+    "phase": 5,
+    "level": 3,
+    "title": "関係除算：すべてのPC製品を購入した顧客",
+    "prompt_md": "`products` のうちカテゴリが `'PC'` の商品は 2 種類（ノートPC・デスクトップPC）あります。\n\n**その 2 種類を「すべて」購入したことがある顧客**を抽出してください。\n\n### 出力仕様\n- 列: 顧客ID、顧客名（この順）\n- 並び順: 問いません\n- **`NOT EXISTS` を使うこと**（採点条件に含まれます）\n- 列名は自由です\n\n> これは関係代数でいう**除算（division）**にあたる操作です。「すべての〜」という要件は、\n> 「**〜でないものが存在しない**」という二重否定に置き換えて考えます。",
+    "schema_sql": "CREATE TABLE customers (\n  customer_id INTEGER,\n  name        VARCHAR,\n  city        VARCHAR\n);\nCREATE TABLE orders (\n  order_id    INTEGER,\n  customer_id INTEGER,\n  order_date  DATE,\n  amount      INTEGER\n);\nCREATE TABLE order_items (\n  order_id   INTEGER,\n  item_no    INTEGER,\n  product_id INTEGER,\n  qty        INTEGER\n);\nCREATE TABLE products (\n  product_id INTEGER,\n  name       VARCHAR,\n  category   VARCHAR,\n  price      INTEGER\n);",
+    "seed_data_sql": "INSERT INTO customers VALUES\n  (1, 'あさひ商事',   '東京'),\n  (2, 'いろは物産',   '大阪'),\n  (3, 'うしお工業',   '東京'),\n  (4, 'えびす商会',   '福岡'),\n  (5, 'おおぞら電機', '東京');\nINSERT INTO orders VALUES\n  (101, 1, DATE '2024-01-10', 50000),\n  (102, 1, DATE '2024-03-05', 30000),\n  (103, 2, DATE '2024-02-20', 80000),\n  (104, 3, DATE '2024-05-01', 20000),\n  (105, 5, DATE '2023-12-15', 60000),\n  (106, 2, DATE '2023-11-11', 15000);\nINSERT INTO order_items VALUES\n  (101, 1, 1, 1),\n  (101, 2, 3, 2),\n  (102, 1, 2, 1),\n  (102, 2, 5, 1),\n  (103, 1, 5, 1),\n  (103, 2, 4, 3),\n  (104, 1, 3, 5),\n  (105, 1, 2, 2),\n  (106, 1, 4, 1);\nINSERT INTO products VALUES\n  (1, 'ノートPC',       'PC',       90000),\n  (2, 'モニター',       '周辺機器', 25000),\n  (3, 'マウス',         '周辺機器',  3000),\n  (4, 'キーボード',     '周辺機器',  9000),\n  (5, 'デスクトップPC', 'PC',      120000);",
+    "expected_query": "SELECT c.customer_id, c.name\nFROM customers c\nWHERE NOT EXISTS (\n  SELECT 1\n  FROM products p\n  WHERE p.category = 'PC'\n    AND NOT EXISTS (\n      SELECT 1\n      FROM orders o\n      JOIN order_items oi ON oi.order_id = o.order_id\n      WHERE o.customer_id = c.customer_id\n        AND oi.product_id = p.product_id\n    )\n);",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": false,
+      "compare_columns": null,
+      "sql_required": [
+        "NOT\\s+EXISTS"
+      ],
+      "pattern_hint": "この問題は `NOT EXISTS` の二重否定（関係除算）で解いてください。"
+    },
+    "hints_md": [
+      "「すべての PC 製品を買った顧客」＝「**その顧客が買っていない PC 製品が 1 つも存在しない**顧客」と言い換えます。",
+      "外側の `NOT EXISTS` の中に「PC 製品のうち、その顧客が買っていないもの」を書きます。つまり `NOT EXISTS` が入れ子になります。"
+    ],
+    "explanation_md": "## 考え方: 二重否定への言い換え\n\nSQL には「すべての〜について成り立つ」を直接書く全称限量子（∀）がありません。\nそこで**述語論理の同値変形**を使います。\n\n```\n∀x P(x)  ≡  ¬∃x ¬P(x)\n「すべての x について P」＝「P でない x が存在しない」\n```\n\nこれを日本語に落とすと:\n\n> **すべての** PC 製品を買った顧客\n> ＝ 「その顧客が**買っていない** PC 製品」が**存在しない**顧客\n\nこれがそのまま SQL になります。\n\n```sql\nSELECT c.customer_id, c.name\nFROM customers c\nWHERE NOT EXISTS (                    -- 存在しない\n  SELECT 1 FROM products p\n  WHERE p.category = 'PC'             -- PC 製品のうち\n    AND NOT EXISTS (                  -- その顧客が買っていないもの\n      SELECT 1 FROM orders o\n      JOIN order_items oi ON oi.order_id = o.order_id\n      WHERE o.customer_id = c.customer_id\n        AND oi.product_id = p.product_id\n    )\n);\n```\n\n## 関係除算（division）\n\n関係代数の演算のひとつで、「R ÷ S」は「S のすべての要素と対応づく R の要素」を返します。\n\n- 「すべての科目を履修した学生」\n- 「全部品を供給できる仕入先」\n- 「全店舗で販売実績のある商品」\n\nといった要件がこれにあたります。**データベーススペシャリスト試験では頻出**で、関係代数の記号問題としても、SQL の記述問題としても出題されます。\n\n## 注文が無い顧客の扱い\n\n「えびす商会」は注文が 1 件もありません。この顧客では、内側の `NOT EXISTS` が両方の PC 製品について真になる（どちらも買っていない）ため、外側の `NOT EXISTS` は偽となり、**正しく除外されます**。\n\n## 数学的な注意: 空集合の除算\n\nもし PC カテゴリの商品が 1 件も無かったら、二重否定版は「買っていない PC 製品が存在しない」が全顧客について真になるので、**全顧客が該当**します。これは関係除算の定義どおりの正しい振る舞い（空集合に対する全称命題は真）です。\n直感に反しますが、論理としては一貫しています。`COUNT` 版はこのケースで 0 件を返すため、厳密には除算と一致しません。",
+    "tags": [
+      "関係除算",
+      "not exists",
+      "サブクエリ"
+    ],
+    "alternative_md": "**別解（COUNT で数え上げる）**\n\n```sql\nSELECT c.customer_id, c.name\nFROM customers c\nJOIN orders o      ON o.customer_id = c.customer_id\nJOIN order_items oi ON oi.order_id = o.order_id\nJOIN products p     ON p.product_id = oi.product_id AND p.category = 'PC'\nGROUP BY c.customer_id, c.name\nHAVING COUNT(DISTINCT p.product_id) = (SELECT COUNT(*) FROM products WHERE category = 'PC');\n```\n\n実務ではこちらのほうが読みやすく、性能も安定しがちです。ただし\n- `COUNT(DISTINCT ...)` を忘れると、同じ商品を 2 回買った顧客を誤って含めてしまう\n- 「PC 製品が 0 件」のとき、除算の定義では**全顧客が該当**するはずが、この書き方では 0 件になる\n\nという違いがあります。**厳密な関係除算の意味に忠実なのは `NOT EXISTS` 版**です。"
+  }
+]

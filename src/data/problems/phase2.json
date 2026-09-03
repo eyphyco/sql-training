@@ -1,0 +1,249 @@
+[
+  {
+    "id": "phase2-lv1-001",
+    "type": "sql_query",
+    "phase": 2,
+    "level": 1,
+    "title": "各クラスの最高得点者を1人だけ抽出する（ROW_NUMBER）",
+    "prompt_md": "`students` テーブルから、**クラスごとに得点が最も高い生徒を 1 人ずつ**抽出してください。\n同点の場合は `id` が小さい生徒を採用します。\n\n### 出力仕様\n- 列: クラス名、生徒名、得点（この順）\n- 並び順: 問いません\n- 列名は自由です\n\n> この問題は**ウィンドウ関数**を使って解いてください（`GROUP BY` だけでは「その最高点を取ったのが誰か」を取り出せません）。",
+    "schema_sql": "CREATE TABLE students (id INTEGER, name VARCHAR, class VARCHAR, score INTEGER);",
+    "seed_data_sql": "INSERT INTO students VALUES\n  (1, '青木', 'A組', 80), (2, '井上', 'A組', 72), (3, '上田', 'A組', 68), (4, '遠藤', 'A組', 90),\n  (5, '大野', 'B組', 60), (6, '柏木', 'B組', 55), (7, '木村', 'B組', 70),\n  (8, '工藤', 'C組', 70), (9, '桜井', 'C組', 70), (10, '志村', 'C組', 70), (11, '鈴木', 'C組', 71),\n  (12, '瀬戸', 'D組', 69), (13, '高井', 'D組', 71);",
+    "expected_query": "SELECT class, name, score\nFROM (\n  SELECT class, name, score,\n         ROW_NUMBER() OVER (PARTITION BY class ORDER BY score DESC, id) AS rn\n  FROM students\n) t\nWHERE rn = 1;",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": false,
+      "compare_columns": null,
+      "sql_required": [
+        "OVER\\s*\\("
+      ],
+      "pattern_hint": "この問題はウィンドウ関数（`OVER (...)`）を使って解いてください。"
+    },
+    "hints_md": [
+      "`ROW_NUMBER() OVER (PARTITION BY class ORDER BY score DESC)` で、クラスごとに 1 位から順の連番が振れます。",
+      "ウィンドウ関数の結果は `WHERE` では直接絞り込めません。サブクエリ（または CTE）でいったん番号を付けてから、外側で `WHERE rn = 1` とします。"
+    ],
+    "explanation_md": "## 考え方\n\n```sql\nSELECT class, name, score\nFROM (\n  SELECT class, name, score,\n         ROW_NUMBER() OVER (PARTITION BY class ORDER BY score DESC, id) AS rn\n  FROM students\n) t\nWHERE rn = 1;\n```\n\n## GROUP BY では解けない理由\n\n```sql\n-- これは「クラスごとの最高点」は出るが、それが誰かは分からない\nSELECT class, MAX(score) FROM students GROUP BY class;\n\n-- これはエラー（name はグループごとに 1 つに定まらない）\nSELECT class, name, MAX(score) FROM students GROUP BY class;\n```\n\n`GROUP BY` は**行を潰して**グループごとに 1 行にします。潰された行の属性（誰か）は失われます。\n一方**ウィンドウ関数は行を潰しません**。各行を残したまま、「同じクラスの中で自分は何位か」という情報を**列として追加**します。これがウィンドウ関数の本質です。\n\n## OVER 句の構造\n\n```\n関数() OVER (\n  PARTITION BY <グループ分けの列>   -- 省略すると全行が 1 つのウィンドウ\n  ORDER BY   <ウィンドウ内の並び>   -- 順位付けや累積の基準\n  <フレーム指定>                    -- ROWS BETWEEN ... （問題 phase2-lv3-006 で扱います）\n)\n```\n\n`PARTITION BY` は「GROUP BY に相当するが行を潰さない」もの、と理解すると分かりやすいです。\n\n## なぜ WHERE で直接絞れないのか\n\nSQL の評価順序は `FROM → WHERE → GROUP BY → HAVING → **ウィンドウ関数** → SELECT → ORDER BY` です。\n`WHERE` が評価される時点ではウィンドウ関数はまだ計算されていないため、`WHERE ROW_NUMBER() OVER (...) = 1` は構文エラーになります。サブクエリ / CTE / QUALIFY のいずれかで 1 段階ずらす必要があります。",
+    "tags": [
+      "ウィンドウ関数",
+      "row_number",
+      "partition by"
+    ],
+    "alternative_md": "**別解（DuckDB / Snowflake などの QUALIFY 句）**\n\n```sql\nSELECT class, name, score\nFROM students\nQUALIFY ROW_NUMBER() OVER (PARTITION BY class ORDER BY score DESC, id) = 1;\n```\n\n`QUALIFY` は「ウィンドウ関数版の HAVING」で、サブクエリのネストを省けます。標準 SQL ではありませんが、DuckDB・Snowflake・Teradata などで使えます。"
+  },
+  {
+    "id": "phase2-lv1-002",
+    "type": "sql_query",
+    "phase": 2,
+    "level": 1,
+    "title": "RANK・DENSE_RANK・ROW_NUMBER の違いを確認する",
+    "prompt_md": "`contest_results` には同点の選手が含まれています。各選手に対して、得点の高い順に **3 種類の順位**を付けて出力してください。\n\n### 出力仕様\n- 列: 選手名、得点、`RANK`、`DENSE_RANK`、`ROW_NUMBER`（この順）\n- `ROW_NUMBER` の同点時の順序は、選手名の昇順とします\n- 並び順: 得点の降順、同点なら選手名の昇順（**並び順も採点対象です**）\n- 列名は自由です",
+    "schema_sql": "CREATE TABLE contest_results (player VARCHAR, score INTEGER);",
+    "seed_data_sql": "INSERT INTO contest_results VALUES\n  ('あかり', 95),\n  ('いちか', 92),\n  ('うみ',   92),\n  ('えま',   88),\n  ('おと',   88),\n  ('かえで', 80);",
+    "expected_query": "SELECT player, score,\n       RANK()       OVER (ORDER BY score DESC)          AS rnk,\n       DENSE_RANK() OVER (ORDER BY score DESC)          AS dense_rnk,\n       ROW_NUMBER() OVER (ORDER BY score DESC, player)  AS row_num\nFROM contest_results\nORDER BY score DESC, player;",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": true,
+      "compare_columns": null,
+      "sql_required": [
+        "OVER\\s*\\("
+      ],
+      "pattern_hint": "この問題はウィンドウ関数（`OVER (...)`）を使って解いてください。"
+    },
+    "hints_md": [
+      "`PARTITION BY` は不要です。`OVER (ORDER BY score DESC)` だけで全体を 1 つのウィンドウとして扱えます。",
+      "`ROW_NUMBER` だけは同点でも必ず異なる番号になるため、`ORDER BY` に決定的なタイブレーク列が必要です。"
+    ],
+    "explanation_md": "## 結果を並べて比べる\n\n| 選手 | 得点 | RANK | DENSE_RANK | ROW_NUMBER |\n|---|---|---|---|---|\n| あかり | 95 | 1 | 1 | 1 |\n| いちか | 92 | 2 | 2 | 2 |\n| うみ | 92 | **2** | **2** | **3** |\n| えま | 88 | **4** | **3** | 4 |\n| おと | 88 | 4 | 3 | 5 |\n| かえで | 80 | **6** | **4** | 6 |\n\n## 3 つの違い\n\n| 関数 | 同点の扱い | 次の順位 |\n|---|---|---|\n| `RANK()` | 同じ順位を付ける | **飛ぶ**（1,2,2,4） |\n| `DENSE_RANK()` | 同じ順位を付ける | **飛ばない**（1,2,2,3） |\n| `ROW_NUMBER()` | 必ず異なる番号 | 連番（1,2,3,4） |\n\n- 「**3 位以内の商品**」のような**件数**を意識した抽出 → `RANK`（同点を全部拾う）\n- 「**上位 3 種類の価格帯**」のような**値の種類**を数える → `DENSE_RANK`\n- 「重複行から 1 件だけ残す」「ページング」 → `ROW_NUMBER`\n\n## ROW_NUMBER の落とし穴\n\n`ROW_NUMBER() OVER (ORDER BY score DESC)` だけだと、同点の 2 人のどちらが 2 番になるかは**未定義**です。実行のたびに結果が変わる可能性があり、再現性が必要な処理（ページングや重複排除）ではバグの原因になります。**必ず一意になるタイブレーク列（主キーなど）を ORDER BY の末尾に足す**習慣をつけてください。\n\n## 順位付けの実務例\n\n「各カテゴリの売上トップ 3」は `RANK() OVER (PARTITION BY category ORDER BY sales DESC) <= 3` で書けます。同点 3 位が 2 人いれば 4 行返る点に注意（ちょうど 3 行にしたいなら `ROW_NUMBER`）。",
+    "tags": [
+      "ウィンドウ関数",
+      "rank",
+      "dense_rank",
+      "row_number"
+    ]
+  },
+  {
+    "id": "phase2-lv2-003",
+    "type": "sql_query",
+    "phase": 2,
+    "level": 2,
+    "title": "部署ごとの給与上位2名を抽出する",
+    "prompt_md": "`employees` から、**部署ごとに給与が高い上位 2 名**を抽出してください。\n\n### 出力仕様\n- 列: 部署名、氏名、給与、部署内順位（この順）\n- 部署内順位は 1 位が 1、2 位が 2 になるようにします\n- 並び順: 問いません\n- 列名は自由です\n\n> 総務のように 1 人しかいない部署は、その 1 人だけが出力されます。",
+    "schema_sql": "CREATE TABLE employees (\n  emp_id     INTEGER,\n  name       VARCHAR,\n  dept       VARCHAR,\n  salary     INTEGER,\n  hired_on   DATE,\n  manager_id INTEGER\n);",
+    "seed_data_sql": "INSERT INTO employees VALUES\n  (1, '佐藤', '営業', 480000, DATE '2018-04-01', NULL),\n  (2, '鈴木', '営業', 420000, DATE '2019-04-01', 1),\n  (3, '高橋', '営業', 390000, DATE '2021-10-01', 1),\n  (4, '田中', '開発', 520000, DATE '2017-04-01', NULL),\n  (5, '伊藤', '開発', 500000, DATE '2020-04-01', 4),\n  (6, '渡辺', '開発', 460000, DATE '2020-04-01', 4),\n  (7, '山本', '開発', 380000, DATE '2022-04-01', 4),\n  (8, '中村', '人事', 450000, DATE '2019-04-01', NULL),\n  (9, '小林', '人事', 460000, DATE '2023-04-01', 8),\n  (10, '加藤', '総務', 400000, DATE '2016-04-01', NULL);",
+    "expected_query": "SELECT dept, name, salary, rnk\nFROM (\n  SELECT dept, name, salary,\n         RANK() OVER (PARTITION BY dept ORDER BY salary DESC) AS rnk\n  FROM employees\n) t\nWHERE rnk <= 2;",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": false,
+      "compare_columns": null,
+      "sql_required": [
+        "OVER\\s*\\("
+      ],
+      "pattern_hint": "この問題はウィンドウ関数（`OVER (...)`）を使って解いてください。"
+    },
+    "hints_md": [
+      "`PARTITION BY dept` で部署ごとのウィンドウを作り、`ORDER BY salary DESC` で順位を付けます。",
+      "順位で絞り込むので、サブクエリ / CTE / QUALIFY のいずれかで 1 段階ずらす必要があります。"
+    ],
+    "explanation_md": "## 考え方\n\nいわゆる **Top-N per group（グループごとの上位 N 件）** 問題で、実務でも試験でも頻出です。\n\n```sql\nWITH ranked AS (\n  SELECT dept, name, salary,\n         RANK() OVER (PARTITION BY dept ORDER BY salary DESC) AS rnk\n  FROM employees\n)\nSELECT dept, name, salary, rnk FROM ranked WHERE rnk <= 2;\n```\n\n## ウィンドウ関数を使わない場合との比較\n\n相関サブクエリでも書けます。\n\n```sql\nSELECT e.dept, e.name, e.salary\nFROM employees e\nWHERE (SELECT COUNT(*) FROM employees x\n       WHERE x.dept = e.dept AND x.salary > e.salary) < 2;\n```\n\n意味は同じですが、こちらは**外側の 1 行ごとに内側のクエリが動く**可能性があり、行数が増えると急激に遅くなります（O(n²) 的な挙動）。ウィンドウ関数版は**ソート 1 回**で済みます。この書き換えはフェーズ 5 の中心テーマです。\n\n## RANK と ROW_NUMBER のどちらを使うか\n\nこの問題では同点がないためどちらでも同じ結果になりますが、意味は変わります。\n\n- `RANK() <= 2` … 同点 1 位が 2 人いれば 2 人とも 1 位、次は 3 位なので**2 行**返る\n- `ROW_NUMBER() <= 2` … 常に**ちょうど 2 行**返る\n- `DENSE_RANK() <= 2` … 同点 1 位が 2 人 + 2 位が 2 人なら**4 行**返る\n\n「上位 2 名」という要件が「同点なら全員含める」のか「必ず 2 名」なのかで選ぶ関数が変わります。要件定義の段階で確認すべきポイントです。",
+    "tags": [
+      "ウィンドウ関数",
+      "rank",
+      "partition by"
+    ],
+    "alternative_md": "**別解 1（CTE）**\n\n```sql\nWITH ranked AS (\n  SELECT dept, name, salary,\n         RANK() OVER (PARTITION BY dept ORDER BY salary DESC) AS rnk\n  FROM employees\n)\nSELECT * FROM ranked WHERE rnk <= 2;\n```\n\n**別解 2（QUALIFY / DuckDB）**\n\n```sql\nSELECT dept, name, salary,\n       RANK() OVER (PARTITION BY dept ORDER BY salary DESC) AS rnk\nFROM employees\nQUALIFY rnk <= 2;\n```"
+  },
+  {
+    "id": "phase2-lv2-004",
+    "type": "sql_query",
+    "phase": 2,
+    "level": 2,
+    "title": "店舗ごとの売上累計を出す（累積和）",
+    "prompt_md": "`monthly_sales` は店舗ごとの月次売上です。各行に、**その店舗の年初からの累計売上**を追加して出力してください。\n\n### 出力仕様\n- 列: 店舗名、年月、その月の売上、累計売上（この順）\n- 並び順: 店舗名の昇順、同じ店舗の中では年月の昇順（**並び順も採点対象です**）\n- 列名は自由です",
+    "schema_sql": "CREATE TABLE monthly_sales (store VARCHAR, ym VARCHAR, amount INTEGER);",
+    "seed_data_sql": "INSERT INTO monthly_sales VALUES\n  ('新宿', '2024-01', 100), ('新宿', '2024-02', 120), ('新宿', '2024-03',  90),\n  ('新宿', '2024-04', 150), ('新宿', '2024-05', 130), ('新宿', '2024-06', 160),\n  ('渋谷', '2024-01',  80), ('渋谷', '2024-02',  85), ('渋谷', '2024-03',  95),\n  ('渋谷', '2024-04',  70), ('渋谷', '2024-05', 110), ('渋谷', '2024-06', 120);",
+    "expected_query": "SELECT store, ym, amount,\n       SUM(amount) OVER (PARTITION BY store ORDER BY ym) AS cumulative_amount\nFROM monthly_sales\nORDER BY store, ym;",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": true,
+      "compare_columns": null,
+      "sql_required": [
+        "OVER\\s*\\("
+      ],
+      "pattern_hint": "この問題はウィンドウ関数（`OVER (...)`）を使って解いてください。"
+    },
+    "hints_md": [
+      "`SUM(amount) OVER (PARTITION BY store ORDER BY ym)` と書くと、既定のフレームが「ウィンドウの先頭から現在行まで」になり、累積和になります。",
+      "`ORDER BY` を書かずに `SUM(amount) OVER (PARTITION BY store)` とすると、累積ではなく店舗ごとの総合計が全行に付きます。"
+    ],
+    "explanation_md": "## 考え方\n\n```sql\nSELECT store, ym, amount,\n       SUM(amount) OVER (PARTITION BY store ORDER BY ym) AS cumulative_amount\nFROM monthly_sales\nORDER BY store, ym;\n```\n\n## 「OVER に ORDER BY を書く」ことの意味\n\n集約関数をウィンドウ関数として使うとき、`ORDER BY` の有無で**フレーム（集計範囲）**が変わります。\n\n| 書き方 | 既定のフレーム | 結果 |\n|---|---|---|\n| `SUM(x) OVER (PARTITION BY g)` | パーティション全体 | 各行に**総合計**が付く |\n| `SUM(x) OVER (PARTITION BY g ORDER BY d)` | `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW` | **累積和**になる |\n\nつまり `ORDER BY` を書いた瞬間、暗黙に「先頭から現在行まで」という枠が入ります。これは SQL 標準で定められた挙動で、Oracle・PostgreSQL・SQL Server でも同じです。\n\n## RANGE と ROWS の違い（重要）\n\n既定は `RANGE` です。`RANGE` は「**現在行と ORDER BY のキーが同じ値の行を、すべて同じ位置とみなす**」ため、同じ `ym` の行が複数あると**それらをまとめて足し込みます**。\n\nこの問題では `(store, ym)` が一意なので差は出ませんが、日付が重複するデータで「1 行ずつ」積み上げたいなら明示的に\n\n```sql\nSUM(amount) OVER (PARTITION BY store ORDER BY ym\n                  ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)\n```\n\nと `ROWS` を指定します。**累積和のバグの多くはこの RANGE / ROWS の取り違え**が原因です。",
+    "tags": [
+      "ウィンドウ関数",
+      "累積和",
+      "partition by"
+    ]
+  },
+  {
+    "id": "phase2-lv2-005",
+    "type": "sql_query",
+    "phase": 2,
+    "level": 2,
+    "title": "前月比を計算する（LAG）",
+    "prompt_md": "`monthly_sales` の各行に、**同じ店舗の前月の売上**と、**前月からの増減額**（当月 − 前月）を追加して出力してください。\n\n### 出力仕様\n- 列: 店舗名、年月、当月売上、前月売上、増減額（この順）\n- 各店舗の最初の月は、前月売上・増減額ともに `NULL` にします\n- 並び順: 店舗名の昇順、同じ店舗の中では年月の昇順（**並び順も採点対象です**）\n- 列名は自由です",
+    "schema_sql": "CREATE TABLE monthly_sales (store VARCHAR, ym VARCHAR, amount INTEGER);",
+    "seed_data_sql": "INSERT INTO monthly_sales VALUES\n  ('新宿', '2024-01', 100), ('新宿', '2024-02', 120), ('新宿', '2024-03',  90),\n  ('新宿', '2024-04', 150), ('新宿', '2024-05', 130), ('新宿', '2024-06', 160),\n  ('渋谷', '2024-01',  80), ('渋谷', '2024-02',  85), ('渋谷', '2024-03',  95),\n  ('渋谷', '2024-04',  70), ('渋谷', '2024-05', 110), ('渋谷', '2024-06', 120);",
+    "expected_query": "SELECT store, ym, amount,\n       LAG(amount) OVER (PARTITION BY store ORDER BY ym) AS prev_amount,\n       amount - LAG(amount) OVER (PARTITION BY store ORDER BY ym) AS diff\nFROM monthly_sales\nORDER BY store, ym;",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": true,
+      "compare_columns": null,
+      "sql_required": [
+        "OVER\\s*\\("
+      ],
+      "pattern_hint": "この問題はウィンドウ関数（`OVER (...)`）を使って解いてください。"
+    },
+    "hints_md": [
+      "`LAG(列)` はウィンドウ内の 1 行前の値を返します。`LEAD(列)` は 1 行後です。",
+      "1 行前が存在しない場合は NULL になります。NULL との算術は NULL になるので、増減額も自動的に NULL になります。"
+    ],
+    "explanation_md": "## 考え方\n\n```sql\nSELECT store, ym, amount,\n       LAG(amount) OVER (PARTITION BY store ORDER BY ym) AS prev_amount,\n       amount - LAG(amount) OVER (PARTITION BY store ORDER BY ym) AS diff\nFROM monthly_sales\nORDER BY store, ym;\n```\n\n## LAG / LEAD\n\n```\nLAG(列 [, オフセット [, 既定値]])  -- 前の行\nLEAD(列 [, オフセット [, 既定値]]) -- 後の行\n```\n\n- `LAG(amount, 12)` で「12 か月前」＝**前年同月比**が書けます。\n- `LAG(amount, 1, 0)` とすれば、前行が無いときに NULL ではなく 0 を返します。\n\n## 自己結合との比較\n\nウィンドウ関数が無かった時代は、自己結合で書いていました。\n\n```sql\nSELECT c.store, c.ym, c.amount, p.amount AS prev_amount, c.amount - p.amount AS diff\nFROM monthly_sales c\nLEFT JOIN monthly_sales p\n  ON p.store = c.store\n AND p.ym = strftime(strptime(c.ym, '%Y-%m') - INTERVAL 1 MONTH, '%Y-%m')\nORDER BY c.store, c.ym;\n```\n\n読みづらいうえに、**月が飛んでいるデータ（欠測月）があると壊れます**。`LAG` は「並べたときの 1 つ前」なので欠測に強く、テーブルを 2 回読む必要もありません。ウィンドウ関数を使うべき典型例です。\n\n## 増減率にするとき\n\n```sql\nROUND((amount - LAG(amount) OVER w) * 100.0 / LAG(amount) OVER w, 1) AS growth_pct\nWINDOW w AS (PARTITION BY store ORDER BY ym)\n```\n\n同じ `OVER` 句を何度も書くのが冗長なときは、`WINDOW` 句で名前を付けて使い回せます（標準 SQL の機能で、DuckDB / PostgreSQL / MySQL 8 で利用可能）。なお前月が 0 のときのゼロ除算に注意（`NULLIF(prev, 0)` で回避するのが定石）。",
+    "tags": [
+      "ウィンドウ関数",
+      "lag",
+      "NULL"
+    ]
+  },
+  {
+    "id": "phase2-lv3-006",
+    "type": "sql_query",
+    "phase": 2,
+    "level": 3,
+    "title": "3か月移動平均を求める（フレーム指定）",
+    "prompt_md": "`monthly_sales` の各行に、**その月を含む直近 3 か月の売上平均（3か月移動平均）**を追加して出力してください。\n\n### 出力仕様\n- 列: 店舗名、年月、当月売上、3か月移動平均（この順）\n- 3か月移動平均は**小数第 1 位に丸めて**ください\n- データが 3 か月分そろっていない先頭の月は、**その時点で存在する月だけ**で平均します（1月は当月のみ、2月は 2 か月分）\n- 並び順: 店舗名の昇順、同じ店舗の中では年月の昇順（**並び順も採点対象です**）\n- 列名は自由です",
+    "schema_sql": "CREATE TABLE monthly_sales (store VARCHAR, ym VARCHAR, amount INTEGER);",
+    "seed_data_sql": "INSERT INTO monthly_sales VALUES\n  ('新宿', '2024-01', 100), ('新宿', '2024-02', 120), ('新宿', '2024-03',  90),\n  ('新宿', '2024-04', 150), ('新宿', '2024-05', 130), ('新宿', '2024-06', 160),\n  ('渋谷', '2024-01',  80), ('渋谷', '2024-02',  85), ('渋谷', '2024-03',  95),\n  ('渋谷', '2024-04',  70), ('渋谷', '2024-05', 110), ('渋谷', '2024-06', 120);",
+    "expected_query": "SELECT store, ym, amount,\n       ROUND(AVG(amount) OVER (\n         PARTITION BY store ORDER BY ym\n         ROWS BETWEEN 2 PRECEDING AND CURRENT ROW\n       ), 1) AS moving_avg_3m\nFROM monthly_sales\nORDER BY store, ym;",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": true,
+      "compare_columns": null,
+      "sql_required": [
+        "OVER\\s*\\(",
+        "ROWS"
+      ],
+      "pattern_hint": "ウィンドウ関数の `ROWS` によるフレーム指定を使って解いてください。"
+    },
+    "hints_md": [
+      "「直近 3 か月」は現在行とその 2 行前まで。`ROWS BETWEEN 2 PRECEDING AND CURRENT ROW` です。",
+      "フレームがパーティションの先頭を突き抜けることはありません。1 行目は自動的に 1 行だけの平均になります。"
+    ],
+    "explanation_md": "## 考え方\n\n```sql\nSELECT store, ym, amount,\n       ROUND(AVG(amount) OVER (\n         PARTITION BY store ORDER BY ym\n         ROWS BETWEEN 2 PRECEDING AND CURRENT ROW\n       ), 1) AS moving_avg_3m\nFROM monthly_sales\nORDER BY store, ym;\n```\n\n## フレーム指定の文法\n\n```\n{ROWS | RANGE | GROUPS} BETWEEN <開始> AND <終了>\n```\n\n`<開始>` `<終了>` に書けるもの:\n\n| 指定 | 意味 |\n|---|---|\n| `UNBOUNDED PRECEDING` | パーティションの先頭 |\n| `n PRECEDING` | n 行前 |\n| `CURRENT ROW` | 現在行 |\n| `n FOLLOWING` | n 行後 |\n| `UNBOUNDED FOLLOWING` | パーティションの末尾 |\n\n- **後方 3 か月移動平均**: `ROWS BETWEEN 2 PRECEDING AND CURRENT ROW`\n- **中心化移動平均**: `ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING`\n- **累積和**: `ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`\n\n## ROWS と RANGE の使い分け（再確認）\n\n- `ROWS` … **物理的な行数**で数える\n- `RANGE` … **ORDER BY の値**で数える（同値の行はひとかたまり）\n\n「直近 3 **行**」なら `ROWS`、「直近 3 **日間**」のように値で区切るなら `RANGE BETWEEN INTERVAL 3 DAY PRECEDING AND CURRENT ROW` のように書きます（日付が飛んでいても正しく期間で切れる）。**欠測がありうるデータで `ROWS` を使うと、期間ではなく件数で切ってしまう**ので要注意です。\n\n## 端の扱い\n\n先頭 2 行は 3 行分そろいませんが、フレームはパーティションの外に出ないため、自動的に「あるだけ」で平均されます。「3 か月そろっていない月は NULL にしたい」場合は、\n\n```sql\nCASE WHEN COUNT(*) OVER (PARTITION BY store ORDER BY ym ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) = 3\n     THEN AVG(amount) OVER (...) END\n```\n\nのように件数で判定します。",
+    "tags": [
+      "ウィンドウ関数",
+      "移動平均",
+      "フレーム"
+    ]
+  },
+  {
+    "id": "phase2-lv3-007",
+    "type": "sql_query",
+    "phase": 2,
+    "level": 3,
+    "title": "全体に対する構成比を出す（集約関数のウィンドウ化）",
+    "prompt_md": "`monthly_sales` から、**店舗ごとの売上合計**と、**それが全店舗合計に占める割合（％）**を求めてください。\n\n### 出力仕様\n- 列: 店舗名、店舗の売上合計、構成比（％、**小数第 1 位に丸める**）（この順）\n- 並び順: 問いません\n- 列名は自由です\n\n> 例: 全体が 1000 で自店舗が 250 なら 25.0 と出力します。",
+    "schema_sql": "CREATE TABLE monthly_sales (store VARCHAR, ym VARCHAR, amount INTEGER);",
+    "seed_data_sql": "INSERT INTO monthly_sales VALUES\n  ('新宿', '2024-01', 100), ('新宿', '2024-02', 120), ('新宿', '2024-03',  90),\n  ('新宿', '2024-04', 150), ('新宿', '2024-05', 130), ('新宿', '2024-06', 160),\n  ('渋谷', '2024-01',  80), ('渋谷', '2024-02',  85), ('渋谷', '2024-03',  95),\n  ('渋谷', '2024-04',  70), ('渋谷', '2024-05', 110), ('渋谷', '2024-06', 120);",
+    "expected_query": "SELECT store,\n       SUM(amount) AS store_total,\n       ROUND(SUM(amount) * 100.0 / SUM(SUM(amount)) OVER (), 1) AS share_pct\nFROM monthly_sales\nGROUP BY store;",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": false,
+      "compare_columns": null,
+      "sql_required": [
+        "OVER\\s*\\("
+      ],
+      "pattern_hint": "この問題はウィンドウ関数（`OVER (...)`）を使って解いてください。"
+    },
+    "hints_md": [
+      "まず `GROUP BY store` で店舗ごとの合計を出します。分母は「その合計をさらに全部足したもの」です。",
+      "`SUM(SUM(amount)) OVER ()` のように、**集約関数の結果に対してさらにウィンドウ関数を適用**できます。ウィンドウ関数は GROUP BY より後に評価されるためです。"
+    ],
+    "explanation_md": "## 考え方\n\n```sql\nSELECT store,\n       SUM(amount) AS store_total,\n       ROUND(SUM(amount) * 100.0 / SUM(SUM(amount)) OVER (), 1) AS share_pct\nFROM monthly_sales\nGROUP BY store;\n```\n\n`SUM(SUM(amount)) OVER ()` という二重の SUM に驚くかもしれませんが、これは正しい標準 SQL です。\n\n## なぜ二重の SUM が成り立つのか\n\n評価順序を思い出してください。\n\n```\nFROM → WHERE → GROUP BY（ここで集約が確定） → HAVING → ウィンドウ関数 → SELECT\n```\n\n`GROUP BY store` の時点で、行は「店舗ごとに 1 行、値は `SUM(amount)`」になっています。\n**ウィンドウ関数はその後に評価される**ため、内側の `SUM(amount)` は「すでに集計済みの値」を指し、外側の `SUM(...) OVER ()` はその集計済みの行を**全部**足します。`OVER ()`（空の OVER）は「全行が 1 つのウィンドウ」を意味します。\n\n## 応用: 部分集計に対する比率\n\n```sql\n-- 各店舗の月次売上が、その店舗の年間合計に占める割合\nSELECT store, ym, amount,\n       ROUND(amount * 100.0 / SUM(amount) OVER (PARTITION BY store), 1) AS pct_of_store\nFROM monthly_sales;\n```\n\n`PARTITION BY` を変えるだけで「何に対する比率か」を切り替えられるのが強力な点です。同じことをサブクエリでやると、比率の分母ごとにサブクエリが増えていきます。\n\n## 実務での注意\n\n構成比の合計は丸め誤差で 100.0% にならないことがあります（例: 33.3 + 33.3 + 33.3 = 99.9）。帳票で合計 100% を保証したい場合は、最大の項目に差分を寄せるなどの調整が別途必要です。",
+    "tags": [
+      "ウィンドウ関数",
+      "構成比",
+      "group by"
+    ],
+    "alternative_md": "**別解（サブクエリで全体合計を求める）**\n\n```sql\nSELECT store,\n       SUM(amount) AS store_total,\n       ROUND(SUM(amount) * 100.0 / (SELECT SUM(amount) FROM monthly_sales), 1) AS share_pct\nFROM monthly_sales\nGROUP BY store;\n```\n\n読みやすさではこちらが上ですが、テーブルを 2 回読むことになります。"
+  },
+  {
+    "id": "phase2-lv3-008",
+    "type": "sql_query",
+    "phase": 2,
+    "level": 3,
+    "title": "LAST_VALUE の罠（既定フレームを理解する）",
+    "prompt_md": "`monthly_sales` の各行に、**その店舗の最初の月の売上**と**最後の月の売上**を並べて出力してください。\n（どの行にも、その店舗の 1 月の値と 6 月の値が入ることになります）\n\n### 出力仕様\n- 列: 店舗名、年月、当月売上、その店舗の最初の月の売上、その店舗の最後の月の売上（この順）\n- 並び順: 店舗名の昇順、同じ店舗の中では年月の昇順（**並び順も採点対象です**）\n- 列名は自由です\n\n> `LAST_VALUE` を素直に書くと**当月の値がそのまま返ってしまいます**。なぜそうなるかを考えてみてください。",
+    "schema_sql": "CREATE TABLE monthly_sales (store VARCHAR, ym VARCHAR, amount INTEGER);",
+    "seed_data_sql": "INSERT INTO monthly_sales VALUES\n  ('新宿', '2024-01', 100), ('新宿', '2024-02', 120), ('新宿', '2024-03',  90),\n  ('新宿', '2024-04', 150), ('新宿', '2024-05', 130), ('新宿', '2024-06', 160),\n  ('渋谷', '2024-01',  80), ('渋谷', '2024-02',  85), ('渋谷', '2024-03',  95),\n  ('渋谷', '2024-04',  70), ('渋谷', '2024-05', 110), ('渋谷', '2024-06', 120);",
+    "expected_query": "SELECT store, ym, amount,\n       FIRST_VALUE(amount) OVER (PARTITION BY store ORDER BY ym) AS first_amount,\n       LAST_VALUE(amount) OVER (\n         PARTITION BY store ORDER BY ym\n         ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING\n       ) AS last_amount\nFROM monthly_sales\nORDER BY store, ym;",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": true,
+      "compare_columns": null,
+      "sql_required": [
+        "OVER\\s*\\("
+      ],
+      "pattern_hint": "この問題はウィンドウ関数（`OVER (...)`）を使って解いてください。"
+    },
+    "hints_md": [
+      "`OVER (... ORDER BY ...)` の既定フレームは「先頭から**現在行まで**」です。その範囲での「最後の値」は現在行の値になります。",
+      "パーティション全体を見せるには `ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING` を明示します。"
+    ],
+    "explanation_md": "## 何が起きているのか\n\n```sql\n-- 期待どおりに動かない例\nLAST_VALUE(amount) OVER (PARTITION BY store ORDER BY ym)\n```\n\n`ORDER BY` を書いた `OVER` 句の既定フレームは\n\n```\nRANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW\n```\n\nです。つまり各行から見えているのは「**先頭から自分まで**」。その範囲の「最後の値」は当然**自分自身**になります。結果として `LAST_VALUE` は `amount` をそのままコピーしたような列になってしまいます。\n\n`FIRST_VALUE` が問題なく動くのは、「先頭から自分まで」の**先頭**は常にパーティションの先頭だからです。\n\n## 正しい書き方\n\n```sql\nLAST_VALUE(amount) OVER (\n  PARTITION BY store ORDER BY ym\n  ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING\n) AS last_amount\n```\n\nフレームを**パーティション全体**に広げます。これは Oracle・PostgreSQL・SQL Server・MySQL 8 すべてに共通する挙動で、面接や試験でも「ウィンドウ関数を分かっているか」を測る定番の論点です。\n\n## NTH_VALUE も同じ罠\n\n`NTH_VALUE(amount, 3)` も既定フレームの影響を受け、3 行目に到達するまで NULL を返します。`FIRST_VALUE` 以外のナビゲーション関数を使うときは、**必ずフレームを明示する**と覚えておくのが安全です。\n\n## まとめ\n\n| 関数 | 既定フレームで安全か |\n|---|---|\n| `FIRST_VALUE` | ○ |\n| `LAST_VALUE` | **×**（フレーム明示が必要） |\n| `NTH_VALUE` | **×** |\n| `LAG` / `LEAD` | ○（フレームの影響を受けない） |\n| `SUM` / `AVG` などの集約 | 累積になる（意図次第） |",
+    "tags": [
+      "ウィンドウ関数",
+      "first_value",
+      "last_value",
+      "フレーム"
+    ],
+    "alternative_md": "**別解（並び順を逆にした FIRST_VALUE）**\n\n```sql\nFIRST_VALUE(amount) OVER (PARTITION BY store ORDER BY ym DESC) AS last_amount\n```\n\n`FIRST_VALUE` は既定フレームでも「先頭行」を見るので影響を受けません。降順にして先頭を取る、というのは実務でよく使われる回避策です。"
+  }
+]

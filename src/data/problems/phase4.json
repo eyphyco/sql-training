@@ -1,0 +1,246 @@
+[
+  {
+    "id": "phase4-lv1-001",
+    "type": "multiple_choice",
+    "phase": 4,
+    "level": 1,
+    "title": "実行計画ツリーはどこから読むか",
+    "prompt_md": "次は DuckDB の `EXPLAIN` が出力した実行計画（物理プラン）です。\n\n```\n┌───────────────────────────┐\n│         PROJECTION        │\n└─────────────┬─────────────┘\n┌─────────────┴─────────────┐\n│      HASH_GROUP_BY        │\n│        Groups: #0         │\n│      Aggregates: count()  │\n└─────────────┬─────────────┘\n┌─────────────┴─────────────┐\n│         HASH_JOIN         │\n│      Join Type: INNER     ├──────────────┐\n│    Conditions: id = id    │              │\n└─────────────┬─────────────┘              │\n┌─────────────┴─────────────┐┌─────────────┴─────────────┐\n│          SEQ_SCAN         ││          SEQ_SCAN         │\n│    Table: customers       ││    Table: orders          │\n│    Filters: city='東京'   ││                           │\n└───────────────────────────┘└───────────────────────────┘\n```\n\nこの実行計画について、**最も適切な説明**はどれですか。",
+    "options": [
+      {
+        "id": "a",
+        "text": "最上段の PROJECTION から順に下へ実行される。つまり射影 → 集約 → 結合 → 表の読み込みの順である。"
+      },
+      {
+        "id": "b",
+        "text": "最下段の SEQ_SCAN（葉）から実行され、結果が上位ノードへ渡っていく。customers には city='東京' の絞り込みが表の読み込み時点で適用されている。"
+      },
+      {
+        "id": "c",
+        "text": "左右の SEQ_SCAN は必ず左から順番に完了させてから実行される。並列に読まれることはない。"
+      },
+      {
+        "id": "d",
+        "text": "Filters が表示されているのは、索引が使われていることを示している。"
+      }
+    ],
+    "correct_option_id": "b",
+    "hints_md": [
+      "ツリーの「葉」と「根」のどちらが先に動くかを考えてください。"
+    ],
+    "explanation_md": "## 正解: b\n\n実行計画のツリーは**葉（下）から根（上）へ**データが流れます。表示は上下逆さまの木ですが、**実行は下から**です。\n\n```\nSEQ_SCAN（表を読む）\n   ↓ 行を渡す\nHASH_JOIN（突き合わせる）\n   ↓\nHASH_GROUP_BY（集約する）\n   ↓\nPROJECTION（必要な列に整える）\n   ↓\n結果\n```\n\n## 各選択肢の検討\n\n- **a**: 逆です。上から読むのは「何をしているか」を把握するときの読み方で、実行順序は下から上です。\n- **c**: `HASH_JOIN` は片側（**ビルド側**）でハッシュ表を作り、もう片側（**プローブ側**）を流し込みます。ビルド側を先に読み終える必要はありますが、多くの DBMS は両者を並列に読みます。「必ず左から順番に」は誤りです。\n- **d**: `Filters` は**スキャン時に条件が適用されている**（フィルタのプッシュダウン）ことを示すもので、索引の使用を意味しません。DuckDB は列指向でゾーンマップ（各データブロックの最小値・最大値）を持つため、索引が無くても不要なブロックを読み飛ばせます。\n\n## Filters が下に押し下げられている意味\n\n`city='東京'` という条件が `SEQ_SCAN` の中に現れているのは、オプティマイザが**述語プッシュダウン**を行った証拠です。\n結合してから絞り込むのではなく、**読み込みの段階で行を減らしてから結合する**ので、中間結果が小さくなり高速です。\n\n実行計画を読むときは、次の順で見ると効率的です。\n\n1. **一番下（葉）**: どの表を、どんな条件で読んでいるか（Filters はあるか）\n2. **結合ノード**: どの結合方式か（HASH / MERGE / NESTED LOOP）、どちらがビルド側か\n3. **見積もり行数（`~N rows`）**: 実際の件数と大きくズレていないか\n4. **一番上**: 最終的に何行返るか",
+    "tags": [
+      "実行計画",
+      "explain"
+    ]
+  },
+  {
+    "id": "phase4-lv1-002",
+    "type": "multiple_choice",
+    "phase": 4,
+    "level": 1,
+    "title": "索引が使われなくなる WHERE 句",
+    "prompt_md": "`orders` テーブルの `order_date` 列（DATE 型）に B木索引が張られています。\n\n次の `WHERE` 句のうち、**索引が使われなくなる可能性が最も高い**ものはどれですか。",
+    "options": [
+      {
+        "id": "a",
+        "text": "WHERE order_date >= DATE '2024-01-01' AND order_date < DATE '2025-01-01'"
+      },
+      {
+        "id": "b",
+        "text": "WHERE EXTRACT(YEAR FROM order_date) = 2024"
+      },
+      {
+        "id": "c",
+        "text": "WHERE order_date = DATE '2024-05-01'"
+      },
+      {
+        "id": "d",
+        "text": "WHERE order_date BETWEEN DATE '2024-01-01' AND DATE '2024-03-31'"
+      }
+    ],
+    "correct_option_id": "b",
+    "hints_md": [
+      "索引に格納されているのは「列の生の値」です。列を関数で加工した結果は索引に入っていません。"
+    ],
+    "explanation_md": "## 正解: b\n\n**索引列に関数や演算を適用すると、その索引は使えなくなります。**\n\nB木索引には `order_date` の**生の値**が並んでいます。`EXTRACT(YEAR FROM order_date)` は加工後の値なので、索引を順にたどって目的の範囲を絞り込むことができず、結局**全行を読んで 1 行ずつ関数を評価する**ことになります。\n\n## sargable（サージャブル）\n\n索引で効率的に検索できる条件を **SARGable**（Search ARGument able）と呼びます。\n\n| 書き方 | sargable | 理由 |\n|---|---|---|\n| `col = 値` / `col > 値` / `col BETWEEN a AND b` | ○ | 生の値で範囲を特定できる |\n| `col LIKE 'ABC%'` | ○ | 前方一致は範囲検索に変換できる |\n| `col LIKE '%ABC'` | **×** | 後方一致・中間一致は範囲を特定できない |\n| `EXTRACT(YEAR FROM col) = 2024` | **×** | 列が関数に包まれている |\n| `col * 2 > 100` | **×** | 列が演算に包まれている（`col > 50` と書くべき） |\n| `col IS NULL` | △ | DBMS による（PostgreSQL は可、Oracle の B木索引は NULL を格納しない） |\n| `col <> 値` | △ | 否定条件は選択率が悪く、全表走査が選ばれやすい |\n\n## 書き換えの定石\n\n```sql\n-- NG\nWHERE EXTRACT(YEAR FROM order_date) = 2024\n-- OK（範囲に展開する）\nWHERE order_date >= DATE '2024-01-01' AND order_date < DATE '2025-01-01'\n```\n\nどうしても関数を使いたい場合は、**関数索引（function-based index）**を作る手もあります。\n\n```sql\nCREATE INDEX idx_orders_year ON orders (EXTRACT(YEAR FROM order_date));\n```\n\n## 暗黙の型変換にも注意\n\n`VARCHAR` 型の列に `WHERE code = 123`（数値リテラル）と書くと、DBMS が `CAST(code AS INTEGER)` を挿入することがあります。これも「列を関数で包んだ」のと同じで索引が効かなくなり、しかも **SQL 上は何も間違っていないように見える**ため発見が遅れます。実行計画に想定外の `CAST` が出ていないか確認する習慣をつけてください。\n\n## DuckDB での注意\n\nこのアプリで使っている DuckDB は**列指向の分析用エンジン**で、行指向 DBMS のような索引探索（Index Scan）はほとんど使いません。代わりに列ごとのゾーンマップでブロックを読み飛ばします。ここで学ぶ索引の話は **PostgreSQL / Oracle / MySQL などの行指向 DBMS と、データベーススペシャリスト試験**を前提としたものです。",
+    "tags": [
+      "インデックス",
+      "sargable",
+      "実行計画"
+    ]
+  },
+  {
+    "id": "phase4-lv2-003",
+    "type": "multiple_choice",
+    "phase": 4,
+    "level": 2,
+    "title": "複合索引の左端プレフィックス",
+    "prompt_md": "`employees` テーブルに、次の**複合索引**が 1 つだけ作られています。\n\n```sql\nCREATE INDEX idx_emp ON employees (dept, hired_on);\n```\n\n次の検索条件のうち、**この索引をほとんど活用できない**ものはどれですか。",
+    "options": [
+      {
+        "id": "a",
+        "text": "WHERE dept = '開発'"
+      },
+      {
+        "id": "b",
+        "text": "WHERE dept = '開発' AND hired_on >= DATE '2020-01-01'"
+      },
+      {
+        "id": "c",
+        "text": "WHERE hired_on >= DATE '2020-01-01'"
+      },
+      {
+        "id": "d",
+        "text": "WHERE dept IN ('開発', '営業')"
+      }
+    ],
+    "correct_option_id": "c",
+    "hints_md": [
+      "複合索引は「dept で並べ、その中で hired_on で並べた電話帳」だと考えてください。"
+    ],
+    "explanation_md": "## 正解: c\n\n複合索引 `(dept, hired_on)` は、**まず dept で並び、その中で hired_on で並んだ**構造です。電話帳が「姓 → 名」の順に並んでいるのと同じです。\n\n- 「姓が田中の人」は探せる（= `dept` のみの条件 → **使える**）\n- 「姓が田中で名が太郎」も探せる（= 両方の条件 → **最も効率的**）\n- 「名が太郎の人」は**電話帳全体を見るしかない**（= `hired_on` のみ → **使えない**）\n\nこの性質を **左端プレフィックス（leftmost prefix）規則**と呼びます。\n\n## 複合索引の設計指針\n\n1. **等値条件で使う列を先頭に**、範囲条件で使う列を後ろに置く\n   `WHERE dept = ? AND hired_on > ?` なら `(dept, hired_on)` が最適。逆順の `(hired_on, dept)` では範囲条件の後ろが活かせません。\n2. **選択率の高い（絞り込める）列を先頭に**する\n3. `ORDER BY` の順序とそろえると、**ソート処理そのものを省略**できることがある\n4. **カバリング索引**: 検索条件だけでなく `SELECT` する列まで索引に含めると、表本体へのアクセス（テーブルアクセス）が不要になり大幅に速くなる\n\n## 索引は「多ければよい」ではない\n\n索引は検索を速くする一方で、\n- **更新（INSERT / UPDATE / DELETE）のたびに索引も更新**されるため書き込みが遅くなる\n- **ディスク容量**を消費する\n- オプティマイザの選択肢が増えて、**誤った計画を選ぶリスク**も上がる\n\n「1 つの複合索引で複数のクエリをカバーできないか」を先に検討するのが定石です。\n\n## 選択肢 d について\n\n`IN` は複数の等値条件の並びと同じで、索引を先頭列から使えます（DBMS は索引を複数回探索します）。したがって d は問題なく活用できます。",
+    "tags": [
+      "インデックス",
+      "複合インデックス"
+    ]
+  },
+  {
+    "id": "phase4-lv2-004",
+    "type": "multiple_choice",
+    "phase": 4,
+    "level": 2,
+    "title": "ネステッドループ結合の駆動表",
+    "prompt_md": "2 つの表 A（1,000 万行）と B（1,000 行）を等値結合します。B の結合キーには索引があり、A の結合キーには索引がありません。\n\n**ネステッドループ結合**を使う場合、駆動表（外側のループ）に選ぶべき表と、その理由として最も適切なものはどれですか。",
+    "options": [
+      {
+        "id": "a",
+        "text": "A を駆動表にする。行数が多い表を先に読んだほうがキャッシュが効くため。"
+      },
+      {
+        "id": "b",
+        "text": "B を駆動表にする。ただし内側の A には索引が無いため、この組み合わせではネステッドループ自体が不利で、ハッシュ結合が選ばれるのが一般的である。"
+      },
+      {
+        "id": "c",
+        "text": "どちらでも実行時間は変わらない。結合方式が同じなら順序は結果に影響しないため。"
+      },
+      {
+        "id": "d",
+        "text": "必ず主キーを持つ表を駆動表にする決まりがある。"
+      }
+    ],
+    "correct_option_id": "b",
+    "hints_md": [
+      "ネステッドループ結合のコストは「外側の行数 × 内側 1 回あたりの探索コスト」です。内側に索引が無いとどうなるでしょうか。"
+    ],
+    "explanation_md": "## 正解: b\n\nネステッドループ結合のコストはおおよそ\n\n```\n外側の行数 × （内側を 1 回検索するコスト）\n```\n\nです。したがって\n\n- **外側（駆動表）は絞り込み後の行数が少ないほうがよい**\n- **内側は結合キーに索引があることが必須**（無いと内側を毎回全表走査することになり、1,000 × 1,000万 の壊滅的なコストになる）\n\nこの問題では内側候補の A に索引が無いので、ネステッドループは適しません。実際のオプティマイザは**ハッシュ結合**（小さい B でハッシュ表を作り、大きい A を流し込む）を選びます。これなら A と B をそれぞれ 1 回ずつ読むだけで済みます。\n\n## 3 つの結合アルゴリズム\n\n| 方式 | 得意な場面 | 計算量の目安 |\n|---|---|---|\n| **ネステッドループ結合** | 外側が小さく、内側の結合キーに索引がある。非等値結合も可 | O(外 × log 内)（索引あり） |\n| **ハッシュ結合** | 等値結合で、片方がメモリに乗る。大きい表同士 | O(外 + 内) |\n| **ソートマージ結合** | 双方が結合キーでソート済み。範囲結合にも使える | O(n log n + m log m) |\n\n**ハッシュ結合は等値結合でしか使えません**。`ON a.x BETWEEN b.lo AND b.hi` のような非等値結合ではネステッドループやマージ結合になり、行数が増えると急激に重くなります（フェーズ 3 の範囲結合、および次の問題を参照）。\n\n## 実務での確認手順\n\n1. `EXPLAIN` で結合方式と結合順序を見る\n2. 見積もり行数（`~N rows`）と実際の行数（`EXPLAIN ANALYZE`）を比較する\n3. 大きくズレていたら**統計情報が古い**ことを疑う（`ANALYZE` / `VACUUM ANALYZE` を実行する）\n4. それでも直らなければ、索引の追加やクエリの書き換えを検討する\n\n「オプティマイザが変な計画を選ぶ」ケースの多くは、**統計情報の陳腐化**が原因です。ヒント句で無理やり計画を固定するのは最後の手段と考えてください。",
+    "tags": [
+      "結合アルゴリズム",
+      "実行計画",
+      "カーディナリティ"
+    ]
+  },
+  {
+    "id": "phase4-lv3-005",
+    "type": "multiple_choice",
+    "phase": 4,
+    "level": 3,
+    "title": "EXPLAIN と EXPLAIN ANALYZE の違い",
+    "prompt_md": "あるクエリの `EXPLAIN` 結果では、結合ノードの見積もり行数が `~120 rows` と表示されていました。\nしかし `EXPLAIN ANALYZE` で実測すると、同じノードを実際には **480,000 行**が通過していました。\n\nこの状況の解釈と対応として、**最も適切**なものはどれですか。",
+    "options": [
+      {
+        "id": "a",
+        "text": "EXPLAIN は実際にクエリを実行しないため、表示される行数は統計情報に基づく見積もりである。4,000 倍の乖離は統計情報の陳腐化や相関のある条件が原因の可能性が高く、まず統計情報を更新して再確認する。"
+      },
+      {
+        "id": "b",
+        "text": "EXPLAIN の行数は常に正確なので、EXPLAIN ANALYZE 側の測定が誤っている。"
+      },
+      {
+        "id": "c",
+        "text": "見積もりと実測がズレるのは正常な状態であり、性能問題とは無関係なので気にしなくてよい。"
+      },
+      {
+        "id": "d",
+        "text": "乖離を解消するには、必ずヒント句で結合方式を固定する必要がある。"
+      }
+    ],
+    "correct_option_id": "a",
+    "hints_md": [
+      "EXPLAIN はクエリを実行しますか？ 表示される行数はどこから来た数字でしょうか。"
+    ],
+    "explanation_md": "## 正解: a\n\n| コマンド | 実行するか | 行数の意味 |\n|---|---|---|\n| `EXPLAIN` | **しない** | 統計情報からの**見積もり** |\n| `EXPLAIN ANALYZE` | **する** | 実際に通過した**実測値**（＋各ノードの所要時間） |\n\n## 見積もりが外れると何が起きるか\n\nオプティマイザは**行数の見積もりを前提に**結合方式・結合順序・索引の使用を決めます。見積もりが 4,000 倍も外れていれば、\n\n- 「120 行なら」とネステッドループを選んだのに、実際は 48 万行 → 破滅的に遅い\n- 小さいと思ってハッシュ表のビルド側にした表がメモリに乗らず、ディスクへ溢れる\n\nといった事故が起きます。**遅いクエリの調査は、まず見積もりと実測の乖離を探すところから**始めるのが定石です。\n\n## 見積もりが外れる主な原因\n\n1. **統計情報が古い**（大量投入・大量削除の直後） → `ANALYZE` を実行する\n2. **列同士に相関がある**（例: `都道府県='東京' AND 市区町村='渋谷区'`）\n   DBMS は既定で「条件は独立」と仮定して選択率を掛け算するため、相関があると過小評価になる → 拡張統計（PostgreSQL の `CREATE STATISTICS`）や複合索引で改善\n3. **列に関数を適用している** → 統計が使えず、既定の選択率が適用される\n4. **バインド変数**（プレースホルダ）で値が実行時まで不明 → 平均的な選択率で見積もる\n\n## 選択肢 d について\n\nヒント句（Oracle の `/*+ USE_HASH */`、MySQL の `FORCE INDEX` など）は**最後の手段**です。データ量の変化に追随できなくなり、将来かえって遅くなります。\nまず統計情報、次にクエリの書き方（sargable にする、不要な結合を外す）、次に索引設計、それでも駄目ならヒント、という順序で検討してください。",
+    "tags": [
+      "実行計画",
+      "explain",
+      "統計情報"
+    ]
+  },
+  {
+    "id": "phase4-lv2-006",
+    "type": "sql_query",
+    "phase": 4,
+    "level": 2,
+    "title": "非等値結合をやめてハッシュ結合に載せる",
+    "prompt_md": "`access_logs`（3,000 行）を `month_master`（月マスタ）と結合して、**月ごとのアクセス件数**を求めます。\n\nエディタには**期間の範囲で結合しているクエリ**が入っています。まず `EXPLAIN` ボタンで実行計画を確認してください。\n`NESTED_LOOP_JOIN`（総当たり結合）が使われているはずです。\n\nこれを **`HASH_JOIN` が使われる書き方に修正**してください。結果は変えてはいけません。\n\n### 出力仕様\n- 列: 年月、アクセス件数（この順）\n- 並び順: 年月の昇順（**並び順も採点対象です**）\n- 実行計画に `HASH_JOIN` が現れ、`NESTED_LOOP_JOIN` が現れないこと（採点対象です）\n- 列名は自由です\n\n> ヒント: `month_master.ym` は `'2024-01'` の形式です。ログの日付を同じ形式の文字列に変換すれば、**等値条件**で結合できます。",
+    "schema_sql": "CREATE TABLE access_logs (\n  log_id    INTEGER,\n  user_id   INTEGER,\n  logged_at DATE,\n  status    INTEGER\n);\nCREATE TABLE month_master (\n  ym         VARCHAR,\n  start_date DATE,\n  end_date   DATE\n);",
+    "seed_data_sql": "INSERT INTO access_logs\nSELECT i::INTEGER,\n       (i % 500)::INTEGER,\n       DATE '2024-01-01' + ((i % 91)::INTEGER),\n       CASE WHEN i % 50 = 0 THEN 500 WHEN i % 7 = 0 THEN 404 ELSE 200 END\nFROM range(1, 3001) r(i);\nINSERT INTO month_master VALUES\n  ('2024-01', DATE '2024-01-01', DATE '2024-01-31'),\n  ('2024-02', DATE '2024-02-01', DATE '2024-02-29'),\n  ('2024-03', DATE '2024-03-01', DATE '2024-03-31');",
+    "expected_query": "SELECT m.ym, COUNT(*) AS access_count\nFROM access_logs a\nJOIN month_master m\n  ON strftime(a.logged_at, '%Y-%m') = m.ym\nGROUP BY m.ym\nORDER BY m.ym;",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": true,
+      "compare_columns": null,
+      "explain_required": [
+        "HASH_JOIN"
+      ],
+      "explain_forbidden": [
+        "NESTED_LOOP_JOIN",
+        "BLOCKWISE_NL_JOIN"
+      ],
+      "pattern_hint": "月マスタとの結合を「期間の範囲比較」ではなく「年月キーの等値比較」で書くと、ハッシュ結合が使えます。"
+    },
+    "hints_md": [
+      "`ON a.logged_at >= m.start_date AND a.logged_at <= m.end_date` は**非等値結合**です。ハッシュ結合は等値条件でしか使えません。",
+      "`strftime(a.logged_at, '%Y-%m')` でログの日付を `'2024-01'` 形式にできます。これを `m.ym` と `=` で結べば等値結合になります。"
+    ],
+    "explanation_md": "## 考え方\n\n```sql\nSELECT m.ym, COUNT(*) AS access_count\nFROM access_logs a\nJOIN month_master m\n  ON strftime(a.logged_at, '%Y-%m') = m.ym\nGROUP BY m.ym\nORDER BY m.ym;\n```\n\n## なぜ非等値結合は遅いのか\n\n**ハッシュ結合は等値条件（`=`）でしか使えません。** ハッシュ値が一致するかどうかしか判定できないからです。\n\n`a.logged_at BETWEEN m.start_date AND m.end_date` のような範囲条件では、\n- ハッシュ結合 → 使えない\n- ネステッドループ結合 → 外側の各行について内側を走査（3,000 × 3 = 9,000 回の比較）\n- マージ結合 → ソート済みなら使えることもある\n\nという選択肢しか残りません。今回はマスタが 3 行なので実害はありませんが、**マスタが 10 万行、ログが 1,000 万行**になると、比較回数は 10¹² 回に達し、実質的に終わりません。\n\n## 書き換えの一般則\n\n| 元の形 | 書き換え |\n|---|---|\n| 期間マスタと `BETWEEN` で結合 | 結合キー（年月・区分コード）を作って等値結合 |\n| `ON a.x > b.y` で近い値を探す | ウィンドウ関数（`LAG` / `LEAD`）で代替できないか検討 |\n| 価格帯マスタと範囲結合 | 商品側に価格帯コードを持たせる（非正規化） |\n\n「**非等値結合を等値結合に変換できないか**」は、遅い結合を見たときに最初に検討すべき観点です。\n\n## トレードオフ\n\n書き換え後のクエリは `strftime()` という**関数を結合キーに使っています**。これは行指向 DBMS では「索引が効かない」問題（前の問題を参照）を招きます。実務では\n\n- ログ側に `ym` 列を持たせる（生成列 / 計算列や、ETL 時の付与）\n- 関数索引を張る\n\nといった設計で対応します。**「クエリの書き換え」と「テーブル設計の変更」はセットで検討する**というのが、性能改善の実務的な進め方です。\n\n## 補足: DuckDB の実行計画で見える結合演算子\n\n| 演算子 | 意味 |\n|---|---|\n| `HASH_JOIN` | ハッシュ結合（等値結合） |\n| `NESTED_LOOP_JOIN` | 総当たり（比較可能な非等値条件） |\n| `BLOCKWISE_NL_JOIN` | 総当たり（`LIKE` など任意条件。最も重い） |\n| `PIECEWISE_MERGE_JOIN` | 不等号 1 つの結合をソートして処理する |\n| `CROSS_PRODUCT` | 結合条件なし（直積） |",
+    "tags": [
+      "実行計画",
+      "結合アルゴリズム",
+      "非等値結合"
+    ],
+    "starter_sql": "-- このクエリは正しい結果を返しますが、実行計画を見ると\n-- NESTED_LOOP_JOIN（総当たり）になっています。\n-- EXPLAIN ボタンで確認してから、等値結合に書き換えてください。\nSELECT m.ym, COUNT(*) AS access_count\nFROM access_logs a\nJOIN month_master m\n  ON a.logged_at >= m.start_date AND a.logged_at <= m.end_date\nGROUP BY m.ym\nORDER BY m.ym;"
+  },
+  {
+    "id": "phase4-lv3-007",
+    "type": "sql_query",
+    "phase": 4,
+    "level": 3,
+    "title": "直積になっているクエリを実行計画から見つけて直す",
+    "prompt_md": "エディタのクエリは「顧客ごとの注文件数」を求めようとしていますが、**すべての顧客が同じ件数（6 件）**になってしまいます。\n\nまず**そのまま実行**して結果を確認し、次に `EXPLAIN` で実行計画を見てください。実行計画に `CROSS_PRODUCT` が現れているはずです。\n\n原因を取り除き、**正しい顧客ごとの注文件数**を求めてください。\n\n### 出力仕様\n- 列: 顧客名、注文件数（この順）\n- **注文が 1 件も無い顧客も、件数 0 で出力**してください\n- 並び順: 問いません\n- 実行計画に `CROSS_PRODUCT` が現れないこと（採点対象です）\n- 列名は自由です",
+    "schema_sql": "CREATE TABLE customers (\n  customer_id INTEGER,\n  name        VARCHAR,\n  city        VARCHAR\n);\nCREATE TABLE orders (\n  order_id    INTEGER,\n  customer_id INTEGER,\n  order_date  DATE,\n  amount      INTEGER\n);",
+    "seed_data_sql": "INSERT INTO customers VALUES\n  (1, 'あさひ商事',   '東京'),\n  (2, 'いろは物産',   '大阪'),\n  (3, 'うしお工業',   '東京'),\n  (4, 'えびす商会',   '福岡'),\n  (5, 'おおぞら電機', '東京');\nINSERT INTO orders VALUES\n  (101, 1, DATE '2024-01-10', 50000),\n  (102, 1, DATE '2024-03-05', 30000),\n  (103, 2, DATE '2024-02-20', 80000),\n  (104, 3, DATE '2024-05-01', 20000),\n  (105, 5, DATE '2023-12-15', 60000),\n  (106, 2, DATE '2023-11-11', 15000);",
+    "expected_query": "SELECT c.name, COUNT(o.order_id) AS order_count\nFROM customers c\nLEFT JOIN orders o ON o.customer_id = c.customer_id\nGROUP BY c.customer_id, c.name;",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": false,
+      "compare_columns": null,
+      "explain_forbidden": [
+        "CROSS_PRODUCT"
+      ],
+      "pattern_hint": "結合条件を `ON`（または `WHERE`）に書けば、直積（CROSS_PRODUCT）は解消されます。"
+    },
+    "hints_md": [
+      "`FROM customers c, orders o` は結合条件が無いため、5 × 6 = 30 行の直積（クロス結合）になっています。",
+      "注文が無い顧客も残すので `LEFT JOIN` です。そして件数は `COUNT(*)` ではなく `COUNT(o.order_id)` にしてください。"
+    ],
+    "explanation_md": "## 考え方\n\n```sql\nSELECT c.name, COUNT(o.order_id) AS order_count\nFROM customers c\nLEFT JOIN orders o ON o.customer_id = c.customer_id\nGROUP BY c.customer_id, c.name;\n```\n\n## 直積（CROSS_PRODUCT）が起きる理由\n\n```sql\nFROM customers c, orders o   -- 結合条件を書き忘れた\n```\n\nカンマ区切りの結合で `WHERE` に結合条件を書かないと、**全行の組み合わせ**が作られます。顧客 5 行 × 注文 6 行 = 30 行。それを顧客ごとに数えれば、当然どの顧客も 6 件になります。\n\nこれは**表が 3 つ、4 つと増えるほど発見しづらくなる**バグです。1,000 行 × 1,000 行 = 100 万行、そこにもう 1 表加われば 10 億行——「なぜかクエリが終わらない」の典型的な原因がこれです。\n\n## 予防策\n\n1. **`JOIN ... ON` 構文を使う**。`ON` を省略すると多くの DBMS で構文エラーになるため、書き忘れに気づけます。カンマ結合は書き忘れても動いてしまいます。\n2. 表を n 個結合するなら、**結合条件は原則 n−1 個**必要。数を数える癖をつける。\n3. 実行計画に `CROSS_PRODUCT` / `NESTED LOOP (no condition)` が出ていないか確認する。\n4. 結果の行数が想定と桁違いなら、まず結合条件を疑う。\n\n## COUNT(*) と COUNT(列) — 外部結合での再確認\n\n修正後も `COUNT(*)` のままだと、注文が無い「えびす商会」が **0 件ではなく 1 件**と表示されます。`LEFT JOIN` で対応が無かった行にも「右側が NULL の行」が 1 本存在するためです。\n\n**外部結合したあとの件数は `COUNT(右側の非 NULL 列)`**。フェーズ 3 でも扱った、実務で頻出のポイントです。\n\n## 意図的な直積\n\n直積が常に悪いわけではありません。「全店舗 × 全月」の組み合わせを作ってから実績を左外部結合し、**実績が無い月も 0 で埋める**——というカレンダー表の生成では、`CROSS JOIN` を明示的に使います。\nその場合は**カンマではなく `CROSS JOIN` と明記**して、意図的であることをコードで示してください。",
+    "tags": [
+      "実行計画",
+      "直積",
+      "結合"
+    ],
+    "starter_sql": "-- 「顧客ごとの注文件数」を出そうとしていますが、\n-- どの顧客も同じ件数になってしまいます。\n-- EXPLAIN で実行計画を確認し、原因を突き止めて修正してください。\nSELECT c.name, COUNT(*) AS order_count\nFROM customers c, orders o\nGROUP BY c.name;"
+  }
+]

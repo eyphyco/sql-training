@@ -1,0 +1,215 @@
+[
+  {
+    "id": "phase3-lv1-001",
+    "type": "sql_query",
+    "phase": 3,
+    "level": 1,
+    "title": "顧客名つきの注文一覧を作る（INNER JOIN）",
+    "prompt_md": "`orders`（注文）と `customers`（顧客）を結合して、**注文一覧に顧客名を付けて**出力してください。\n\n### 出力仕様\n- 列: 注文ID、顧客名、注文日、金額（この順）\n- 並び順: 注文IDの昇順（**並び順も採点対象です**）\n- 列名は自由です",
+    "schema_sql": "CREATE TABLE customers (\n  customer_id INTEGER,\n  name        VARCHAR,\n  city        VARCHAR\n);\nCREATE TABLE orders (\n  order_id    INTEGER,\n  customer_id INTEGER,\n  order_date  DATE,\n  amount      INTEGER\n);\nCREATE TABLE order_items (\n  order_id   INTEGER,\n  item_no    INTEGER,\n  product_id INTEGER,\n  qty        INTEGER\n);\nCREATE TABLE products (\n  product_id INTEGER,\n  name       VARCHAR,\n  category   VARCHAR,\n  price      INTEGER\n);",
+    "seed_data_sql": "INSERT INTO customers VALUES\n  (1, 'あさひ商事',   '東京'),\n  (2, 'いろは物産',   '大阪'),\n  (3, 'うしお工業',   '東京'),\n  (4, 'えびす商会',   '福岡'),\n  (5, 'おおぞら電機', '東京');\nINSERT INTO orders VALUES\n  (101, 1, DATE '2024-01-10', 50000),\n  (102, 1, DATE '2024-03-05', 30000),\n  (103, 2, DATE '2024-02-20', 80000),\n  (104, 3, DATE '2024-05-01', 20000),\n  (105, 5, DATE '2023-12-15', 60000),\n  (106, 2, DATE '2023-11-11', 15000);\nINSERT INTO order_items VALUES\n  (101, 1, 1, 1),\n  (101, 2, 3, 2),\n  (102, 1, 2, 1),\n  (103, 1, 5, 1),\n  (103, 2, 4, 3),\n  (104, 1, 3, 5),\n  (105, 1, 2, 2),\n  (106, 1, 4, 1);\nINSERT INTO products VALUES\n  (1, 'ノートPC',       'PC',       90000),\n  (2, 'モニター',       '周辺機器', 25000),\n  (3, 'マウス',         '周辺機器',  3000),\n  (4, 'キーボード',     '周辺機器',  9000),\n  (5, 'デスクトップPC', 'PC',      120000);",
+    "expected_query": "SELECT o.order_id, c.name, o.order_date, o.amount\nFROM orders o\nINNER JOIN customers c ON c.customer_id = o.customer_id\nORDER BY o.order_id;",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": true,
+      "compare_columns": null
+    },
+    "hints_md": [
+      "結合条件は「注文テーブルの customer_id」と「顧客テーブルの customer_id」が等しいことです。",
+      "テーブルに別名（エイリアス）を付けると `o.order_id` のように短く書けて、同名の列があっても曖昧になりません。"
+    ],
+    "explanation_md": "## 考え方\n\n```sql\nSELECT o.order_id, c.name, o.order_date, o.amount\nFROM orders o\nINNER JOIN customers c ON c.customer_id = o.customer_id\nORDER BY o.order_id;\n```\n\n## INNER JOIN の意味\n\n`INNER JOIN`（内部結合）は「**両方のテーブルに対応する行がある組み合わせだけ**」を返します。\n顧客 4（えびす商会）は注文が 1 件もないため、この結果には現れません。「注文のない顧客も出したい」ときは外部結合が必要です（次の問題）。\n\n## 古い書き方との比較\n\n```sql\n-- 昔ながらの書き方（SQL-89 形式）\nSELECT o.order_id, c.name, o.order_date, o.amount\nFROM orders o, customers c\nWHERE c.customer_id = o.customer_id;\n```\n\n結果は同じですが、現在は `JOIN ... ON` を使う **SQL-92 形式**が推奨です。理由は次の 3 点。\n\n1. **結合条件と絞り込み条件が分離される**（`ON` は結合、`WHERE` は絞り込み）ので読みやすい\n2. `ON` を書き忘れると構文エラーになり、**うっかりクロス結合を作る事故を防げる**（カンマ区切りだと WHERE を忘れても動いてしまい、行数が爆発する）\n3. 外部結合（`LEFT JOIN` など）が同じ構文で書ける\n\n## 結合の実装（先取り）\n\nDBMS は結合を実現するとき、内部的には次のいずれかのアルゴリズムを選びます。\n\n- **ネステッドループ結合**: 外側の各行に対して内側を探す。小さい表向き\n- **ハッシュ結合**: 片方をハッシュ表にしてもう片方を突き合わせる。等値結合＋大きい表向き\n- **ソートマージ結合**: 双方をソートして突き合わせる。ソート済みや範囲結合向き\n\nどれが選ばれたかは `EXPLAIN` で確認できます。フェーズ 4 で詳しく扱います。",
+    "tags": [
+      "inner join",
+      "結合"
+    ]
+  },
+  {
+    "id": "phase3-lv1-002",
+    "type": "sql_query",
+    "phase": 3,
+    "level": 1,
+    "title": "一度も注文していない顧客を抽出する（LEFT JOIN + IS NULL）",
+    "prompt_md": "**一度も注文をしたことがない顧客**を抽出してください。\n\n### 出力仕様\n- 列: 顧客ID、顧客名（この順）\n- 並び順: 問いません\n- 列名は自由です",
+    "schema_sql": "CREATE TABLE customers (\n  customer_id INTEGER,\n  name        VARCHAR,\n  city        VARCHAR\n);\nCREATE TABLE orders (\n  order_id    INTEGER,\n  customer_id INTEGER,\n  order_date  DATE,\n  amount      INTEGER\n);\nCREATE TABLE order_items (\n  order_id   INTEGER,\n  item_no    INTEGER,\n  product_id INTEGER,\n  qty        INTEGER\n);\nCREATE TABLE products (\n  product_id INTEGER,\n  name       VARCHAR,\n  category   VARCHAR,\n  price      INTEGER\n);",
+    "seed_data_sql": "INSERT INTO customers VALUES\n  (1, 'あさひ商事',   '東京'),\n  (2, 'いろは物産',   '大阪'),\n  (3, 'うしお工業',   '東京'),\n  (4, 'えびす商会',   '福岡'),\n  (5, 'おおぞら電機', '東京');\nINSERT INTO orders VALUES\n  (101, 1, DATE '2024-01-10', 50000),\n  (102, 1, DATE '2024-03-05', 30000),\n  (103, 2, DATE '2024-02-20', 80000),\n  (104, 3, DATE '2024-05-01', 20000),\n  (105, 5, DATE '2023-12-15', 60000),\n  (106, 2, DATE '2023-11-11', 15000);\nINSERT INTO order_items VALUES\n  (101, 1, 1, 1),\n  (101, 2, 3, 2),\n  (102, 1, 2, 1),\n  (103, 1, 5, 1),\n  (103, 2, 4, 3),\n  (104, 1, 3, 5),\n  (105, 1, 2, 2),\n  (106, 1, 4, 1);\nINSERT INTO products VALUES\n  (1, 'ノートPC',       'PC',       90000),\n  (2, 'モニター',       '周辺機器', 25000),\n  (3, 'マウス',         '周辺機器',  3000),\n  (4, 'キーボード',     '周辺機器',  9000),\n  (5, 'デスクトップPC', 'PC',      120000);",
+    "expected_query": "SELECT c.customer_id, c.name\nFROM customers c\nLEFT JOIN orders o ON o.customer_id = c.customer_id\nWHERE o.order_id IS NULL;",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": false,
+      "compare_columns": null
+    },
+    "hints_md": [
+      "`LEFT JOIN` は左のテーブルの全行を残し、対応する行が右に無ければ右側の列を NULL で埋めます。",
+      "「対応が無かった行」は、右側テーブルの列が NULL かどうかで判定できます。"
+    ],
+    "explanation_md": "## 考え方\n\n```sql\nSELECT c.customer_id, c.name\nFROM customers c\nLEFT JOIN orders o ON o.customer_id = c.customer_id\nWHERE o.order_id IS NULL;\n```\n\nこの書き方は **anti join（反結合）** と呼ばれ、「A にあって B に無いもの」を求める定番パターンです。\n\n## 動作イメージ\n\n1. `LEFT JOIN` で顧客 5 行すべてを残す。注文がある顧客は注文の数だけ行が増える\n2. 注文が無い顧客（えびす商会）は、右側の列がすべて NULL の行が 1 本だけ作られる\n3. `WHERE o.order_id IS NULL` でその行だけを拾う\n\n## IS NULL を書く列に注意\n\n`WHERE o.order_id IS NULL` の代わりに **NULL を許容する列**（例えば `o.amount`）を使うと、「注文はあるが金額が NULL」の行まで拾ってしまいます。\n判定に使う列は、**結合キーか主キーなど NULL になり得ない列**を選んでください。\n\n## 3 つの書き方の性能\n\n| 書き方 | 特徴 |\n|---|---|\n| `LEFT JOIN ... IS NULL` | 古くから使える。オプティマイザが anti join に変換することが多い |\n| `NOT EXISTS` | 意図が明確。**NULL に強い**。最近の DBMS では最速になることが多い |\n| `NOT IN` | **NULL で壊れる**。サブクエリ側に NOT NULL 制約がある場合のみ |\n\n現代の DBMS ではこの 3 つはほぼ同じ実行計画に最適化されますが、`NOT IN` だけは意味が違う（NULL の扱い）ので、書き換えるときは要注意です。",
+    "tags": [
+      "left join",
+      "外部結合",
+      "NULL"
+    ],
+    "alternative_md": "**別解 1（NOT EXISTS）**\n\n```sql\nSELECT c.customer_id, c.name\nFROM customers c\nWHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.customer_id);\n```\n\n**別解 2（NOT IN — ただし注意あり）**\n\n```sql\nSELECT customer_id, name FROM customers\nWHERE customer_id NOT IN (SELECT customer_id FROM orders);\n```\n\n`NOT IN` はサブクエリ側に **NULL が 1 つでも混ざると結果が常に空になる**という有名な罠があります（フェーズ 5 で扱います）。実務では `NOT EXISTS` を第一候補にしてください。"
+  },
+  {
+    "id": "phase3-lv2-003",
+    "type": "sql_query",
+    "phase": 3,
+    "level": 2,
+    "title": "LEFT JOIN の絞り込みを ON に書くか WHERE に書くか",
+    "prompt_md": "**全顧客について**、2024 年の注文金額合計を出してください。\n2024 年に注文が無い顧客も、合計 `0` として**必ず 1 行出力**します。\n\n### 出力仕様\n- 列: 顧客名、2024年の注文金額合計（この順）\n- 並び順: 問いません\n- 列名は自由です\n\n> `WHERE` に年の条件を書くと、注文が無い顧客が消えてしまいます。なぜかを考えてみてください。",
+    "schema_sql": "CREATE TABLE customers (\n  customer_id INTEGER,\n  name        VARCHAR,\n  city        VARCHAR\n);\nCREATE TABLE orders (\n  order_id    INTEGER,\n  customer_id INTEGER,\n  order_date  DATE,\n  amount      INTEGER\n);\nCREATE TABLE order_items (\n  order_id   INTEGER,\n  item_no    INTEGER,\n  product_id INTEGER,\n  qty        INTEGER\n);\nCREATE TABLE products (\n  product_id INTEGER,\n  name       VARCHAR,\n  category   VARCHAR,\n  price      INTEGER\n);",
+    "seed_data_sql": "INSERT INTO customers VALUES\n  (1, 'あさひ商事',   '東京'),\n  (2, 'いろは物産',   '大阪'),\n  (3, 'うしお工業',   '東京'),\n  (4, 'えびす商会',   '福岡'),\n  (5, 'おおぞら電機', '東京');\nINSERT INTO orders VALUES\n  (101, 1, DATE '2024-01-10', 50000),\n  (102, 1, DATE '2024-03-05', 30000),\n  (103, 2, DATE '2024-02-20', 80000),\n  (104, 3, DATE '2024-05-01', 20000),\n  (105, 5, DATE '2023-12-15', 60000),\n  (106, 2, DATE '2023-11-11', 15000);\nINSERT INTO order_items VALUES\n  (101, 1, 1, 1),\n  (101, 2, 3, 2),\n  (102, 1, 2, 1),\n  (103, 1, 5, 1),\n  (103, 2, 4, 3),\n  (104, 1, 3, 5),\n  (105, 1, 2, 2),\n  (106, 1, 4, 1);\nINSERT INTO products VALUES\n  (1, 'ノートPC',       'PC',       90000),\n  (2, 'モニター',       '周辺機器', 25000),\n  (3, 'マウス',         '周辺機器',  3000),\n  (4, 'キーボード',     '周辺機器',  9000),\n  (5, 'デスクトップPC', 'PC',      120000);",
+    "expected_query": "SELECT c.name, COALESCE(SUM(o.amount), 0) AS total_2024\nFROM customers c\nLEFT JOIN orders o\n  ON o.customer_id = c.customer_id\n AND o.order_date >= DATE '2024-01-01'\n AND o.order_date <  DATE '2025-01-01'\nGROUP BY c.customer_id, c.name;",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": false,
+      "compare_columns": null
+    },
+    "hints_md": [
+      "外部結合の `ON` は「どの行と結び付けるか」、`WHERE` は「結合が終わった結果から何を残すか」です。",
+      "`WHERE o.order_date >= ...` と書くと、右側が NULL になった行（＝対応が無かった行）も条件に合わず消えてしまいます。",
+      "合計が NULL になるところは `COALESCE(..., 0)` で 0 に変換します。"
+    ],
+    "explanation_md": "## 考え方\n\n```sql\nSELECT c.name, COALESCE(SUM(o.amount), 0) AS total_2024\nFROM customers c\nLEFT JOIN orders o\n  ON o.customer_id = c.customer_id\n AND o.order_date >= DATE '2024-01-01'\n AND o.order_date <  DATE '2025-01-01'\nGROUP BY c.customer_id, c.name;\n```\n\n## なぜ WHERE ではダメなのか\n\n処理の順番はこうです。\n\n```\n1. LEFT JOIN が実行される  → 対応が無い顧客には NULL の行が作られる\n2. WHERE が実行される      → NULL の行は条件を満たさないので消える\n3. 結果として、内部結合と同じになる\n```\n\n`o.order_date >= DATE '2024-01-01'` という条件は、`o.order_date` が NULL のとき **UNKNOWN** になり、`WHERE` は UNKNOWN の行を通しません。\nつまり **「LEFT JOIN の右側テーブルの列を WHERE に書くと、外部結合が内部結合に化ける」**。これは実務で最も多い外部結合のバグです。\n\n## 覚え方\n\n| 書く場所 | 意味 | 外部結合への影響 |\n|---|---|---|\n| `ON` | どの行同士を結び付けるか | 条件に合わなければ**右側が NULL になるだけ**。左の行は残る |\n| `WHERE` | 結合結果から何を残すか | 条件に合わない行は**消える** |\n\n「**外部結合の右側テーブルに対する絞り込みは ON に書く**」と覚えてください。\n逆に「右側が NULL でないもの」に絞りたい（＝実質内部結合にしたい）なら、WHERE に書くのが正解です。\n\n## 内部結合なら違いはない\n\n`INNER JOIN` の場合は `ON` に書いても `WHERE` に書いても結果は同じで、オプティマイザも同じ計画を選びます。差が出るのは**外部結合のときだけ**です。\n\n## COALESCE を忘れない\n\n`SUM` は対象行が無いと NULL を返します（0 ではありません）。集計値をそのまま画面や帳票に出す場合は `COALESCE(SUM(x), 0)` で 0 に潰しておくのが定石です。",
+    "tags": [
+      "left join",
+      "外部結合",
+      "on句"
+    ]
+  },
+  {
+    "id": "phase3-lv2-004",
+    "type": "sql_query",
+    "phase": 3,
+    "level": 2,
+    "title": "社員と上司を対応づける（自己結合）",
+    "prompt_md": "`employees` の `manager_id` は、同じテーブルの `emp_id` を指す上司の社員番号です（`NULL` は上司なし）。\n\n**全社員について、社員名と上司名の対応表**を作ってください。上司がいない社員も出力し、その場合の上司名は `NULL` にします。\n\n### 出力仕様\n- 列: 社員番号、社員名、上司名（この順）\n- 並び順: 社員番号の昇順（**並び順も採点対象です**）\n- 列名は自由です",
+    "schema_sql": "CREATE TABLE employees (\n  emp_id     INTEGER,\n  name       VARCHAR,\n  dept       VARCHAR,\n  salary     INTEGER,\n  hired_on   DATE,\n  manager_id INTEGER\n);",
+    "seed_data_sql": "INSERT INTO employees VALUES\n  (1, '佐藤', '営業', 480000, DATE '2018-04-01', NULL),\n  (2, '鈴木', '営業', 420000, DATE '2019-04-01', 1),\n  (3, '高橋', '営業', 390000, DATE '2021-10-01', 1),\n  (4, '田中', '開発', 520000, DATE '2017-04-01', NULL),\n  (5, '伊藤', '開発', 500000, DATE '2020-04-01', 4),\n  (6, '渡辺', '開発', 460000, DATE '2020-04-01', 4),\n  (7, '山本', '開発', 380000, DATE '2022-04-01', 4),\n  (8, '中村', '人事', 450000, DATE '2019-04-01', NULL),\n  (9, '小林', '人事', 460000, DATE '2023-04-01', 8),\n  (10, '加藤', '総務', 400000, DATE '2016-04-01', NULL);",
+    "expected_query": "SELECT e.emp_id, e.name, m.name AS manager_name\nFROM employees e\nLEFT JOIN employees m ON m.emp_id = e.manager_id\nORDER BY e.emp_id;",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": true,
+      "compare_columns": null
+    },
+    "hints_md": [
+      "同じテーブルを 2 回使います。それぞれに別名（`e` と `m` など）を付けて区別してください。",
+      "上司がいない社員も残したいので `LEFT JOIN` です。`INNER JOIN` だと部長 4 名が消えます。"
+    ],
+    "explanation_md": "## 考え方\n\n```sql\nSELECT e.emp_id, e.name, m.name AS manager_name\nFROM employees e\nLEFT JOIN employees m ON m.emp_id = e.manager_id\nORDER BY e.emp_id;\n```\n\n## 自己結合（self join）\n\n同じテーブルを 2 つの役割で使う結合です。**別名（エイリアス）が必須**で、これが無いとどちらの列を指しているか区別できません。\n\nここでは 1 つの `employees` を\n- `e` … 社員としての役割\n- `m` … 上司としての役割\n\nという 2 つの「論理的なテーブル」として扱っています。\n\n## 典型的な用途\n\n- **階層構造**（社員 → 上司、部品 → 親部品、カテゴリ → 親カテゴリ）\n- **前後の行の比較**（同じテーブルの「1 つ前の日付の行」と結合する）\n- **組み合わせの列挙**（`a.id < b.id` で結合すると重複しないペアが作れる）\n\n## 階層を何段もたどるには\n\n自己結合は「1 段上」しかたどれません。「部長までの全階層」のような可変段数の探索には**再帰共通表式（RECURSIVE CTE）**を使います。\n\n```sql\nWITH RECURSIVE org AS (\n  SELECT emp_id, name, manager_id, 1 AS lv\n  FROM employees WHERE manager_id IS NULL\n  UNION ALL\n  SELECT e.emp_id, e.name, e.manager_id, org.lv + 1\n  FROM employees e JOIN org ON org.emp_id = e.manager_id\n)\nSELECT * FROM org ORDER BY lv, emp_id;\n```\n\n再帰 CTE は SQL:1999 で標準化され、データベーススペシャリスト試験でも出題対象です。\n\n## 前後行の比較なら窓関数を優先\n\n「1 つ前の行と比較する」目的の自己結合は、フェーズ 2 で学んだ `LAG` / `LEAD` のほうが速くて安全です（欠測に強い）。自己結合は「階層」や「任意の条件によるペアリング」に使い、単純な前後比較には窓関数、と使い分けてください。",
+    "tags": [
+      "自己結合",
+      "left join",
+      "結合"
+    ]
+  },
+  {
+    "id": "phase3-lv2-005",
+    "type": "sql_query",
+    "phase": 3,
+    "level": 2,
+    "title": "3テーブルを結合してカテゴリ別の売上を集計する",
+    "prompt_md": "`order_items`（注文明細）・`products`（商品）を使って、**商品カテゴリごとの販売数量と売上金額**を求めてください。\n売上金額は「`products.price` × `order_items.qty`」の合計とします。\n\n### 出力仕様\n- 列: カテゴリ名、販売数量合計、売上金額合計（この順）\n- 並び順: 売上金額合計の**降順**（**並び順も採点対象です**）\n- 列名は自由です",
+    "schema_sql": "CREATE TABLE customers (\n  customer_id INTEGER,\n  name        VARCHAR,\n  city        VARCHAR\n);\nCREATE TABLE orders (\n  order_id    INTEGER,\n  customer_id INTEGER,\n  order_date  DATE,\n  amount      INTEGER\n);\nCREATE TABLE order_items (\n  order_id   INTEGER,\n  item_no    INTEGER,\n  product_id INTEGER,\n  qty        INTEGER\n);\nCREATE TABLE products (\n  product_id INTEGER,\n  name       VARCHAR,\n  category   VARCHAR,\n  price      INTEGER\n);",
+    "seed_data_sql": "INSERT INTO customers VALUES\n  (1, 'あさひ商事',   '東京'),\n  (2, 'いろは物産',   '大阪'),\n  (3, 'うしお工業',   '東京'),\n  (4, 'えびす商会',   '福岡'),\n  (5, 'おおぞら電機', '東京');\nINSERT INTO orders VALUES\n  (101, 1, DATE '2024-01-10', 50000),\n  (102, 1, DATE '2024-03-05', 30000),\n  (103, 2, DATE '2024-02-20', 80000),\n  (104, 3, DATE '2024-05-01', 20000),\n  (105, 5, DATE '2023-12-15', 60000),\n  (106, 2, DATE '2023-11-11', 15000);\nINSERT INTO order_items VALUES\n  (101, 1, 1, 1),\n  (101, 2, 3, 2),\n  (102, 1, 2, 1),\n  (103, 1, 5, 1),\n  (103, 2, 4, 3),\n  (104, 1, 3, 5),\n  (105, 1, 2, 2),\n  (106, 1, 4, 1);\nINSERT INTO products VALUES\n  (1, 'ノートPC',       'PC',       90000),\n  (2, 'モニター',       '周辺機器', 25000),\n  (3, 'マウス',         '周辺機器',  3000),\n  (4, 'キーボード',     '周辺機器',  9000),\n  (5, 'デスクトップPC', 'PC',      120000);",
+    "expected_query": "SELECT p.category,\n       SUM(oi.qty) AS total_qty,\n       SUM(p.price * oi.qty) AS total_amount\nFROM order_items oi\nINNER JOIN products p ON p.product_id = oi.product_id\nGROUP BY p.category\nORDER BY SUM(p.price * oi.qty) DESC;",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": true,
+      "compare_columns": null
+    },
+    "hints_md": [
+      "必要なのは `order_items` と `products` の 2 つです。`orders` や `customers` は今回不要です。",
+      "金額は結合後の行ごとに `price * qty` を計算してから `SUM` します。`SUM(price) * SUM(qty)` ではありません。"
+    ],
+    "explanation_md": "## 考え方\n\n```sql\nSELECT p.category,\n       SUM(oi.qty) AS total_qty,\n       SUM(p.price * oi.qty) AS total_amount\nFROM order_items oi\nINNER JOIN products p ON p.product_id = oi.product_id\nGROUP BY p.category\nORDER BY SUM(p.price * oi.qty) DESC;\n```\n\n## 「必要なテーブルだけ結合する」\n\n問題文に `orders` や `customers` が出てこないなら、結合してはいけません。**不要な結合は行数を増やし、実行計画を悪化させるだけ**です。\n「どのテーブルの、どの列が答えに必要か」を先に洗い出してから FROM 句を組み立てる癖をつけてください。\n\n## SUM(a * b) と SUM(a) * SUM(b)\n\n```\nSUM(price * qty)   … 行ごとに掛けてから合計 → 正しい売上\nSUM(price) * SUM(qty) … 全然違う値になる\n```\n\n集計の粒度を間違える典型例です。**「1 行が何を表すか」を確認してから集約関数を書く**、というのが鉄則です。ここでは 1 行が「ある注文のある明細」なので、行ごとに金額を出してから足します。\n\n## 単価は明細に持つべきか\n\nこのスキーマでは金額を `products.price`（現在の単価）から計算していますが、**実務ではこれはバグの温床**です。商品の値段が変われば過去の売上まで変わってしまいます。\n\n現実の設計では、注文明細に**その時点の単価をコピーして保持**します（`order_items.unit_price`）。「時点の値を残すべき属性」を見抜くのは DB 設計の重要な論点で、フェーズ 6 で改めて扱います。",
+    "tags": [
+      "inner join",
+      "多段結合",
+      "group by"
+    ]
+  },
+  {
+    "id": "phase3-lv3-006",
+    "type": "sql_query",
+    "phase": 3,
+    "level": 3,
+    "title": "結合による重複加算を避ける（事前集計）",
+    "prompt_md": "顧客ごとに、次の 2 つを **1 つのクエリで** 出してください。\n\n1. 注文金額の合計（`orders.amount` の合計）\n2. 購入した商品の延べ数量（`order_items.qty` の合計）\n\n注文が 1 件も無い顧客も、両方 `0` として出力します。\n\n### 出力仕様\n- 列: 顧客名、注文金額合計、延べ数量（この順）\n- 並び順: 問いません\n- 列名は自由です\n\n> `customers` → `orders` → `order_items` を素直に結合して `SUM(o.amount)` とすると、**金額が水増しされます**。明細が 2 行ある注文は、金額も 2 回足されてしまうためです。",
+    "schema_sql": "CREATE TABLE customers (\n  customer_id INTEGER,\n  name        VARCHAR,\n  city        VARCHAR\n);\nCREATE TABLE orders (\n  order_id    INTEGER,\n  customer_id INTEGER,\n  order_date  DATE,\n  amount      INTEGER\n);\nCREATE TABLE order_items (\n  order_id   INTEGER,\n  item_no    INTEGER,\n  product_id INTEGER,\n  qty        INTEGER\n);\nCREATE TABLE products (\n  product_id INTEGER,\n  name       VARCHAR,\n  category   VARCHAR,\n  price      INTEGER\n);",
+    "seed_data_sql": "INSERT INTO customers VALUES\n  (1, 'あさひ商事',   '東京'),\n  (2, 'いろは物産',   '大阪'),\n  (3, 'うしお工業',   '東京'),\n  (4, 'えびす商会',   '福岡'),\n  (5, 'おおぞら電機', '東京');\nINSERT INTO orders VALUES\n  (101, 1, DATE '2024-01-10', 50000),\n  (102, 1, DATE '2024-03-05', 30000),\n  (103, 2, DATE '2024-02-20', 80000),\n  (104, 3, DATE '2024-05-01', 20000),\n  (105, 5, DATE '2023-12-15', 60000),\n  (106, 2, DATE '2023-11-11', 15000);\nINSERT INTO order_items VALUES\n  (101, 1, 1, 1),\n  (101, 2, 3, 2),\n  (102, 1, 2, 1),\n  (103, 1, 5, 1),\n  (103, 2, 4, 3),\n  (104, 1, 3, 5),\n  (105, 1, 2, 2),\n  (106, 1, 4, 1);\nINSERT INTO products VALUES\n  (1, 'ノートPC',       'PC',       90000),\n  (2, 'モニター',       '周辺機器', 25000),\n  (3, 'マウス',         '周辺機器',  3000),\n  (4, 'キーボード',     '周辺機器',  9000),\n  (5, 'デスクトップPC', 'PC',      120000);",
+    "expected_query": "WITH order_qty AS (\n  SELECT order_id, SUM(qty) AS qty\n  FROM order_items\n  GROUP BY order_id\n)\nSELECT c.name,\n       COALESCE(SUM(o.amount), 0) AS total_amount,\n       COALESCE(SUM(q.qty), 0)    AS total_qty\nFROM customers c\nLEFT JOIN orders o    ON o.customer_id = c.customer_id\nLEFT JOIN order_qty q ON q.order_id = o.order_id\nGROUP BY c.customer_id, c.name;",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": false,
+      "compare_columns": null
+    },
+    "hints_md": [
+      "1 対多の結合を 2 段重ねると、行が「掛け算」で増えます。上位テーブルの値はその回数だけ重複して足されます。",
+      "対策は「**結合する前に集約して 1 対 1 にしておく**」こと。CTE（WITH 句）で注文ごとの数量を先に作ってから結合します。",
+      "別解として、金額側だけ `SUM(DISTINCT ...)` を使う方法もありますが、同額の注文が複数あると壊れます。"
+    ],
+    "explanation_md": "## 何が起きるのか（ファンアウト）\n\n`customers 1 : n orders 1 : n order_items` を一気に結合すると、注文 101（明細 2 行）は結合後に **2 行**になります。\nその状態で `SUM(o.amount)` を計算すると、50,000 円が 2 回足されて 100,000 円になってしまいます。これを **fan-out（ファンアウト）による重複加算**と呼びます。\n\n| 顧客 | 正しい金額 | 素直に結合した場合 |\n|---|---|---|\n| あさひ商事 | 80,000 | **130,000**（101 が 2 回） |\n| いろは物産 | 95,000 | **175,000**（103 が 2 回） |\n\n## 正しい対処: 結合前に粒度をそろえる\n\n```sql\nWITH order_qty AS (\n  SELECT order_id, SUM(qty) AS qty FROM order_items GROUP BY order_id\n)\nSELECT ...\nFROM customers c\nLEFT JOIN orders o    ON o.customer_id = c.customer_id\nLEFT JOIN order_qty q ON q.order_id = o.order_id   -- ここは 1 対 1\nGROUP BY c.customer_id, c.name;\n```\n\n`order_qty` は注文 1 件につき 1 行なので、結合しても行は増えません。\n**「1 対多を複数たどるときは、たどる前に集約して 1 対 1 にする」**——これが集計クエリの最重要原則です。\n\n## 診断のしかた\n\n集計値がおかしいと思ったら、まず `GROUP BY` を外して**生の結合結果を目で見て**ください。\n\n```sql\nSELECT c.name, o.order_id, o.amount, oi.item_no, oi.qty\nFROM customers c\nLEFT JOIN orders o ON o.customer_id = c.customer_id\nLEFT JOIN order_items oi ON oi.order_id = o.order_id\nORDER BY c.customer_id, o.order_id;\n```\n\n「1 行が何を表しているか」「同じ金額が何度も現れていないか」が一目で分かります。\n\n## SUM(DISTINCT) が危険な理由\n\n`SUM(DISTINCT o.amount)` は重複を除いてくれますが、**たまたま同額の注文が 2 件ある顧客では片方が消えます**。値ではなく**行の重複**を除きたいのですから、`DISTINCT` は正しい道具ではありません。",
+    "tags": [
+      "結合",
+      "重複",
+      "事前集計",
+      "left join"
+    ],
+    "alternative_md": "**別解（相関サブクエリで列ごとに集計する）**\n\n```sql\nSELECT c.name,\n       COALESCE((SELECT SUM(o.amount) FROM orders o WHERE o.customer_id = c.customer_id), 0) AS total_amount,\n       COALESCE((SELECT SUM(oi.qty) FROM orders o JOIN order_items oi ON oi.order_id = o.order_id\n                  WHERE o.customer_id = c.customer_id), 0) AS total_qty\nFROM customers c;\n```\n\n意味は明確ですが、顧客 1 行ごとにサブクエリが評価されるため件数が増えると重くなります（フェーズ 5 のテーマ）。"
+  },
+  {
+    "id": "phase3-lv3-007",
+    "type": "sql_query",
+    "phase": 3,
+    "level": 3,
+    "title": "在庫の突合差分を洗い出す（FULL OUTER JOIN）",
+    "prompt_md": "`system_stock`（システム上の在庫）と `physical_count`（実地棚卸の結果）を突き合わせ、**数量が一致しない商品**を洗い出してください。\n**どちらか一方にしか存在しない商品も対象**（もう一方は数量 0 とみなす）です。\n\n### 出力仕様\n- 列: 商品コード、システム在庫数、実地棚卸数、差分（システム − 実地）（この順）\n- 片方にしか無い商品の数量は `0` として出力します\n- 並び順: 問いません\n- 列名は自由です",
+    "schema_sql": "CREATE TABLE system_stock (\n  product_code VARCHAR,\n  qty          INTEGER\n);\nCREATE TABLE physical_count (\n  product_code VARCHAR,\n  qty          INTEGER\n);",
+    "seed_data_sql": "INSERT INTO system_stock VALUES\n  ('A-001', 100),\n  ('A-002',  50),\n  ('A-003',  30),\n  ('A-004',  10);\nINSERT INTO physical_count VALUES\n  ('A-001', 100),\n  ('A-002',  48),\n  ('A-005',   7),\n  ('A-003',  30);",
+    "expected_query": "SELECT COALESCE(s.product_code, p.product_code) AS product_code,\n       COALESCE(s.qty, 0) AS system_qty,\n       COALESCE(p.qty, 0) AS physical_qty,\n       COALESCE(s.qty, 0) - COALESCE(p.qty, 0) AS diff\nFROM system_stock s\nFULL OUTER JOIN physical_count p ON p.product_code = s.product_code\nWHERE COALESCE(s.qty, 0) <> COALESCE(p.qty, 0);",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": false,
+      "compare_columns": null
+    },
+    "hints_md": [
+      "「どちらか一方にしかない行も残す」＝ `FULL OUTER JOIN` です。",
+      "商品コード自体も片側が NULL になり得ます。`COALESCE(s.product_code, p.product_code)` で埋めてください。",
+      "数量の比較も NULL のままでは `<>` が UNKNOWN になり判定できません。先に `COALESCE(..., 0)` で埋めてから比べます。"
+    ],
+    "explanation_md": "## 考え方\n\n```sql\nSELECT COALESCE(s.product_code, p.product_code) AS product_code,\n       COALESCE(s.qty, 0) AS system_qty,\n       COALESCE(p.qty, 0) AS physical_qty,\n       COALESCE(s.qty, 0) - COALESCE(p.qty, 0) AS diff\nFROM system_stock s\nFULL OUTER JOIN physical_count p ON p.product_code = s.product_code\nWHERE COALESCE(s.qty, 0) <> COALESCE(p.qty, 0);\n```\n\n結果は 3 行になります。\n\n| 商品 | システム | 実地 | 状況 |\n|---|---|---|---|\n| A-002 | 50 | 48 | 数量差異 |\n| A-004 | 10 | 0 | 実地に無い（紛失の疑い） |\n| A-005 | 0 | 7 | システムに無い（未登録の疑い） |\n\nA-001 と A-003 は一致しているので除外されます。\n\n## 外部結合の 3 種類\n\n| 種類 | 残るもの |\n|---|---|\n| `LEFT OUTER JOIN` | 左の全行 |\n| `RIGHT OUTER JOIN` | 右の全行 |\n| `FULL OUTER JOIN` | 両方の全行 |\n\n`OUTER` は省略可能（`LEFT JOIN` = `LEFT OUTER JOIN`）です。\n`RIGHT JOIN` は「左右を入れ替えた LEFT JOIN」と等価なので、可読性のため **LEFT に統一する**チームが多いです。一方 `FULL OUTER` は代替が効かない（UNION で書くと冗長になる）ため、突合・差分抽出の場面で重宝します。\n\nなお MySQL は `FULL OUTER JOIN` を**サポートしていません**。その場合は\n\n```sql\nSELECT ... FROM a LEFT JOIN b ON ...\nUNION\nSELECT ... FROM a RIGHT JOIN b ON ...\n```\n\nで代替します。DBMS 間の方言として押さえておくとよいポイントです。\n\n## NULL 同士は等しくない\n\n`WHERE s.qty <> p.qty` と書くと、片側が NULL の行は **UNKNOWN** になって除外されてしまい、「片方にしか無い商品」を取りこぼします。\nNULL を含む比較では、必ず `COALESCE` で既定値に寄せるか、`IS DISTINCT FROM` を使ってください。\n\n```sql\nWHERE s.qty IS DISTINCT FROM p.qty   -- NULL を「値の一種」として比較する標準構文\n```\n\n`IS DISTINCT FROM` は「NULL 同士は等しい、NULL と値は異なる」と判定してくれる便利な演算子です（PostgreSQL / DuckDB で利用可）。",
+    "tags": [
+      "full outer join",
+      "外部結合",
+      "coalesce"
+    ]
+  },
+  {
+    "id": "phase3-lv3-008",
+    "type": "sql_query",
+    "phase": 3,
+    "level": 3,
+    "title": "価格帯マスタと範囲で結合する（非等値結合）",
+    "prompt_md": "`price_bands` は価格帯マスタで、`min_price` 以上 `max_price` 以下の商品がその価格帯に属します。\n\n**価格帯ごとの商品数**を求めてください。**該当する商品が 1 つも無い価格帯も、件数 0 で出力**します。\n\n### 出力仕様\n- 列: 価格帯名、商品数（この順）\n- 並び順: `min_price` の昇順（**並び順も採点対象です**）\n- 列名は自由です",
+    "schema_sql": "CREATE TABLE products (\n  product_id INTEGER,\n  name       VARCHAR,\n  category   VARCHAR,\n  price      INTEGER\n);\nCREATE TABLE price_bands (\n  band_name VARCHAR,\n  min_price INTEGER,\n  max_price INTEGER\n);",
+    "seed_data_sql": "INSERT INTO products VALUES\n  (1, 'ノートPC',       'PC',       90000),\n  (2, 'モニター',       '周辺機器', 25000),\n  (3, 'マウス',         '周辺機器',  3000),\n  (4, 'キーボード',     '周辺機器',  9000),\n  (5, 'デスクトップPC', 'PC',      120000);\nINSERT INTO price_bands VALUES\n  ('低価格',   0,      9999),\n  ('中価格',   10000,  49999),\n  ('高価格',   50000,  199999),\n  ('超高価格', 200000, 9999999);",
+    "expected_query": "SELECT b.band_name, COUNT(p.product_id) AS product_count\nFROM price_bands b\nLEFT JOIN products p\n  ON p.price >= b.min_price AND p.price <= b.max_price\nGROUP BY b.band_name, b.min_price\nORDER BY b.min_price;",
+    "judge": {
+      "type": "result_set",
+      "order_sensitive": true,
+      "compare_columns": null
+    },
+    "hints_md": [
+      "結合条件は等号だけではありません。`ON p.price BETWEEN b.min_price AND b.max_price` のような範囲条件も書けます。",
+      "商品が無い価格帯も残したいので `LEFT JOIN`。そして件数は `COUNT(*)` ではなく `COUNT(右側の列)` にしてください。"
+    ],
+    "explanation_md": "## 考え方\n\n```sql\nSELECT b.band_name, COUNT(p.product_id) AS product_count\nFROM price_bands b\nLEFT JOIN products p\n  ON p.price >= b.min_price AND p.price <= b.max_price\nGROUP BY b.band_name, b.min_price\nORDER BY b.min_price;\n```\n\n結果は 低価格 2 / 中価格 1 / 高価格 2 / **超高価格 0** となります。\n\n## COUNT(*) との違い（この問題の肝）\n\n`LEFT JOIN` で対応が無かった価格帯には「右側がすべて NULL の行」が 1 本作られます。そこで\n\n- `COUNT(*)` … その NULL 行も**1 行として数えてしまい、0 ではなく 1 になる**\n- `COUNT(p.product_id)` … NULL は数えないので**正しく 0 になる**\n\n**外部結合したあとの件数は必ず `COUNT(右側の非NULL列)` で数える**、と覚えてください。実務のレポートで「該当 0 件のはずが 1 件と出る」バグの大半はこれです。\n\n## 非等値結合（theta join）\n\n`ON` に書けるのは等号だけではありません。範囲・不等号・関数でも結合できます。\n\n```sql\nON p.price BETWEEN b.min_price AND b.max_price   -- 価格帯マスタ\nON t.event_at >= s.start_at AND t.event_at < s.end_at  -- 有効期間マスタ（履歴テーブル）\nON a.id < b.id                                    -- 重複しないペアの列挙\n```\n\n**注意点は性能**です。等値結合ならハッシュ結合が使えますが、非等値結合はハッシュが使えず、ネステッドループやマージ結合になります。実際、この問題のクエリを `EXPLAIN` してみると `HASH_JOIN` ではなく別の演算子が選ばれるはずです（フェーズ 4 で確認します）。\n\n大量データで範囲結合を行うと、最悪の場合ほぼ直積に近い計算量になります。マスタ側が小さいことを確認したうえで使うか、価格帯を事前に商品側へ持たせる（非正規化）などの設計判断が必要です。\n\n## 境界の設計\n\n`max_price` を 9999 / 49999 のように「1 円手前」で切る設計は、**小数を含む金額が来た瞬間に穴が空きます**（9999.5 円はどの帯にも入らない）。\n`min_price <= price AND price < next_min` という **「以上・未満」** の設計にしておくと、境界の穴も重なりも生じません。区間の設計は DB 設計の頻出論点です。",
+    "tags": [
+      "非等値結合",
+      "left join",
+      "count"
+    ]
+  }
+]

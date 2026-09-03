@@ -1,0 +1,63 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Noto Sans Mono', monospace;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: #0b1020;
+  color: #e2e8f0;
+}
+
+/* CodeMirror の高さをコンテナに合わせる */
+.cm-editor {
+  height: 100%;
+}
+.cm-scroller {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+/* Markdown 本文の最低限のタイポグラフィ */
+.md :where(h1) { font-size: 1.25rem; font-weight: 700; margin: 0.6em 0 0.4em; }
+.md :where(h2) { font-size: 1.1rem; font-weight: 700; margin: 1em 0 0.4em; color: #93c5fd; }
+.md :where(h3) { font-size: 1rem; font-weight: 600; margin: 0.9em 0 0.3em; }
+.md :where(p) { margin: 0.5em 0; line-height: 1.75; }
+.md :where(ul) { list-style: disc; padding-left: 1.4em; margin: 0.5em 0; }
+.md :where(ol) { list-style: decimal; padding-left: 1.6em; margin: 0.5em 0; }
+.md :where(li) { margin: 0.2em 0; line-height: 1.7; }
+.md :where(strong) { color: #fbbf24; font-weight: 700; }
+.md :where(code) {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+}
+.md :where(pre) {
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 0.8em 1em;
+  overflow-x: auto;
+  margin: 0.7em 0;
+}
+.md :where(pre code) { background: none; border: none; padding: 0; font-size: 0.82rem; line-height: 1.6; }
+.md :where(table) { border-collapse: collapse; margin: 0.7em 0; font-size: 0.85rem; display: block; overflow-x: auto; }
+.md :where(th, td) { border: 1px solid #334155; padding: 0.35em 0.7em; text-align: left; }
+.md :where(th) { background: #1e293b; }
+.md :where(blockquote) { border-left: 3px solid #475569; padding-left: 0.9em; color: #94a3b8; margin: 0.6em 0; }
+.md :where(a) { color: #60a5fa; text-decoration: underline; }
