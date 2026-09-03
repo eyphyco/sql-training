@@ -204,6 +204,19 @@ try {
     (await page.locator('text=リロードを抑止できませんでした').count()) === 0,
   );
 
+  // 8g. 大きすぎる結果は保存しない（間引いて復元すると ANSWER が誤判定するため）
+  await typeSql('SELECT i FROM range(3000) t(i)');
+  await page.click('[data-testid="run"]');
+  await page.waitForTimeout(1500);
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForSelector('text=students', { timeout: 60000 });
+  await page.waitForTimeout(800);
+  check(
+    '大きすぎる結果は復元せず SQL だけ戻す',
+    (await page.locator('.cm-content').innerText()).includes('range(3000)') &&
+      (await page.locator('text=「実行」を押すと').count()) > 0,
+  );
+
   // 9. 進捗が localStorage に残る
   await page.goto(base, { waitUntil: 'networkidle' });
   const stored = await page.evaluate(() => localStorage.getItem('sql-training:progress:v1'));

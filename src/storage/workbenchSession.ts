@@ -13,8 +13,11 @@ export interface WorkbenchSession {
 const KEY_PREFIX = 'sql-training:workbench:v1:';
 /** F5 を捕まえた時刻。リロードが起きてしまったかどうかの判定に使う */
 const F5_KEY = 'sql-training:f5-at';
-/** 復元する結果行の上限。巨大な結果でセッションストレージを埋めない */
-const MAX_ROWS = 200;
+/**
+ * 保存する結果行の上限。巨大な結果でセッションストレージを埋めないため。
+ * これを超える結果は「途中まで」を残すと ANSWER が誤判定するので、結果ごと捨てる。
+ */
+const MAX_ROWS = 2000;
 
 const key = (problemId: string): string => KEY_PREFIX + problemId;
 
@@ -25,19 +28,11 @@ const key = (problemId: string): string => KEY_PREFIX + problemId;
  */
 export function saveSession(problemId: string, session: WorkbenchSession): void {
   try {
-    const trimmed: WorkbenchSession = session.lastRun
-      ? {
-          ...session,
-          lastRun: {
-            sql: session.lastRun.sql,
-            result: {
-              ...session.lastRun.result,
-              rows: session.lastRun.result.rows.slice(0, MAX_ROWS),
-            },
-          },
-        }
-      : session;
-    sessionStorage.setItem(key(problemId), JSON.stringify(trimmed));
+    // 行を間引いて保存すると復元後の ANSWER が不足行ありと誤判定するため、
+    // 大きすぎる結果は保存しない（復元後はもう一度「実行」してもらう）
+    const tooLarge = (session.lastRun?.result.rows.length ?? 0) > MAX_ROWS;
+    const stored: WorkbenchSession = tooLarge ? { ...session, lastRun: null } : session;
+    sessionStorage.setItem(key(problemId), JSON.stringify(stored));
   } catch {
     /* 保存できなくても学習は続けられるので握りつぶす */
   }
