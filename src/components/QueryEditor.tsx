@@ -11,12 +11,11 @@ import { editorTheme } from './editorTheme';
 interface Props {
   value: string;
   onChange: (value: string) => void;
-  onRun: () => void;
   schema: TableSchema[];
   height?: string;
 }
 
-export default function QueryEditor({ value, onChange, onRun, schema, height = '100%' }: Props) {
+export default function QueryEditor({ value, onChange, schema, height = '100%' }: Props) {
   const { resolved } = useTheme();
 
   // テーブル・列名を補完候補として渡す
@@ -36,16 +35,10 @@ export default function QueryEditor({ value, onChange, onRun, schema, height = '
     ];
   }, [schema, resolved]);
 
+  // 実行のショートカット（F5 / Ctrl+Enter）は SqlWorkbench 側で
+  // ウィンドウ全体に登録している。ここで重ねて拾うと二重実行になる。
   return (
-    <div
-      className="h-full overflow-hidden"
-      onKeyDown={(e) => {
-        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-          e.preventDefault();
-          onRun();
-        }
-      }}
-    >
+    <div className="h-full overflow-hidden">
       <CodeMirror
         value={value}
         height={height}

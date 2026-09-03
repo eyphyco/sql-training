@@ -182,6 +182,27 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
     }
   }, [busy, lastRun, sqlText, problem, attempt]);
 
+  // handleRun は入力のたびに作り直されるので、リスナーの再登録を避けて ref 経由で呼ぶ
+  const handleRunRef = useRef(handleRun);
+  useEffect(() => {
+    handleRunRef.current = handleRun;
+  }, [handleRun]);
+
+  // 実行のショートカット。SQL 問題を開いている間だけ有効にする。
+  // F5 は SSMS / DBeaver などと同じ「実行」に割り当て、ブラウザのリロードは抑止する。
+  // リロードしたいときのために Ctrl+R / ⌘R は横取りしない。
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const isF5 = e.key === 'F5' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey;
+      const isModEnter = e.key === 'Enter' && (e.ctrlKey || e.metaKey);
+      if (!isF5 && !isModEnter) return;
+      e.preventDefault();
+      void handleRunRef.current();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
   const errorHint = runError ? explainSqlError(runError) : null;
   const hints = problem.hints_md ?? [];
   const canReveal = revealed || attempts >= 3;
@@ -217,15 +238,22 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
                 <IconLayers size={13} />
                 EXPLAIN
               </Button>
-              <Button size="sm" variant="primary" onClick={handleRun} disabled={busy} data-testid="run">
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={handleRun}
+                disabled={busy}
+                data-testid="run"
+                title="実行（F5 または Ctrl+Enter）"
+              >
                 <IconPlay size={12} />
                 実行
-                <kbd className="ml-0.5 hidden font-mono text-[10px] opacity-70 sm:inline">⌘↵</kbd>
+                <kbd className="ml-0.5 hidden font-mono text-[10px] opacity-70 sm:inline">F5</kbd>
               </Button>
             </div>
           </header>
           <div className="min-h-[360px] flex-1 bg-sunken">
-            <QueryEditor value={sqlText} onChange={setSqlText} onRun={handleRun} schema={schema} />
+            <QueryEditor value={sqlText} onChange={setSqlText} schema={schema} />
           </div>
         </Card>
 

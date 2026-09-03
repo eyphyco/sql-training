@@ -136,6 +136,28 @@ try {
   const indented = await page.locator('.cm-content').innerText();
   check('候補が無いとき Tab はインデントのまま', /^\s+SELECT 1/.test(indented), JSON.stringify(indented));
 
+  // 8c. F5 で実行できること（ブラウザのリロードは抑止する）
+  await page.evaluate(() => {
+    window.__f5Prevented = undefined;
+    // 既定動作の抑止は全ハンドラの実行後に確認する
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'F5') {
+        setTimeout(() => {
+          window.__f5Prevented = e.defaultPrevented;
+        }, 0);
+      }
+    });
+  });
+  await typeSql('SELECT 7 AS lucky');
+  await page.keyboard.press('F5');
+  await page.waitForTimeout(900);
+  const f5cell = await page.locator('table tbody tr td').nth(1).innerText();
+  check('F5 でクエリを実行できる', f5cell === '7', f5cell);
+  check(
+    'F5 のブラウザ既定動作（リロード）を抑止する',
+    (await page.evaluate(() => window.__f5Prevented)) === true,
+  );
+
   // 9. 進捗が localStorage に残る
   await page.goto(base, { waitUntil: 'networkidle' });
   const stored = await page.evaluate(() => localStorage.getItem('sql-training:progress:v1'));
