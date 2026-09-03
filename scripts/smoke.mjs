@@ -113,6 +113,29 @@ try {
   await page.waitForSelector('text=SEQ_SCAN', { timeout: 30000 });
   check('EXPLAIN の実行計画が表示される', true);
 
+  // 8b. Tab の挙動: 候補が出ているときは確定、出ていなければインデント
+  await typeSql('');
+  await page.click('.cm-content');
+  await page.keyboard.type('SELECT * FROM stu', { delay: 25 });
+  await page.waitForSelector('.cm-tooltip-autocomplete', { timeout: 10000 });
+  // CodeMirror は候補表示から interactionDelay(既定75ms)以内のキー入力を無視する
+  await page.waitForTimeout(300);
+  await page.keyboard.press('Tab');
+  await page.waitForTimeout(200);
+  const completed = (await page.locator('.cm-content').innerText()).trim();
+  check('補完候補が出ているとき Tab で確定できる', completed.includes('FROM students'), completed);
+
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.press('Delete');
+  await page.keyboard.type('SELECT 1', { delay: 20 });
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(150);
+  await page.keyboard.press('Home');
+  await page.keyboard.press('Tab');
+  await page.waitForTimeout(200);
+  const indented = await page.locator('.cm-content').innerText();
+  check('候補が無いとき Tab はインデントのまま', /^\s+SELECT 1/.test(indented), JSON.stringify(indented));
+
   // 9. 進捗が localStorage に残る
   await page.goto(base, { waitUntil: 'networkidle' });
   const stored = await page.evaluate(() => localStorage.getItem('sql-training:progress:v1'));
