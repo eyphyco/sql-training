@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
 import type { SqlQueryProblem } from '../types';
 import { connect, describeTables, explainQuery, resetEnvironment, runQuery } from '../engine/duckdb';
@@ -12,8 +12,13 @@ import Markdown from './Markdown';
 import { Button, Card } from './ui';
 import { IconBook, IconBulb, IconCheck, IconLayers, IconPlay, IconX } from './icons';
 import { useProgress } from '../storage/progressContext';
-
-type RightTab = 'result' | 'schema' | 'plan';
+import {
+  detectUnpreventedReload,
+  loadSession,
+  markF5Handled,
+  saveSession,
+} from '../storage/workbenchSession';
+import type { RightTab } from '../storage/workbenchSession';
 
 interface LastRun {
   sql: string;
@@ -29,15 +34,22 @@ const TABS: [RightTab, string][] = [
 export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) {
   const { attempt, progress } = useProgress();
   const connRef = useRef<AsyncDuckDBConnection | null>(null);
+  // 実行中フラグ。busy（表示用の state）は反映が非同期なので、
+  // F5 の連打で二重に走らせないためのガードはこちらで持つ。
+  const runningRef = useRef(false);
+
+  // リロードされても書きかけの SQL と直近の結果を失わないよう、タブ内に保存している
+  const restored = useMemo(() => loadSession(problem.id), [problem.id]);
 
   const [status, setStatus] = useState<'booting' | 'ready' | 'error'>('booting');
   const [bootError, setBootError] = useState('');
   const [schema, setSchema] = useState<TableSchema[]>([]);
-  const [sqlText, setSqlText] = useState(problem.starter_sql ?? '');
-  const [lastRun, setLastRun] = useState<LastRun | null>(null);
+  const [sqlText, setSqlText] = useState(restored?.sql ?? problem.starter_sql ?? '');
+  const [lastRun, setLastRun] = useState<LastRun | null>(restored?.lastRun ?? null);
   const [runError, setRunError] = useState<string | null>(null);
-  const [planText, setPlanText] = useState<string | null>(null);
-  const [tab, setTab] = useState<RightTab>('schema');
+  const [planText, setPlanText] = useState<string | null>(restored?.planText ?? null);
+  const [tab, setTab] = useState<RightTab>(restored?.tab ?? 'schema');
+  const [reloadNotice, setReloadNotice] = useState(detectUnpreventedReload);
   const [judgement, setJudgement] = useState<JudgeResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [hintLevel, setHintLevel] = useState(0);
@@ -79,7 +91,8 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
 
   const handleRun = useCallback(async () => {
     const conn = connRef.current;
-    if (!conn || busy) return;
+    if (!conn || runningRef.current) return;
+    runningRef.current = true;
     setBusy(true);
     setRunError(null);
     try {
@@ -92,13 +105,15 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
       setRunError(e instanceof Error ? e.message : String(e));
       setTab('result');
     } finally {
+      runningRef.current = false;
       setBusy(false);
     }
-  }, [sqlText, busy]);
+  }, [sqlText]);
 
   const handleExplain = useCallback(async () => {
     const conn = connRef.current;
-    if (!conn || busy) return;
+    if (!conn || runningRef.current) return;
+    runningRef.current = true;
     setBusy(true);
     setRunError(null);
     try {
@@ -108,14 +123,15 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
       setRunError(e instanceof Error ? e.message : String(e));
       setTab('result');
     } finally {
+      runningRef.current = false;
       setBusy(false);
     }
-  }, [sqlText, busy]);
+  }, [sqlText]);
 
   // ANSWER: 直近の「実行」結果を使って採点する（設計書 6-1）
   const handleAnswer = useCallback(async () => {
     const conn = connRef.current;
-    if (!conn || busy) return;
+    if (!conn || runningRef.current) return;
     if (!lastRun) {
       setJudgement({
         correct: false,
@@ -136,6 +152,7 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
       });
       return;
     }
+    runningRef.current = true;
     setBusy(true);
     try {
       // ユーザーのクエリがデータを変更していても正しく採点できるよう、期待値は作り直した環境で取る
@@ -178,9 +195,10 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
         details: [e instanceof Error ? e.message : String(e)],
       });
     } finally {
+      runningRef.current = false;
       setBusy(false);
     }
-  }, [busy, lastRun, sqlText, problem, attempt]);
+  }, [lastRun, sqlText, problem, attempt]);
 
   // handleRun は入力のたびに作り直されるので、リスナーの再登録を避けて ref 経由で呼ぶ
   const handleRunRef = useRef(handleRun);
@@ -191,17 +209,37 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
   // 実行のショートカット。SQL 問題を開いている間だけ有効にする。
   // F5 は SSMS / DBeaver などと同じ「実行」に割り当て、ブラウザのリロードは抑止する。
   // リロードしたいときのために Ctrl+R / ⌘R は横取りしない。
+  //
+  // capture フェーズで拾って stopPropagation する理由:
+  //   - Ctrl+Enter は CodeMirror の既定キーマップで insertBlankLine に割り当てられており、
+  //     bubble で受けると「空行が入る + 実行される」の二重動作になる。
+  //   - 途中の誰かが stopPropagation してもリロードの抑止だけは確実に効かせたい。
+  // key ではなく code も見るのは、IME が有効なときに key が 'Process' になる環境があるため。
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      const isF5 = e.key === 'F5' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey;
-      const isModEnter = e.key === 'Enter' && (e.ctrlKey || e.metaKey);
+      const noMods = !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey;
+      const isF5 = (e.code === 'F5' || e.key === 'F5') && noMods;
+      const isModEnter = (e.code === 'Enter' || e.key === 'Enter') && (e.ctrlKey || e.metaKey);
       if (!isF5 && !isModEnter) return;
       e.preventDefault();
+      e.stopPropagation();
+      if (isF5) markF5Handled();
+      // 押しっぱなしのオートリピートでは実行しない（抑止だけは毎回する）
+      if (e.repeat) return;
       void handleRunRef.current();
     };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    window.addEventListener('keydown', onKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
   }, []);
+
+  // 書きかけの SQL と直近の結果をタブ内に保存する（リロード対策）
+  useEffect(() => {
+    if (status !== 'ready') return;
+    const timer = setTimeout(() => {
+      saveSession(problem.id, { sql: sqlText, lastRun, planText, tab });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [problem.id, status, sqlText, lastRun, planText, tab]);
 
   const errorHint = runError ? explainSqlError(runError) : null;
   const hints = problem.hints_md ?? [];
@@ -228,6 +266,29 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
 
   return (
     <div className="space-y-4">
+      {/* F5 を横取りしたのにリロードされてしまうブラウザ向けの説明 */}
+      {reloadNotice && (
+        <div className="flex items-start gap-2.5 rounded-lg border border-warning-line bg-warning-soft p-3">
+          <IconBulb size={14} className="mt-0.5 shrink-0 text-warning" />
+          <div className="text-[12.5px] leading-relaxed text-fg">
+            <p>
+              このブラウザでは F5
+              によるリロードを抑止できませんでした。DuckDB は作り直されましたが、SQL
+              と直近の実行結果は復元しています。
+            </p>
+            <p className="mt-1 text-muted">
+              確実に実行したいときは Ctrl+Enter（macOS は ⌘+Enter）をお使いください。
+            </p>
+          </div>
+          <button
+            onClick={() => setReloadNotice(false)}
+            className="ml-auto shrink-0 text-[11.5px] text-subtle hover:text-fg"
+          >
+            閉じる
+          </button>
+        </div>
+      )}
+
       {/* 左：エディタ / 右：DB の状態 */}
       <div className="grid gap-3 lg:grid-cols-2">
         <Card as="section" className="flex min-h-[400px] flex-col overflow-hidden">

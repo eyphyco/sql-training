@@ -139,14 +139,20 @@ try {
   // 8c. F5 で実行できること（ブラウザのリロードは抑止する）
   await page.evaluate(() => {
     window.__f5Prevented = undefined;
-    // 既定動作の抑止は全ハンドラの実行後に確認する
-    window.addEventListener('keydown', (e) => {
-      if (e.key === 'F5') {
-        setTimeout(() => {
-          window.__f5Prevented = e.defaultPrevented;
-        }, 0);
-      }
-    });
+    // アプリ側は capture で拾って stopPropagation するので、確認用も capture で登録する。
+    // 同じ要素に登録したリスナー同士は stopPropagation の影響を受けない。
+    window.addEventListener(
+      'keydown',
+      (e) => {
+        if (e.key === 'F5') {
+          // 既定動作の抑止は全ハンドラの実行後に確認する
+          setTimeout(() => {
+            window.__f5Prevented = e.defaultPrevented;
+          }, 0);
+        }
+      },
+      true,
+    );
   });
   await typeSql('SELECT 7 AS lucky');
   await page.keyboard.press('F5');
@@ -156,6 +162,46 @@ try {
   check(
     'F5 のブラウザ既定動作（リロード）を抑止する',
     (await page.evaluate(() => window.__f5Prevented)) === true,
+  );
+
+  // 8d. Ctrl+Enter が CodeMirror の Mod-Enter（空行挿入）と二重に動かないこと
+  await typeSql('SELECT 8 AS eight');
+  const linesBefore = await page.locator('.cm-line').count();
+  await page.keyboard.press('ControlOrMeta+Enter');
+  await page.waitForTimeout(900);
+  check('Ctrl+Enter で空行が挿入されない', (await page.locator('.cm-line').count()) === linesBefore);
+  check(
+    'Ctrl+Enter でクエリを実行できる',
+    (await page.locator('table tbody tr td').nth(1).innerText()) === '8',
+  );
+
+  // 8e. リロードされても書きかけの SQL と直近の結果が戻ること
+  await page.waitForTimeout(400);
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForSelector('text=students', { timeout: 60000 });
+  await page.waitForTimeout(800);
+  check(
+    'リロード後も SQL が復元される',
+    (await page.locator('.cm-content').innerText()).includes('SELECT 8 AS eight'),
+  );
+  check(
+    'リロード後も直近の実行結果が復元される',
+    (await page.locator('table tbody tr td').nth(1).innerText()) === '8',
+  );
+
+  // 8f. F5 を抑止できないブラウザ向けの案内
+  await page.evaluate(() => sessionStorage.setItem('sql-training:f5-at', String(Date.now())));
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForSelector('text=students', { timeout: 60000 });
+  check(
+    'F5 を抑止できなかった場合に案内を表示する',
+    (await page.locator('text=リロードを抑止できませんでした').count()) > 0,
+  );
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForSelector('text=students', { timeout: 60000 });
+  check(
+    '案内は一度きりで出続けない',
+    (await page.locator('text=リロードを抑止できませんでした').count()) === 0,
   );
 
   // 9. 進捗が localStorage に残る
