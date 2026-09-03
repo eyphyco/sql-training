@@ -1,5 +1,7 @@
 # SQL Training
 
+**公開URL: https://eyphyco.github.io/sql-training/**
+
 集計・ウィンドウ関数・結合・実行計画・DB設計を、**問題を解く → 自動採点 → 解説を読む** の流れで学ぶ個人用ハンズオンアプリ。
 
 SQL の実行はすべてブラウザ内の **DuckDB-WASM** で完結する。サーバも認証も不要で、GitHub Pages などの静的ホスティングにそのまま置ける。
@@ -128,7 +130,7 @@ npm run show -- phase1-lv1-001        # 模範解答の結果を目視確認
 
 ## デプロイ（GitHub Pages）
 
-`.github/workflows/deploy.yml` を同梱済み。リポジトリの **Settings → Pages → Source** を **GitHub Actions** にして `main` へ push すれば公開される。
+`.github/workflows/deploy.yml` により、`main` へ push すると自動でビルド・デプロイされる（Pages のソースは GitHub Actions に設定済み）。公開先は https://eyphyco.github.io/sql-training/ 。
 
 - `vite.config.ts` の `base` は `'./'`（相対）なので、リポジトリ名を設定に埋め込まなくてもプロジェクトページで動く
 - ルーティングは `HashRouter` を使っているため、リロード時の 404 対策（`404.html` など）は不要
