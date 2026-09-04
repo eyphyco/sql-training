@@ -90,7 +90,7 @@ export default function Home() {
             カリキュラム
           </SectionTitle>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {PHASES.map((phase) => {
+            {PHASES.map((phase, i) => {
               const stat = phaseStats[phase.id] ?? { solved: 0, total: 0 };
               const done = stat.total > 0 && stat.solved === stat.total;
               return (
@@ -121,7 +121,8 @@ export default function Home() {
                       {phase.summary}
                     </p>
                     <div className="mt-auto flex items-center gap-3">
-                      <Meter value={stat.solved} total={stat.total} />
+                      {/* 上から順に伸ばして、7 本を一度に見比べられるようにする */}
+                      <Meter value={stat.solved} total={stat.total} delay={0.05 + 0.04 * i} />
                       <span className="tnum shrink-0 text-[11.5px] text-subtle">
                         {stat.solved}/{stat.total}
                       </span>

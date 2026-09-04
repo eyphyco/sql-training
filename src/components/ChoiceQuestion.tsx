@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { motion } from 'motion/react';
 import type { MultipleChoiceProblem } from '../types';
 import Markdown from './Markdown';
 import { Button, Card } from './ui';
 import { IconBook, IconBulb, IconCheck, IconX } from './icons';
 import { useProgress } from '../storage/progressContext';
+import { RISE, SLIDE } from './motion';
 
 export default function ChoiceQuestion({ problem }: { problem: MultipleChoiceProblem }) {
   const { attempt, progress } = useProgress();
@@ -32,14 +34,25 @@ export default function ChoiceQuestion({ problem }: { problem: MultipleChoicePro
             tone = 'border-accent-line bg-accent-soft';
             markTone = 'border-accent text-accent';
           }
+          // 採点したら、正解を一拍持ち上げ、外した選択肢は小さく首を振る。
+          // 色が変わるだけだと、どれが正解だったのかを探し直すことになる
+          const wrongPick = judged && isPicked && !isAnswer;
           return (
-            <button
+            <motion.button
               key={opt.id}
               onClick={() => !judged && setSelected(opt.id)}
               disabled={judged}
+              data-testid="choice-option"
+              animate={{
+                y: judged && isAnswer ? -3 : 0,
+                x: wrongPick ? [0, -3, 3, -2, 2, 0] : 0,
+              }}
+              transition={wrongPick ? { duration: 0.3, ease: 'easeInOut' } : SLIDE}
               className={`flex w-full items-start gap-3 rounded-md border px-4 py-3 text-left transition-colors ${tone}`}
             >
-              <span
+              <motion.span
+                animate={{ scale: judged && isAnswer ? [1, 1.25, 1] : 1 }}
+                transition={{ duration: 0.32, ease: 'easeOut' }}
                 className={`mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full border font-mono text-[10.5px] ${markTone}`}
               >
                 {judged && isAnswer ? (
@@ -49,9 +62,9 @@ export default function ChoiceQuestion({ problem }: { problem: MultipleChoicePro
                 ) : (
                   opt.id.toUpperCase()
                 )}
-              </span>
+              </motion.span>
               <span className="text-[13.5px] leading-relaxed text-fg">{opt.text}</span>
-            </button>
+            </motion.button>
           );
         })}
       </div>
@@ -108,7 +121,10 @@ export default function ChoiceQuestion({ problem }: { problem: MultipleChoicePro
 
       {judged && (
         <>
-          <div
+          <motion.div
+            variants={RISE}
+            initial="hidden"
+            animate="shown"
             className={`flex items-center gap-2 rounded-lg border p-4 text-[13.5px] font-semibold ${
               correct
                 ? 'border-success-line bg-success-soft text-success'
@@ -117,7 +133,7 @@ export default function ChoiceQuestion({ problem }: { problem: MultipleChoicePro
           >
             {correct ? <IconCheck size={15} /> : <IconX size={15} />}
             {correct ? '正解' : `不正解。正解は ${problem.correct_option_id.toUpperCase()} です。`}
-          </div>
+          </motion.div>
           <Card className="overflow-hidden">
             <p className="flex items-center gap-1.5 border-b border-line bg-raised px-4 py-2 text-[11.5px] font-medium text-muted">
               <IconBook size={13} />

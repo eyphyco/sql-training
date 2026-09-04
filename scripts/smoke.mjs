@@ -139,13 +139,36 @@ try {
       .locator('[data-testid="reading-progress"]')
       .evaluate((el) => el.getBoundingClientRect().width);
   const readTop = await readingWidth();
+  const tocCurrent = () => page.locator('[data-testid="chapter-nav-current"]').innerText();
+  // 目次の帯は layoutId で位置を繋いでいる。途中位置を取れれば滑っている
+  const tocY = () =>
+    page
+      .locator('[data-testid="chapter-nav-current"] span')
+      .first()
+      .evaluate((el) => el.getBoundingClientRect().y);
+  const tocFrom = await tocCurrent();
+  const tocYFrom = await tocY();
   await page.mouse.wheel(0, 2500);
+  await page.waitForTimeout(60);
+  const tocYMid = await tocY();
   await page.waitForTimeout(700); // バネが落ち着くのを待つ
   const readMid = await readingWidth();
   check(
     '読み進み線がスクロールで伸びる',
     readMid > readTop + 10,
     `${readTop.toFixed(0)}px → ${readMid.toFixed(0)}px`,
+  );
+  const tocTo = await tocCurrent();
+  const tocYTo = await tocY();
+  check(
+    '目次が読んでいる節に追従する',
+    tocFrom !== tocTo,
+    `${tocFrom.replace(/\s+/g, ' ')} → ${tocTo.replace(/\s+/g, ' ')}`,
+  );
+  check(
+    '目次の帯が滑って移動する',
+    Math.abs(tocYMid - tocYTo) > 3,
+    `${tocYFrom.toFixed(0)} → 途中 ${tocYMid.toFixed(0)} → ${tocYTo.toFixed(0)}`,
   );
   await page.mouse.wheel(0, -3000);
   await page.waitForTimeout(400);
@@ -159,6 +182,25 @@ try {
     listed === ALL_PROBLEMS.length,
     `${listed} / ${ALL_PROBLEMS.length} 件`,
   );
+
+  // 絞り込むと、残った行が滑って詰まる（layout アニメーション）
+  const lastPhase = Math.max(...ALL_PROBLEMS.map((p) => p.phase));
+  const tailId = ALL_PROBLEMS.filter((p) => p.phase === lastPhase)[0].id;
+  const tailY = () =>
+    page.locator(`a[href$="#/problems/${tailId}"]`).evaluate((el) => el.getBoundingClientRect().y);
+  const listFrom = await tailY();
+  await page.locator('[data-testid="phase-chip"]').nth(lastPhase - 1).click();
+  await page.waitForTimeout(150);
+  const listMid = await tailY();
+  await page.waitForTimeout(800);
+  const listTo = await tailY();
+  check(
+    '絞り込んだ行が滑って詰まる',
+    listTo < listFrom - 100 && Math.abs(listMid - listTo) > 20,
+    `${listFrom.toFixed(0)} → 途中 ${listMid.toFixed(0)} → ${listTo.toFixed(0)}`,
+  );
+  await page.goto(`${base}#/problems`, { waitUntil: 'networkidle' });
+  await page.waitForSelector('a[href*="#/problems/phase1-lv1-001"]');
 
   // 3. 問題を開き DuckDB が起動する
   await page.click('a[href*="#/problems/phase1-lv1-001"]');
@@ -366,6 +408,34 @@ try {
   const parsed = JSON.parse(stored ?? '{}');
   check('進捗が localStorage に保存される', parsed?.solvedProblems?.['phase1-lv1-001']?.solved === true);
 
+  // ホームの進捗バーは 0 から伸びる。
+  // 読み込み後に測ると伸び終わっていることがあるので、描画前に
+  // 仕込んだ観測者で最小値を拾う（addInitScript はページの JS より先に走る）。
+  await page.addInitScript(() => {
+    window.__meterMin = 2;
+    const tick = () => {
+      const el = document.querySelector('[role="progressbar"] > *');
+      if (el) {
+        const a = new DOMMatrixReadOnly(getComputedStyle(el).transform).a;
+        if (a < window.__meterMin) window.__meterMin = a;
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+  await page.goto(base, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(1200);
+  const meterTo = await page
+    .locator('[role="progressbar"] > *')
+    .first()
+    .evaluate((el) => new DOMMatrixReadOnly(getComputedStyle(el).transform).a);
+  const meterMin = await page.evaluate(() => window.__meterMin);
+  check(
+    'ホームの進捗バーが 0 から伸びる',
+    meterTo > 0 && meterMin < meterTo / 2,
+    `scaleX ${meterMin.toFixed(3)} → ${meterTo.toFixed(3)}`,
+  );
+
   // 10. 選択式問題を解く
   const mcId = ALL_PROBLEMS.find((p) => p.type === 'multiple_choice');
   await page.goto(`${base}#/problems/${mcId.id}`, { waitUntil: 'networkidle' });
@@ -376,6 +446,18 @@ try {
   check(
     '選択式問題が採点される',
     (await page.locator(mcCorrect ? 'text=正解' : 'text=不正解').count()) > 0,
+  );
+
+  // 採点後、正解の選択肢だけが持ち上がる
+  await page.waitForTimeout(600);
+  const lifts = await page.locator('[data-testid="choice-option"]').evaluateAll((els) =>
+    els.map((el) => Math.round(new DOMMatrixReadOnly(getComputedStyle(el).transform).m42)),
+  );
+  const answerIndex = mcId.options.findIndex((o) => o.id === mcId.correct_option_id);
+  check(
+    '正解の選択肢だけが持ち上がる',
+    lifts[answerIndex] < 0 && lifts.filter((y) => y < 0).length === 1,
+    `translateY = [${lifts.join(', ')}]`,
   );
 
   // 11. 記述式問題を解く

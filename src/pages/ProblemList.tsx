@@ -1,10 +1,12 @@
 import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { AnimatePresence, motion } from 'motion/react';
 import { ALL_TAGS, PROBLEM_METAS } from '../data/problems';
 import { LEVEL_LABEL, LEVEL_TONE, PHASES, PHASE_BY_ID } from '../data/phases';
 import { useProgress } from '../storage/progressContext';
 import { Tag } from '../components/ui';
 import { IconCheck, IconDash } from '../components/icons';
+import { SLIDE } from '../components/motion';
 import type { LevelId, PhaseId, ProblemType } from '../types';
 
 const TYPE_LABEL: Record<ProblemType, string> = {
@@ -66,6 +68,7 @@ export default function ProblemList() {
             <button
               key={p.id}
               onClick={() => setParam('phase', String(p.id))}
+              data-testid="phase-chip"
               className={chip(phase === String(p.id))}
             >
               <span className="tnum mr-1 font-mono text-subtle">{p.id}</span>
@@ -114,40 +117,54 @@ export default function ProblemList() {
         </div>
       </div>
 
+      {/*
+        絞り込みで行が消えるとき、残った行が滑って詰まる。
+        消える行は席を先に空け（popLayout）、残る行の移動だけを見せる。
+      */}
       <ul className="glass overflow-hidden rounded-lg border border-line bg-surface">
-        {filtered.map((p) => {
-          const solved = isSolved(p.id);
-          return (
-            <li key={p.id} className="border-b border-line last:border-0">
-              <Link
-                to={`/problems/${p.id}`}
-                className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-raised"
+        <AnimatePresence initial={false} mode="popLayout">
+          {filtered.map((p) => {
+            const solved = isSolved(p.id);
+            return (
+              <motion.li
+                key={p.id}
+                layout
+                transition={SLIDE}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="border-b border-line last:border-0"
               >
-                <span className={`shrink-0 ${solved ? 'text-success' : 'text-subtle/50'}`}>
-                  {solved ? <IconCheck size={14} /> : <IconDash size={14} />}
-                </span>
-                <span className="hidden shrink-0 font-mono text-[10.5px] text-subtle sm:inline">
-                  {p.id}
-                </span>
-                {/* 題名とタグをひとまとまりで伸ばす。広い画面で題名と右の情報が
-                    離れて間延びするのを、タグで埋める */}
-                <span className="flex min-w-0 flex-1 items-baseline gap-3">
-                  <span className="min-w-0 truncate text-[13.5px] text-fg">{p.title}</span>
-                  <span className="hidden min-w-0 truncate text-[11px] text-subtle xl:inline">
-                    {p.tags.map((t) => `#${t}`).join('  ')}
+                <Link
+                  to={`/problems/${p.id}`}
+                  className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-raised"
+                >
+                  <span className={`shrink-0 ${solved ? 'text-success' : 'text-subtle/50'}`}>
+                    {solved ? <IconCheck size={14} /> : <IconDash size={14} />}
                   </span>
-                </span>
-                <span className="hidden shrink-0 text-[11px] text-subtle md:inline">
-                  {PHASE_BY_ID.get(p.phase as PhaseId)?.name}
-                </span>
-                <span className="hidden w-6 shrink-0 text-center text-[11px] text-subtle sm:inline">
-                  {TYPE_LABEL[p.type]}
-                </span>
-                <Tag tone={LEVEL_TONE[p.level]}>{LEVEL_LABEL[p.level]}</Tag>
-              </Link>
-            </li>
-          );
-        })}
+                  <span className="hidden shrink-0 font-mono text-[10.5px] text-subtle sm:inline">
+                    {p.id}
+                  </span>
+                  {/* 題名とタグをひとまとまりで伸ばす。広い画面で題名と右の情報が
+                      離れて間延びするのを、タグで埋める */}
+                  <span className="flex min-w-0 flex-1 items-baseline gap-3">
+                    <span className="min-w-0 truncate text-[13.5px] text-fg">{p.title}</span>
+                    <span className="hidden min-w-0 truncate text-[11px] text-subtle xl:inline">
+                      {p.tags.map((t) => `#${t}`).join('  ')}
+                    </span>
+                  </span>
+                  <span className="hidden shrink-0 text-[11px] text-subtle md:inline">
+                    {PHASE_BY_ID.get(p.phase as PhaseId)?.name}
+                  </span>
+                  <span className="hidden w-6 shrink-0 text-center text-[11px] text-subtle sm:inline">
+                    {TYPE_LABEL[p.type]}
+                  </span>
+                  <Tag tone={LEVEL_TONE[p.level]}>{LEVEL_LABEL[p.level]}</Tag>
+                </Link>
+              </motion.li>
+            );
+          })}
+        </AnimatePresence>
         {filtered.length === 0 && (
           <li className="px-4 py-8 text-center text-[13px] text-subtle">
             条件に一致する問題がありません。

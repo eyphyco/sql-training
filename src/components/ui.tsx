@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+import { motion } from 'motion/react';
+import { EASE_OUT } from './motion';
 
 /* ボタン: バリアントとサイズを固定し、画面ごとに書き分けないようにする。
    形はすべて角丸いっぱい（ピル）で統一する */
@@ -83,8 +85,11 @@ export function SectionTitle({ children, right }: { children: ReactNode; right?:
   );
 }
 
-/** 進捗バー。高さ3px、単色。グラデーションは使わない */
-export function Meter({ value, total }: { value: number; total: number }) {
+/**
+ * 進捗バー。高さ3px、単色。グラデーションは使わない。
+ * 0 から伸びる。`delay` を渡すと、並べたときに順に伸びていく。
+ */
+export function Meter({ value, total, delay = 0 }: { value: number; total: number; delay?: number }) {
   const pct = total === 0 ? 0 : Math.round((value / total) * 100);
   return (
     <div
@@ -94,11 +99,12 @@ export function Meter({ value, total }: { value: number; total: number }) {
       aria-valuemin={0}
       aria-valuemax={total}
     >
-      <div
-        className={`h-full rounded-full transition-[width] duration-500 ${
-          pct === 100 ? 'bg-success' : 'bg-accent'
-        }`}
-        style={{ width: `${pct}%` }}
+      <motion.div
+        className={`h-full origin-left rounded-full ${pct === 100 ? 'bg-success' : 'bg-accent'}`}
+        initial={{ scaleX: 0 }}
+        animate={{ scaleX: pct / 100 }}
+        transition={{ duration: 0.6, ease: EASE_OUT, delay }}
+        style={{ width: '100%' }}
       />
     </div>
   );
