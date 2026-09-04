@@ -53,10 +53,28 @@ try {
   check('ダークに切り替わる', (await themeOf()) === 'dark');
   await page.reload({ waitUntil: 'networkidle' });
   check('リロード後もダークが保持される', (await themeOf()) === 'dark');
+  // 下地の明るさは相対輝度で見る。色そのものを直書きすると
+  // 配色を変えるたびに落ちて、実際に確かめたいこと（明暗の向き）を見失う
+  const bodyLuma = () =>
+    page.evaluate(() => {
+      const [r, g, b] = getComputedStyle(document.body)
+        .backgroundColor.match(/\d+(\.\d+)?/g)
+        .slice(0, 3)
+        .map((v) => {
+          const c = Number(v) / 255;
+          return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+        });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    });
+  const darkLuma = await bodyLuma();
   await page.click('button[aria-label="ライト"]');
   check('ライトに切り替わる', (await themeOf()) === 'light');
-  const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-  check('ライトの背景色が明るい', bg === 'rgb(233, 237, 245)', bg);
+  const lightLuma = await bodyLuma();
+  check(
+    'ライトの下地が明るく、ダークの下地が暗い',
+    lightLuma > 0.6 && darkLuma < 0.05,
+    `light ${lightLuma.toFixed(3)} / dark ${darkLuma.toFixed(3)}`,
+  );
   // つまみは layoutId で位置を繋いで滑らせている。途中位置を取れれば動いている
   const thumbX = () =>
     page.evaluate(() => {

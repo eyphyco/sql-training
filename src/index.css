@@ -14,46 +14,54 @@
   /* --- 面 ---------------------------------------------------------
      canvas は唯一の不透明な面。その上に載る面はすべて半透明のフィルムで、
      背後をぼかして色を拾う（= ガラス）。 */
-  --c-canvas: light-dark(#e9edf5, #06080c);
-  --c-surface: light-dark(rgb(255 255 255 / 0.72), rgb(160 178 215 / 0.11));
-  --c-raised: light-dark(rgb(255 255 255 / 0.5), rgb(255 255 255 / 0.06));
-  --c-sunken: light-dark(rgb(15 23 42 / 0.04), rgb(0 0 0 / 0.22));
+  --c-canvas: light-dark(#efece3, #131211);
+  --c-surface: light-dark(rgb(255 255 255 / 0.74), rgb(240 232 214 / 0.09));
+  --c-raised: light-dark(rgb(255 253 248 / 0.55), rgb(255 246 230 / 0.05));
+  --c-sunken: light-dark(rgb(60 46 32 / 0.05), rgb(0 0 0 / 0.24));
   /* 透けさせたくない場所（トグルのつまみ等）に使う不透明な面 */
-  --c-solid: light-dark(#ffffff, #1b1f27);
+  --c-solid: light-dark(#ffffff, #2a2724);
   /* スクロールする内容が透けてはいけない帯（固定ヘッダ・表の見出し） */
-  --c-chrome: light-dark(rgb(246 248 251 / 0.82), rgb(16 19 25 / 0.8));
+  --c-chrome: light-dark(rgb(250 249 245 / 0.84), rgb(26 25 23 / 0.82));
 
   /* --- 境界 -------------------------------------------------------
      ガラスの縁。上辺のハイライトで厚みを、外周のヘアラインで輪郭を出す */
-  --c-line: light-dark(rgb(15 23 42 / 0.1), rgb(255 255 255 / 0.1));
-  --c-line-strong: light-dark(rgb(15 23 42 / 0.16), rgb(255 255 255 / 0.2));
-  --c-glass-edge: light-dark(rgb(255 255 255 / 0.7), rgb(255 255 255 / 0.12));
+  --c-line: light-dark(rgb(60 46 32 / 0.13), rgb(255 245 230 / 0.1));
+  --c-line-strong: light-dark(rgb(60 46 32 / 0.2), rgb(255 245 230 / 0.2));
+  --c-glass-edge: light-dark(rgb(255 255 255 / 0.72), rgb(255 248 236 / 0.1));
 
   /* --- 文字 ------------------------------------------------------- */
-  --c-fg: light-dark(#10131a, #eef1f7);
-  --c-fg-muted: light-dark(#545b68, #9aa3b2);
-  --c-fg-subtle: light-dark(#7c8493, #6d7686);
+  --c-fg: light-dark(#191714, #f4f2ec);
+  --c-fg-muted: light-dark(#5c564c, #a8a29a);
+  --c-fg-subtle: light-dark(#6a645c, #9b948a);
 
   /* --- アクセント -------------------------------------------------
-     soft / line は不透明色ではなく「色の膜」。ガラスの上で沈まないように */
-  --c-accent: light-dark(#2f56d3, #8aa4ff);
-  --c-accent-solid: light-dark(#3560e0, #3f63e6);
-  --c-accent-solid-hover: light-dark(#2b51c9, #4f72f0);
+     soft / line は不透明色ではなく「色の膜」。ガラスの上で沈まないように
+
+     基準は Claude のテラコッタ #d97757。ただし明るい下地の上では
+     文字色として 4.5:1 に届かないので、ライトだけ一段濃い錆色にする
+     （膜と枠は #d97757 のままなので、印象は両テーマで揃う）。 */
+  --c-accent: light-dark(#a04a29, #e0906c);
+  --c-accent-solid: light-dark(#b3542f, #bd5c37);
+  --c-accent-solid-hover: light-dark(#9c4726, #cc6a42);
   --c-on-accent: #ffffff;
-  --c-accent-soft: light-dark(rgb(47 86 211 / 0.1), rgb(120 145 255 / 0.16));
-  --c-accent-line: light-dark(rgb(47 86 211 / 0.26), rgb(120 145 255 / 0.32));
+  --c-accent-soft: light-dark(rgb(217 119 87 / 0.13), rgb(217 119 87 / 0.18));
+  --c-accent-line: light-dark(rgb(217 119 87 / 0.32), rgb(217 119 87 / 0.34));
 
-  --c-success: light-dark(#0f7a5f, #4fd1a5);
-  --c-success-soft: light-dark(rgb(16 168 128 / 0.12), rgb(79 209 165 / 0.14));
-  --c-success-line: light-dark(rgb(16 168 128 / 0.28), rgb(79 209 165 / 0.28));
+  /* 正解は青緑ではなくセージ。テラコッタと同じ暖かさの側に寄せる */
+  --c-success: light-dark(#2f6640, #82c091);
+  --c-success-soft: light-dark(rgb(77 138 92 / 0.13), rgb(130 192 145 / 0.14));
+  --c-success-line: light-dark(rgb(77 138 92 / 0.3), rgb(130 192 145 / 0.28));
 
-  --c-danger: light-dark(#c0342b, #ff9089);
-  --c-danger-soft: light-dark(rgb(214 69 58 / 0.1), rgb(255 144 137 / 0.14));
-  --c-danger-line: light-dark(rgb(214 69 58 / 0.26), rgb(255 144 137 / 0.28));
+  /* 不正解がテラコッタに見えないよう、色相をローズ側まで振り切る。
+     オレンジ寄りの赤にすると、隣に並んだアクセントと区別が付かない */
+  --c-danger: light-dark(#b02636, #f28b93);
+  --c-danger-soft: light-dark(rgb(200 45 60 / 0.12), rgb(242 139 147 / 0.15));
+  --c-danger-line: light-dark(rgb(200 45 60 / 0.3), rgb(242 139 147 / 0.3));
 
-  --c-warning: light-dark(#8a5a00, #e8b062);
-  --c-warning-soft: light-dark(rgb(214 150 30 / 0.14), rgb(232 176 98 / 0.14));
-  --c-warning-line: light-dark(rgb(214 150 30 / 0.3), rgb(232 176 98 / 0.28));
+  /* Anthropic の kraft #d4a27f 系 */
+  --c-warning: light-dark(#8a5a1c, #d9ab74);
+  --c-warning-soft: light-dark(rgb(196 145 70 / 0.16), rgb(217 171 116 / 0.14));
+  --c-warning-line: light-dark(rgb(196 145 70 / 0.32), rgb(217 171 116 / 0.28));
 
   /* --- 角丸 ------------------------------------------------------- */
   --r-xs: 6px;
@@ -66,24 +74,24 @@
      色は付けず、広く薄く落とす。近距離の1本で接地感、遠距離で浮遊感 */
   /* light-dark() は引数 2 つなので、影のリストではなく「色」に対して使う */
   --shadow-card:
-    0 1px 1px light-dark(rgb(15 23 42 / 0.04), rgb(0 0 0 / 0.3)),
-    0 12px 34px -14px light-dark(rgb(15 23 42 / 0.3), rgb(0 0 0 / 0.7));
+    0 1px 1px light-dark(rgb(60 46 32 / 0.05), rgb(0 0 0 / 0.3)),
+    0 12px 34px -14px light-dark(rgb(60 46 32 / 0.3), rgb(0 0 0 / 0.7));
   --shadow-pop:
-    0 2px 4px light-dark(rgb(15 23 42 / 0.04), rgb(0 0 0 / 0.4)),
-    0 14px 44px -12px light-dark(rgb(15 23 42 / 0.3), rgb(0 0 0 / 0.78));
+    0 2px 4px light-dark(rgb(60 46 32 / 0.05), rgb(0 0 0 / 0.4)),
+    0 14px 44px -12px light-dark(rgb(60 46 32 / 0.3), rgb(0 0 0 / 0.78));
 
   /* --- ぼかし量 --------------------------------------------------- */
   --blur-panel: 20px;
   --blur-chrome: 28px;
 
   /* --- シンタックスハイライト（CodeMirror と共有） ----------------- */
-  --c-syn-keyword: light-dark(#3d55c8, #93aaff);
-  --c-syn-string: light-dark(#0f7a52, #6fd7a5);
-  --c-syn-number: light-dark(#9a5a12, #e8b884);
-  --c-syn-comment: light-dark(#7c8493, #6d7686);
-  --c-syn-fn: light-dark(#7038a8, #c9a6f0);
-  --c-syn-type: light-dark(#0a6b78, #6fcdd8);
-  --c-syn-punct: light-dark(#767e8c, #868f9e);
+  --c-syn-keyword: light-dark(#a5502e, #e2926f);
+  --c-syn-string: light-dark(#3d7a52, #8fc79a);
+  --c-syn-number: light-dark(#8a6220, #d9ab74);
+  --c-syn-comment: light-dark(#8a8175, #7a736a);
+  --c-syn-fn: light-dark(#7d4a86, #c9a0d0);
+  --c-syn-type: light-dark(#3d6a86, #8fbcd4);
+  --c-syn-punct: light-dark(#7d766c, #8a8279);
 }
 
 /* 明示的に選ばれたテーマ。light-dark() はこの color-scheme を見る */
@@ -146,7 +154,7 @@
    下地
    ------------------------------------------------------------------
    ガラスは「背後に何かある」ことで初めて成立するので、視界に固定した
-   淡い光を敷く。色相は青〜青緑〜灰の範囲に絞り、彩度は上げない。
+   淡い光を敷く。色相はテラコッタ〜kraft〜暖灰に絞り、彩度は上げない。
    ================================================================== */
 
 html,
@@ -166,17 +174,19 @@ body {
   background-image:
     radial-gradient(
       52rem 36rem at 2% -12%,
-      light-dark(rgb(78 124 255 / 0.24), rgb(70 105 230 / 0.2)),
+      light-dark(rgb(204 120 92 / 0.2), rgb(190 100 70 / 0.16)),
       transparent 62%
     ),
     radial-gradient(
       46rem 32rem at 100% -2%,
-      light-dark(rgb(56 190 220 / 0.2), rgb(40 140 170 / 0.16)),
+      light-dark(rgb(212 162 127 / 0.2), rgb(170 125 85 / 0.14)),
       transparent 64%
     ),
+    /* 下端のにじみは薄く。濃くすると画面下半分が黄ばんで、
+       不正解の帯まで同じ色に見えてしまう */
     radial-gradient(
       64rem 46rem at 50% 114%,
-      light-dark(rgb(118 148 205 / 0.22), rgb(88 108 160 / 0.18)),
+      light-dark(rgb(150 140 130 / 0.15), rgb(120 105 88 / 0.16)),
       transparent 62%
     );
   background-attachment: fixed;
@@ -249,17 +259,17 @@ body {
 /* 塗りつぶしのボタンにも上辺のハイライトを入れて、同じ厚みに見せる */
 .raised-edge {
   box-shadow:
-    inset 0 1px 0 0 rgb(255 255 255 / 0.22),
-    0 1px 2px rgb(15 23 42 / 0.16);
+    inset 0 1px 0 0 rgb(255 255 255 / 0.24),
+    0 1px 2px rgb(60 46 32 / 0.18);
 }
 
 /* 透明効果を減らす設定のときは、すべて不透明な面に落とす */
 @media (prefers-reduced-transparency: reduce) {
   :root {
-    --c-surface: light-dark(#ffffff, #1b1f27);
-    --c-raised: light-dark(#f2f5f9, #22262f);
-    --c-chrome: light-dark(#f6f8fb, #14171d);
-    --c-sunken: light-dark(#eaeef4, #101318);
+    --c-surface: light-dark(#fbfaf7, #262523);
+    --c-raised: light-dark(#f4f1e9, #2f2d2a);
+    --c-chrome: light-dark(#faf9f5, #1b1a18);
+    --c-sunken: light-dark(#eae6dc, #100f0e);
   }
   .glass,
   .glass-chrome,

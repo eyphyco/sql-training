@@ -439,12 +439,12 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
           className={`rounded-lg border p-4 ${
             judgement.correct
               ? 'border-success-line bg-success-soft'
-              : 'border-warning-line bg-warning-soft'
+              : 'border-danger-line bg-danger-soft'
           }`}
         >
           <p
             className={`flex items-center gap-2 text-[13.5px] font-semibold ${
-              judgement.correct ? 'text-success' : 'text-warning'
+              judgement.correct ? 'text-success' : 'text-danger'
             }`}
           >
             {judgement.correct ? <IconCheck size={15} /> : <IconX size={15} />}
