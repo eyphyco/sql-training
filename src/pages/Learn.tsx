@@ -3,6 +3,7 @@ import { LESSONS } from '../data/lessons';
 import { PHASE_BY_ID } from '../data/phases';
 import { useProgress } from '../storage/progressContext';
 import { Card, Meter } from '../components/ui';
+import CurriculumProgress from '../components/CurriculumProgress';
 import { IconBook, IconChevronRight } from '../components/icons';
 
 /** 教材の目次。フェーズ = 章に対応する */
@@ -18,12 +19,19 @@ export default function Learn() {
         </p>
       </div>
 
+      <CurriculumProgress />
+
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {LESSONS.map((lesson) => {
           const phase = PHASE_BY_ID.get(lesson.phase);
           const stat = phaseStats[lesson.phase] ?? { solved: 0, total: 0 };
           return (
-            <Link key={lesson.phase} to={`/learn/${lesson.phase}`} className="group">
+            <Link
+              key={lesson.phase}
+              to={`/learn/${lesson.phase}`}
+              data-testid="chapter-card"
+              className="group"
+            >
               <Card className="flex h-full flex-col p-4 transition-colors group-hover:border-line-strong group-hover:bg-raised">
                 <div className="flex items-center gap-2">
                   <span className="tnum font-mono text-[11px] text-subtle">

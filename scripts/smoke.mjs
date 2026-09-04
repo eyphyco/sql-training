@@ -92,8 +92,15 @@ try {
 
   // 1d. 教材
   await page.goto(`${base}#/learn`, { waitUntil: 'networkidle' });
-  const chapters = await page.locator('a[href*="#/learn/"]').count();
+  // 進捗バーの区切りも /learn/N へのリンクなので、カードだけを数える
+  const chapters = await page.locator('[data-testid="chapter-card"]').count();
   check('教材の目次に全章が並ぶ', chapters === LESSONS.length, `${chapters} / ${LESSONS.length} 章`);
+
+  const progress = page.locator('[data-testid="curriculum-progress"]');
+  check(
+    '教材に全体の進捗バーが出る',
+    (await progress.innerText()).includes(`/ ${ALL_PROBLEMS.length} 問`),
+  );
 
   await page.click('a[href*="#/learn/2"]');
   await page.waitForSelector('text=この章の内容');
@@ -106,6 +113,24 @@ try {
     '節からその問題へ行ける',
     (await page.locator('a[href*="#/problems/phase2-"]').count()) > 0,
   );
+  check('章でも進捗バーが出る', (await progress.count()) === 1);
+
+  // 読み進み線がスクロールに追従する
+  const readingWidth = () =>
+    page
+      .locator('[data-testid="reading-progress"]')
+      .evaluate((el) => el.getBoundingClientRect().width);
+  const readTop = await readingWidth();
+  await page.mouse.wheel(0, 2500);
+  await page.waitForTimeout(700); // バネが落ち着くのを待つ
+  const readMid = await readingWidth();
+  check(
+    '読み進み線がスクロールで伸びる',
+    readMid > readTop + 10,
+    `${readTop.toFixed(0)}px → ${readMid.toFixed(0)}px`,
+  );
+  await page.mouse.wheel(0, -3000);
+  await page.waitForTimeout(400);
 
   // 2. 問題一覧
   await page.goto(`${base}#/problems`, { waitUntil: 'networkidle' });
@@ -323,6 +348,22 @@ try {
   check(
     '進捗データ画面が表示される',
     (await page.locator('button:has-text("エクスポート")').count()) > 0,
+  );
+
+  // 12b. 正解が教材の進捗バーに反映される
+  await page.goto(`${base}#/learn`, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(900); // 数え上げの完了を待つ
+  const solvedShown = await page.locator('[data-testid="progress-solved"]').innerText();
+  const storedProgress = JSON.parse(
+    (await page.evaluate(() => localStorage.getItem('sql-training:progress:v1'))) ?? '{}',
+  );
+  const expectedSolved = Object.values(storedProgress.solvedProblems ?? {}).filter(
+    (r) => r.solved,
+  ).length;
+  check(
+    '正解数が進捗バーに反映される',
+    solvedShown.trim() === String(expectedSolved),
+    `表示 ${solvedShown.trim()} / 保存 ${expectedSolved}`,
   );
 
   // 13. フェーズでフィルタできる

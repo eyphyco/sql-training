@@ -5,6 +5,8 @@ import { LEVEL_LABEL, LEVEL_TONE } from '../data/phases';
 import { useProgress } from '../storage/progressContext';
 import Markdown from '../components/Markdown';
 import { Card, Tag } from '../components/ui';
+import CurriculumProgress from '../components/CurriculumProgress';
+import ReadingProgress from '../components/ReadingProgress';
 import { IconCheck, IconChevronLeft, IconChevronRight } from '../components/icons';
 import type { PhaseId } from '../types';
 
@@ -30,6 +32,7 @@ export default function LearnChapter() {
 
   return (
     <div className="max-w-prose-wide space-y-5">
+      <ReadingProgress />
       <div>
         <div className="flex items-center gap-2 text-[12px]">
           <Link to="/learn" className="text-muted hover:text-fg">
@@ -45,6 +48,9 @@ export default function LearnChapter() {
         </h1>
         <p className="mt-1.5 text-[13px] leading-relaxed text-muted">{lesson.lead}</p>
       </div>
+
+      {/* この章が全体のどこにあたるかを、進捗と一緒に示す */}
+      <CurriculumProgress activePhase={lesson.phase} />
 
       {/* 目次 */}
       <Card className="p-4">
