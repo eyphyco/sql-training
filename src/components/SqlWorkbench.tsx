@@ -291,7 +291,11 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
 
       {/* 左：エディタ / 右：DB の状態 */}
       <div className="grid gap-3 lg:grid-cols-2">
-        <Card as="section" className="flex min-h-[520px] flex-col overflow-hidden lg:h-[clamp(460px,calc(100vh-34rem),820px)]">
+        <Card
+          as="section"
+          testId="editor-pane"
+          className="flex min-h-[520px] flex-col overflow-hidden lg:h-[clamp(460px,calc(100vh-34rem),820px)]"
+        >
           <header className="flex h-9 shrink-0 items-center justify-between border-b border-line bg-raised pr-1.5 pl-3">
             <span className="text-[11.5px] font-medium tracking-tight text-muted">SQL エディタ</span>
             <div className="flex gap-1.5">
@@ -318,7 +322,11 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
           </div>
         </Card>
 
-        <Card as="section" className="flex min-h-[520px] flex-col overflow-hidden lg:h-[clamp(460px,calc(100vh-34rem),820px)]">
+        <Card
+          as="section"
+          testId="result-pane"
+          className="flex min-h-[520px] flex-col overflow-hidden lg:h-[clamp(460px,calc(100vh-34rem),820px)]"
+        >
           <header className="flex h-9 shrink-0 items-stretch gap-4 border-b border-line bg-raised px-3">
             {TABS.map(([key, label]) => (
               <button

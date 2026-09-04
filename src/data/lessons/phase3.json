@@ -1,0 +1,50 @@
+{
+  "phase": 3,
+  "title": "結合の基礎〜応用",
+  "lead": "結合は「くっつける」操作ではなく「行を掛け合わせる」操作。行数がどう変わるかを常に意識する。",
+  "sections": [
+    {
+      "id": "p3-cardinality",
+      "title": "結合とは行を掛け合わせること",
+      "problems": [
+        "phase3-lv1-001",
+        "phase3-lv2-005"
+      ],
+      "body_md": "結合の本質は**直積（すべての組み合わせ）を作って、条件に合うものだけ残す**ことだ。「2 つの表を横に並べる」というイメージだと、行数が増える理由が説明できなくなる。\n\n```sql\nSELECT o.id, c.name\n  FROM orders o\n  JOIN customers c ON o.customer_id = c.id;\n```\n\n意味論としてはこうなる。\n\n1. `orders` × `customers` のすべての組み合わせを作る\n2. `o.customer_id = c.id` を満たすものだけ残す\n\n実際のエンジンは直積を作らずハッシュ表などで処理するが、**結果は直積を絞ったものと同じ**になる。\n\n### 多重度（カーディナリティ）で行数が決まる\n\n| 関係 | 結果の行数 |\n| --- | --- |\n| 1 対 1 | 変わらない |\n| 1 対 N | **N 側の行数**になる |\n| N 対 M | 掛け算で増える |\n\n顧客 1 人が注文を 5 件持っていれば、顧客の行は結果に 5 回現れる。**これを忘れて `sum(c.credit_limit)` のような集計をすると 5 倍になる**。この「ファンアウトによる重複加算」は後の節で扱う。\n\n### 多段結合も同じ\n\n3 つ以上の表をつなぐときも、2 つずつ順に結合していくだけ。\n\n```sql\nSELECT cat.name, sum(oi.quantity * oi.unit_price) AS 売上\n  FROM order_items oi\n  JOIN products   p   ON oi.product_id = p.id\n  JOIN categories cat ON p.category_id = cat.id\n GROUP BY cat.name;\n```\n\nこのとき**どこで行が増えるか**を追う。`order_items` が最も細かい粒度（明細）で、`products` と `categories` は 1 対 1 で引き当てているだけなので行数は増えない。だから `sum` してよい。粒度が変わる結合が混ざったときだけ注意すればいい。"
+    },
+    {
+      "id": "p3-outer-join",
+      "title": "外部結合と、ON と WHERE の決定的な違い",
+      "problems": [
+        "phase3-lv1-002",
+        "phase3-lv2-003",
+        "phase3-lv3-007"
+      ],
+      "body_md": "### 外部結合の種類\n\n| 種類 | 残すもの |\n| --- | --- |\n| `INNER JOIN` | 両方にあるものだけ |\n| `LEFT OUTER JOIN` | **左は全部残す**。右に無ければ NULL |\n| `RIGHT OUTER JOIN` | 右を全部残す（左右を入れ替えた LEFT と同じ） |\n| `FULL OUTER JOIN` | **どちらも全部残す**。相手が無い側は NULL |\n\n`OUTER` は省略できる。`LEFT JOIN` と `LEFT OUTER JOIN` は同じもの。\n\n### 「無いものを探す」定石\n\nLEFT JOIN して、右側が NULL の行だけ残すと「片方にしか無いもの」が取れる。**アンチジョイン**と呼ばれる形。\n\n```sql\n-- 一度も注文していない顧客\nSELECT c.*\n  FROM customers c\n  LEFT JOIN orders o ON c.id = o.customer_id\n WHERE o.id IS NULL;        -- 結合先が無かった行だけ\n```\n\n判定に使う列は、**必ず NOT NULL の列（主キーなど）**を選ぶ。元データが NULL でありうる列を使うと、「結合はしたが値が NULL だった」行まで拾ってしまう。\n\n### ON と WHERE は外部結合で意味が変わる\n\nここが最重要。**INNER JOIN では ON と WHERE のどちらに条件を書いても結果は同じ**だが、**外部結合では結果が変わる**。\n\n```sql\n-- (A) ON に書く: 2024年の注文だけを「結合対象」にする\nSELECT c.name, o.id\n  FROM customers c\n  LEFT JOIN orders o\n    ON c.id = o.customer_id\n   AND o.ordered_on >= DATE '2024-01-01';\n\n-- (B) WHERE に書く: 結合してから絞る\nSELECT c.name, o.id\n  FROM customers c\n  LEFT JOIN orders o ON c.id = o.customer_id\n WHERE o.ordered_on >= DATE '2024-01-01';\n```\n\n評価順序で考えれば分かる。LEFT JOIN（FROM 句）は WHERE より先だ。\n\n- **(A)** … 条件に合う注文だけを結合する。合う注文が無い顧客も、右側 NULL で**残る**\n- **(B)** … いったん結合してから WHERE で絞る。右側が NULL の行は `NULL >= DATE ...` が偽になるので**消える**。結果として INNER JOIN と同じになってしまう\n\n「全顧客を出しつつ、2024 年の注文だけ紐づけたい」なら (A) が正しい。**外部結合を書いたのに INNER と同じ行数になったら、この間違いを疑う**。\n\n### FULL OUTER JOIN と COALESCE\n\n在庫の突合のように「どちらにしか無い行」も出したいときは FULL OUTER JOIN を使う。キー列がどちらか片方で NULL になるので、`coalesce` でまとめる。\n\n```sql\nSELECT coalesce(a.sku, b.sku) AS sku,\n       coalesce(a.qty, 0)     AS 帳簿,\n       coalesce(b.qty, 0)     AS 実棚\n  FROM book_stock a\n  FULL OUTER JOIN real_stock b ON a.sku = b.sku\n WHERE a.sku IS NULL OR b.sku IS NULL OR a.qty <> b.qty;\n```"
+    },
+    {
+      "id": "p3-self-join",
+      "title": "自己結合",
+      "problems": [
+        "phase3-lv2-004"
+      ],
+      "body_md": "同じ表を 2 回使って、**同じ表の中の行同士を対応づける**のが自己結合。社員と上司、商品と関連商品、当月と前月といった「表の中の関係」を扱う。\n\n```sql\nSELECT e.name AS 社員, m.name AS 上司\n  FROM employees e\n  LEFT JOIN employees m ON e.manager_id = m.id;\n```\n\nポイントは 2 つ。\n\n1. **別名（エイリアス）が必須**。どちらの `employees` かを区別できないと書けない\n2. **LEFT JOIN にする**。社長には上司がいないので、INNER にすると社長が消える\n\n「上司がいない人も含めて全員出す」という要件なら LEFT、「上司がいる人だけ」なら INNER。ここも要件の読み取りで決まる。\n\n### 階層をたどる\n\n自己結合を 1 回すると「1 階層上」までしか取れない。「上司の上司」まで欲しければもう 1 回結合する。\n\n```sql\nSELECT e.name, m1.name AS 上司, m2.name AS 上司の上司\n  FROM employees e\n  LEFT JOIN employees m1 ON e.manager_id  = m1.id\n  LEFT JOIN employees m2 ON m1.manager_id = m2.id;\n```\n\n階層の深さが不定なら、**再帰 CTE**（`WITH RECURSIVE`）を使う。組織図や部品表（BOM）の展開はこちらの領分になる。\n\n```sql\nWITH RECURSIVE org AS (\n  SELECT id, name, manager_id, 1 AS depth\n    FROM employees WHERE manager_id IS NULL\n  UNION ALL\n  SELECT e.id, e.name, e.manager_id, org.depth + 1\n    FROM employees e JOIN org ON e.manager_id = org.id\n)\nSELECT * FROM org ORDER BY depth, id;\n```"
+    },
+    {
+      "id": "p3-fanout",
+      "title": "重複加算（ファンアウト）を避ける",
+      "problems": [
+        "phase3-lv3-006"
+      ],
+      "body_md": "結合すると行が増える。増えた状態で集計すると、**同じ値が何度も足される**。実務でいちばん多い集計バグがこれだ。\n\n### 何が起きるか\n\n顧客 1 人に注文が 3 件、その顧客への問い合わせが 2 件あるとする。\n\n```sql\n-- 危険: 注文金額が 2 倍、問い合わせ件数が 3 倍になる\nSELECT c.id,\n       sum(o.amount)  AS 注文合計,   -- 3件 × 2 = 6行ぶん足される\n       count(q.id)    AS 問合せ件数  -- 2件 × 3 = 6行ぶん数えられる\n  FROM customers c\n  LEFT JOIN orders   o ON c.id = o.customer_id\n  LEFT JOIN inquiries q ON c.id = q.customer_id\n GROUP BY c.id;\n```\n\n`orders` と `inquiries` は互いに無関係なのに、顧客を軸に結合したせいで 3 × 2 = 6 行の直積ができている。\n\n### 対処 1：事前集計してから結合する（推奨）\n\n**それぞれを顧客の粒度まで集約してから結合する。**粒度を揃えれば行は増えない。\n\n```sql\nSELECT c.id,\n       coalesce(o.total, 0) AS 注文合計,\n       coalesce(q.cnt, 0)   AS 問合せ件数\n  FROM customers c\n  LEFT JOIN (SELECT customer_id, sum(amount) AS total FROM orders    GROUP BY customer_id) o\n         ON c.id = o.customer_id\n  LEFT JOIN (SELECT customer_id, count(*)    AS cnt   FROM inquiries GROUP BY customer_id) q\n         ON c.id = q.customer_id;\n```\n\nこれなら `orders` 側も `inquiries` 側も顧客ごとに 1 行なので、掛け合わせが起きない。\n\n### 対処 2：DISTINCT で数える\n\n件数だけなら `count(DISTINCT q.id)` で正しく数えられる。ただし **`sum` は DISTINCT で救えない**（同じ金額の別の注文まで 1 件に潰れてしまう）ので、金額の集計では必ず事前集計を使う。\n\n### 見分け方\n\n結合してから `sum` を書くときは、いつも自問する。\n\n> **この結合で、集計したい表の行は増えていないか？**\n\n増えているなら事前集計。増えていないなら（1 対 1 でマスタを引いているだけなら）そのまま集計してよい。"
+    },
+    {
+      "id": "p3-non-equi",
+      "title": "非等値結合",
+      "problems": [
+        "phase3-lv3-008"
+      ],
+      "body_md": "結合条件は `=` である必要はない。範囲・不等号・BETWEEN でも結合できる。これを**非等値結合**と呼ぶ。\n\n```sql\n-- 商品を価格帯マスタに割り当てる\nSELECT b.label, count(*) AS 商品数\n  FROM products p\n  JOIN price_bands b\n    ON p.price >= b.min_price\n   AND p.price <  b.max_price\n GROUP BY b.label;\n```\n\n区間マスタへの割り当て、有効期間つきマスタ（`ON d.dt BETWEEN m.valid_from AND m.valid_to`）、順位の相互比較などで使う。\n\n### 区間の端点に注意\n\n`BETWEEN` は**両端を含む**。価格帯を `0〜1000`、`1000〜3000` のように定義すると、ちょうど 1000 円の商品が両方に該当して**行が二重に出る**。\n\n区間マスタは `min <= x < max`（下限は含む、上限は含まない）で設計し、SQL も `>= AND <` で書くのが安全。`BETWEEN` を使うなら上限を `999` のように 1 つ手前にする。\n\n### 性能上の位置づけ\n\n非等値結合は**ハッシュ結合が使えない**。ハッシュ結合はキーが等しいことを前提にハッシュ表を引く仕組みなので、「範囲に入るか」は判定できない。結果としてネステッドループ結合や、範囲用の特殊なアルゴリズムに落ちる。\n\n- 区間マスタのように**片方が数十行**なら問題にならない\n- 両方が大きい表だと一気に重くなる\n\nフェーズ 4 で扱うが、「実行計画に `NESTED_LOOP_JOIN` や `BLOCKWISE_NL_JOIN` が出たら非等値結合を疑う」という読み方につながる。等値条件を 1 つでも足せる（例：同じ地域コード同士に限る）なら、そこでハッシュ結合に載せてから範囲で絞るのが定石になる。"
+    }
+  ]
+}

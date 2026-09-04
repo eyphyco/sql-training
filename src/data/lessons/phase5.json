@@ -1,0 +1,48 @@
+{
+  "phase": 5,
+  "title": "サブクエリの最適化",
+  "lead": "サブクエリは書けて当然。ここでは「なぜ遅いのか」と「何に書き換えれば速いのか」を判断できるようにする。",
+  "sections": [
+    {
+      "id": "p5-subquery-kinds",
+      "title": "サブクエリの種類と、相関のコスト",
+      "problems": [
+        "phase5-lv1-001"
+      ],
+      "body_md": "### 置かれる場所で 4 種類\n\n| 種類 | 書く場所 | 返すもの |\n| --- | --- | --- |\n| スカラサブクエリ | SELECT / WHERE の値の位置 | **1 行 1 列** |\n| IN / EXISTS のサブクエリ | WHERE の条件 | 集合（の有無） |\n| 導出表（インラインビュー） | FROM | 表 |\n| CTE | `WITH` 句 | 表（名前が付く） |\n\n### 相関と非相関\n\n**外側のクエリの列を参照しているか**で性質がまったく変わる。\n\n```sql\n-- 非相関: 1 回だけ評価すれば済む\nWHERE salary > (SELECT avg(salary) FROM employees)\n\n-- 相関: 外側の行ごとに評価が必要\nWHERE salary > (SELECT avg(salary) FROM employees e2 WHERE e2.dept_id = e.dept_id)\n```\n\n相関サブクエリは、意味論上**外側の 1 行ごとに 1 回実行される**。外側が 100 万行なら 100 万回だ。実際には多くのオプティマイザが「デコリレーション」して結合に書き換えてくれるが、**書き換えられないケースも普通にある**。書いた本人が意図して書き換えられるようにしておきたい。\n\n### EXISTS は「1 件見つかれば打ち切る」\n\n```sql\n-- 注文したことがある顧客\nSELECT * FROM customers c\n WHERE EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.id);\n```\n\n`EXISTS` は**存在するかどうかだけ**を見るので、条件を満たす行が 1 件見つかった時点で内側の評価を打ち切れる（短絡評価）。だから `SELECT 1` でよく、`SELECT *` と書いても速度は変わらない。\n\n「顧客の情報だけ欲しい。注文の中身は要らない」というときに JOIN を使うと、注文が 3 件ある顧客が 3 行に増えてしまい `DISTINCT` が必要になる。**行を増やさずに絞り込めるのが EXISTS の利点**。"
+    },
+    {
+      "id": "p5-not-in-null",
+      "title": "NOT IN が NULL で壊れる",
+      "problems": [
+        "phase5-lv2-002"
+      ],
+      "body_md": "SQL は真・偽・**不明（UNKNOWN）**の 3 値論理で動く。NULL との比較はすべて UNKNOWN になり、WHERE は**真の行だけ**を通す。UNKNOWN は通さない。\n\nこの性質が最悪の形で出るのが `NOT IN` だ。\n\n### 何が起きるか\n\n```sql\nSELECT * FROM customers\n WHERE id NOT IN (SELECT customer_id FROM orders);\n```\n\n`orders.customer_id` に **NULL が 1 つでも混ざっていると、結果は必ず 0 件になる**。\n\n理由を展開すると分かる。`id NOT IN (1, 2, NULL)` は次と同じ意味だ。\n\n```\nid <> 1  AND  id <> 2  AND  id <> NULL\n                              ↑ 常に UNKNOWN\n```\n\n`真 AND UNKNOWN` は UNKNOWN。どの行も真にならないので、1 行も返らない。**エラーにならず、静かに空を返す**のが恐ろしいところ。\n\n### NOT EXISTS なら壊れない\n\n```sql\nSELECT * FROM customers c\n WHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.id);\n```\n\n`NOT EXISTS` は「条件に合う行が**存在しない**か」を見るだけで、NULL 同士の比較結果を AND で畳まない。`o.customer_id = c.id` が UNKNOWN になる行は「一致しなかった」として扱われ、意図どおり動く。\n\n### まとめ\n\n| 書き方 | NULL が混ざったとき |\n| --- | --- |\n| `IN` | 期待どおり動く（UNKNOWN は偽扱いで済む） |\n| **`NOT IN`** | **0 件になる。使わない** |\n| `NOT EXISTS` | 期待どおり動く |\n| `LEFT JOIN ... WHERE 右 IS NULL` | 期待どおり動く |\n\n実務では **`NOT IN` を使わない**と決めてしまってよい。どうしても使うなら、内側に `WHERE customer_id IS NOT NULL` を付けるか、列に NOT NULL 制約を付ける。\n\n### ついでに：`<> NULL` は書けない\n\n`WHERE col <> NULL` も同じ理由で常に UNKNOWN になる。NULL の判定は必ず `IS NULL` / `IS NOT NULL` を使う。"
+    },
+    {
+      "id": "p5-rewrite-window",
+      "title": "相関サブクエリをウィンドウ関数へ書き換える",
+      "problems": [
+        "phase5-lv2-003",
+        "phase5-lv3-005"
+      ],
+      "body_md": "「自分が属するグループの集計値と比べる」という要件は、相関サブクエリでも書けるが**同じ表を 2 回読む**ことになる。ウィンドウ関数なら 1 回で済む。\n\n### 典型パターン：グループ平均より上\n\n```sql\n-- 相関サブクエリ版: employees を 2 回読み、外側の行ごとに内側を評価\nSELECT e.name, e.dept_id, e.salary\n  FROM employees e\n WHERE e.salary > (SELECT avg(e2.salary) FROM employees e2 WHERE e2.dept_id = e.dept_id);\n\n-- ウィンドウ版: 1 回のスキャンで平均を各行に付け、外側で絞る\nWITH x AS (\n  SELECT name, dept_id, salary,\n         avg(salary) OVER (PARTITION BY dept_id) AS dept_avg\n    FROM employees\n)\nSELECT name, dept_id, salary FROM x WHERE salary > dept_avg;\n```\n\nウィンドウ関数は WHERE より後に評価されるので、**CTE で計算してから外側で絞る**のを忘れずに（フェーズ 2 参照）。\n\n### 典型パターン：グループごとの最新 1 件\n\n```sql\n-- 相関サブクエリ版\nSELECT * FROM orders o\n WHERE o.ordered_on = (SELECT max(o2.ordered_on) FROM orders o2 WHERE o2.customer_id = o.customer_id);\n\n-- ウィンドウ版\nWITH x AS (\n  SELECT *, row_number() OVER (PARTITION BY customer_id ORDER BY ordered_on DESC, id DESC) AS rn\n    FROM orders\n)\nSELECT * FROM x WHERE rn = 1;\n```\n\n相関サブクエリ版には**同じ日に 2 件注文があると 2 行返る**という落とし穴がある。`row_number()` なら必ず 1 行に絞れる。**要件が「1 件だけ」なら ROW_NUMBER 版のほうが正しい**。\n\n### 書き換えの判断基準\n\n| 相関サブクエリの中身 | 書き換え先 |\n| --- | --- |\n| グループの集計値と比較 | ウィンドウ関数 `OVER (PARTITION BY ...)` |\n| グループ内の最大/最新の行を取る | `ROW_NUMBER()` + 外側で `= 1` |\n| 存在チェックだけ | そのまま `EXISTS` でよい |\n| 1 対 1 でマスタから 1 列引くだけ | `LEFT JOIN` |\n\n**すべてを書き換えるべきではない**点にも注意。`EXISTS` による存在チェックは、結合に直すと行が増えて `DISTINCT` が必要になり、かえって遅くなることがある。"
+    },
+    {
+      "id": "p5-scalar-subquery",
+      "title": "スカラサブクエリの多重評価",
+      "problems": [
+        "phase5-lv2-004"
+      ],
+      "body_md": "SELECT 句に書いたスカラサブクエリは、**出力する行ごとに 1 回ずつ**評価される。列を 3 つ足せば 3 倍になる。\n\n```sql\n-- 顧客 1 行につき 3 回、orders を引く\nSELECT c.name,\n       (SELECT count(*)    FROM orders o WHERE o.customer_id = c.id) AS 件数,\n       (SELECT sum(amount) FROM orders o WHERE o.customer_id = c.id) AS 合計,\n       (SELECT max(ordered_on) FROM orders o WHERE o.customer_id = c.id) AS 最終\n  FROM customers c;\n```\n\n**1 回の集約にまとめて結合する**のが正解。\n\n```sql\nSELECT c.name,\n       coalesce(o.cnt, 0)   AS 件数,\n       coalesce(o.total, 0) AS 合計,\n       o.last_on            AS 最終\n  FROM customers c\n  LEFT JOIN (\n    SELECT customer_id,\n           count(*)        AS cnt,\n           sum(amount)     AS total,\n           max(ordered_on) AS last_on\n      FROM orders\n     GROUP BY customer_id\n  ) o ON c.id = o.customer_id;\n```\n\n`orders` を読むのは 1 回だけになる。**LEFT JOIN にする**のを忘れないこと。INNER にすると注文の無い顧客が消える。\n\n### 0 と NULL の違いに注意\n\nスカラサブクエリ版では、注文が無い顧客の `count(*)` は **0** を返す（内側で 0 行を集約するので）。一方 LEFT JOIN 版では結合相手が無いので **NULL** になる。同じ結果にしたければ `coalesce(o.cnt, 0)` が要る。書き換えで結果が変わる典型なので、テストで必ず確認する。\n\n### スカラサブクエリは 2 行返すとエラー\n\nスカラサブクエリは 1 行 1 列しか返してはいけない。2 行返るとエラーになる。\n\n```\nError: More than one row returned by a subquery used as an expression\n```\n\n開発時のデータでは 1 行でも、本番で重複が入ると突然落ちる。**集約関数で包む**か、`LIMIT 1` を付けるか、そもそも結合に直す。"
+    },
+    {
+      "id": "p5-division",
+      "title": "関係除算：「すべての〜」を満たす行",
+      "problems": [
+        "phase5-lv3-006"
+      ],
+      "body_md": "「**すべての** PC 製品を購入した顧客」「**すべての** 資格を持つ社員」のような要件を**関係除算**という。SQL に専用の演算子が無いので、二重否定に置き換えて書く。\n\n### 発想の転換\n\n> すべての PC 製品を買った顧客\n> ＝ **「その顧客が買っていない PC 製品」が存在しない**顧客\n\n「すべて」を「〜でないものが存在しない」に言い換えるのがコツ。これで `NOT EXISTS` を 2 重にした形になる。\n\n```sql\nSELECT c.*\n  FROM customers c\n WHERE NOT EXISTS (                          -- ② そんな製品は存在しない\n         SELECT 1\n           FROM products p\n          WHERE p.category = 'PC'\n            AND NOT EXISTS (                 -- ① この顧客が買っていない\n                  SELECT 1\n                    FROM purchases pu\n                   WHERE pu.customer_id = c.id\n                     AND pu.product_id  = p.id\n                )\n       );\n```\n\n内側から読む。①「顧客 c が製品 p を買っていない」→ ②「そういう p が PC 製品の中に 1 つも無い」→ つまり全部買っている。\n\n### 件数で数える書き方\n\n集合の大きさが分かっているなら、数えるほうが読みやすいこともある。\n\n```sql\nSELECT pu.customer_id\n  FROM purchases pu\n  JOIN products p ON pu.product_id = p.id AND p.category = 'PC'\n GROUP BY pu.customer_id\nHAVING count(DISTINCT pu.product_id) = (SELECT count(*) FROM products WHERE category = 'PC');\n```\n\n**`DISTINCT` が必須**。同じ製品を 2 回買った顧客を二重に数えると、条件を満たさないのに通ってしまう。\n\n### 使い分け\n\n| | NOT EXISTS 二重否定 | HAVING count |\n| --- | --- | --- |\n| 読みやすさ | 慣れが要る | 直感的 |\n| 「すべて」の集合が動的 | 対応しやすい | サブクエリで数える必要あり |\n| 空集合のとき | **全員が該当**（数学的に正しい） | 該当なし |\n\nPC 製品が 1 つも無いとき、二重否定版は「買っていない製品が存在しない」ので**全顧客が該当**する。数学的には正しいが、業務要件としては意図しないことが多い。試験で問われる論点でもあるので、どちらの挙動になるか説明できるようにしておく。"
+    }
+  ]
+}

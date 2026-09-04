@@ -84,6 +84,29 @@ export interface PhaseInfo {
   focus: '弱点対応' | '資格対策' | '資格対策・実務';
 }
 
+/* ------------------------------------------------------------------
+   教材
+   フェーズごとに 1 章。章は節に分かれ、節がどの問題を扱うかを持つ。
+   問題側からは節を逆引きして「この問題の前に読む教材」を出す。
+   ------------------------------------------------------------------ */
+
+export interface LessonSection {
+  id: string;
+  title: string;
+  /** 本文（Markdown / 日本語） */
+  body_md: string;
+  /** この節を読んだうえで解く問題。ここが問題との唯一の対応表 */
+  problems: string[];
+}
+
+export interface Lesson {
+  phase: PhaseId;
+  title: string;
+  /** 章の狙いを 1 行で */
+  lead: string;
+  sections: LessonSection[];
+}
+
 /** 進捗データ（設計書 §8） */
 export interface SolvedRecord {
   solved: boolean;

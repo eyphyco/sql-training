@@ -51,13 +51,25 @@ export function Card({
   children,
   className = '',
   as: Tag = 'div',
+  id,
+  testId,
 }: {
   children: ReactNode;
   className?: string;
   as?: 'div' | 'section' | 'article';
+  /** 章内リンクの飛び先にするとき用 */
+  id?: string;
+  /** テストから指し示すための目印 */
+  testId?: string;
 }) {
   return (
-    <Tag className={`glass rounded-lg border border-line bg-surface ${className}`}>{children}</Tag>
+    <Tag
+      id={id}
+      data-testid={testId}
+      className={`glass rounded-lg border border-line bg-surface ${className}`}
+    >
+      {children}
+    </Tag>
   );
 }
 

@@ -3,12 +3,15 @@ import { ProgressProvider } from './storage/ProgressProvider';
 import ThemeToggle from './components/ThemeToggle';
 import { IconDatabase } from './components/icons';
 import Home from './pages/Home';
+import Learn from './pages/Learn';
+import LearnChapter from './pages/LearnChapter';
 import ProblemList from './pages/ProblemList';
 import ProblemDetail from './pages/ProblemDetail';
 import Settings from './pages/Settings';
 
 const NAV = [
   { to: '/', label: 'ホーム', end: true },
+  { to: '/learn', label: '教材', end: false },
   { to: '/problems', label: '問題', end: false },
   { to: '/settings', label: '進捗データ', end: false },
 ];
@@ -60,6 +63,8 @@ export default function App() {
           <main className="mx-auto w-full max-w-page px-5 py-8 lg:px-8">
             <Routes>
               <Route path="/" element={<Home />} />
+              <Route path="/learn" element={<Learn />} />
+              <Route path="/learn/:phaseId" element={<LearnChapter />} />
               <Route path="/problems" element={<ProblemList />} />
               <Route path="/problems/:id" element={<ProblemDetail />} />
               <Route path="/settings" element={<Settings />} />

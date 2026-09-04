@@ -141,10 +141,57 @@ for (const p of problems) {
   checked += 1;
 }
 
+/* ------------------------------------------------------------------
+   教材の検証
+   問題との対応表は教材側の sections[].problems だけ。ここが唯一の
+   対応なので、参照先の実在と、全問がどこかの節に載っていることを見る。
+   ------------------------------------------------------------------ */
+const lessonDir = join(root, 'src/data/lessons');
+const lessons = [];
+for (const f of readdirSync(lessonDir).filter((x) => x.endsWith('.json')).sort()) {
+  const lesson = JSON.parse(readFileSync(join(lessonDir, f), 'utf8'));
+  if (lesson.phase !== Number(f.match(/\d+/)[0])) {
+    fail(f, `ファイル名と phase(${lesson.phase}) が一致しません`);
+  }
+  lessons.push(lesson);
+}
+
+const problemIds = new Set(problems.map((p) => p.id));
+const sectionIds = new Set();
+const covered = new Set();
+let sectionCount = 0;
+for (const lesson of lessons) {
+  for (const key of ['title', 'lead']) {
+    if (!lesson[key]) fail(`phase${lesson.phase}`, `${key} がありません`);
+  }
+  if (!Array.isArray(lesson.sections) || lesson.sections.length === 0) {
+    fail(`phase${lesson.phase}`, 'sections が空です');
+    continue;
+  }
+  for (const s of lesson.sections) {
+    sectionCount += 1;
+    if (!s.id || !s.title || !s.body_md) fail(s.id ?? `phase${lesson.phase}`, '節の必須項目が欠けています');
+    if (sectionIds.has(s.id)) fail(s.id, '節 ID が重複しています');
+    sectionIds.add(s.id);
+    if (!Array.isArray(s.problems) || s.problems.length === 0) {
+      fail(s.id, 'problems が空です（どの問題にも結び付いていません）');
+      continue;
+    }
+    for (const id of s.problems) {
+      if (!problemIds.has(id)) fail(s.id, `存在しない問題を参照しています: ${id}`);
+      covered.add(id);
+    }
+  }
+}
+for (const p of problems) {
+  if (!covered.has(p.id)) fail(p.id, 'どの教材の節からも参照されていません');
+}
+
 const byPhase = {};
 for (const p of problems) byPhase[p.phase] = (byPhase[p.phase] ?? 0) + 1;
 
 console.log(`問題数: ${problems.length}（SQL 実行検証: ${checked} 問）`);
+console.log(`教材: ${lessons.length} 章 / ${sectionCount} 節`);
 console.log(
   'フェーズ別:',
   Object.entries(byPhase)

@@ -5,6 +5,7 @@ import Markdown from '../components/Markdown';
 import { Card, Tag } from '../components/ui';
 import { IconCheck, IconChevronLeft, IconChevronRight } from '../components/icons';
 import SqlWorkbench from '../components/SqlWorkbench';
+import LessonPanel from '../components/LessonPanel';
 import ChoiceQuestion from '../components/ChoiceQuestion';
 import WrittenQuestion from '../components/WrittenQuestion';
 import { useProgress } from '../storage/progressContext';
@@ -69,6 +70,9 @@ export default function ProblemDetail() {
           ))}
         </div>
       </div>
+
+      {/* 教材 → 問題文 → 作業領域の順に読ませる */}
+      <LessonPanel problemId={problem.id} />
 
       <Card className="max-w-prose-wide p-5">
         <Markdown>{problem.prompt_md}</Markdown>

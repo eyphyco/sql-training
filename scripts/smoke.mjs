@@ -13,6 +13,10 @@ const problemDir = join(dirname(fileURLToPath(import.meta.url)), '../src/data/pr
 const ALL_PROBLEMS = readdirSync(problemDir)
   .filter((f) => f.endsWith('.json'))
   .flatMap((f) => JSON.parse(readFileSync(join(problemDir, f), 'utf8')));
+const lessonDir = join(dirname(fileURLToPath(import.meta.url)), '../src/data/lessons');
+const LESSONS = readdirSync(lessonDir)
+  .filter((f) => f.endsWith('.json'))
+  .map((f) => JSON.parse(readFileSync(join(lessonDir, f), 'utf8')));
 const results = [];
 const check = (name, ok, extra = '') => {
   results.push({ name, ok, extra });
@@ -71,6 +75,23 @@ try {
   check('カードの背後がぼける', /blur/.test(glass.panel), glass.panel);
   check('ヘッダの背後がぼける', /blur/.test(glass.chrome), glass.chrome);
 
+  // 1d. 教材
+  await page.goto(`${base}#/learn`, { waitUntil: 'networkidle' });
+  const chapters = await page.locator('a[href*="#/learn/"]').count();
+  check('教材の目次に全章が並ぶ', chapters === LESSONS.length, `${chapters} / ${LESSONS.length} 章`);
+
+  await page.click('a[href*="#/learn/2"]');
+  await page.waitForSelector('text=この章の内容');
+  const chapterText = await page.locator('main').innerText();
+  check(
+    '章に節の本文が表示される',
+    chapterText.includes('UNBOUNDED PRECEDING'),
+  );
+  check(
+    '節からその問題へ行ける',
+    (await page.locator('a[href*="#/problems/phase2-"]').count()) > 0,
+  );
+
   // 2. 問題一覧
   await page.goto(`${base}#/problems`, { waitUntil: 'networkidle' });
   await page.waitForSelector('a[href*="#/problems/phase1-lv1-001"]');
@@ -83,8 +104,8 @@ try {
 
   // 3. 問題を開き DuckDB が起動する
   await page.click('a[href*="#/problems/phase1-lv1-001"]');
-  // 問題文中にも students の語が出るので、右ペイン（2つ目の section）で待つ
-  const rightPane = page.locator('section').nth(1);
+  // 問題文や教材にも students の語が出るので、右ペインを testid で名指しする
+  const rightPane = page.locator('[data-testid="result-pane"]');
   await rightPane.locator('text=13 行').waitFor({ timeout: 60000 });
   check('DuckDB が初期化されスキーマが表示される', true);
   check(
@@ -92,11 +113,29 @@ try {
     (await rightPane.innerText()).includes('students'),
   );
 
+  // 3b. 問題の前に教材が出る / たたんだ状態が端末に残る
+  const lessonPanel = page.locator('[data-testid="lesson"]');
+  check('問題ページに教材が表示される', (await lessonPanel.count()) === 1);
+  // たたむと見出しには節名が残るので、本文にしか出ない語で判定する
+  const lessonBody = '論理的な評価順序';
+  check('教材の本文が開いている（既定）', (await lessonPanel.innerText()).includes(lessonBody));
+  await page.click('[data-testid="lesson-toggle"]');
+  await page.waitForTimeout(200);
+  check('教材をたためる', !(await lessonPanel.innerText()).includes(lessonBody));
+  await page.reload({ waitUntil: 'networkidle' });
+  await rightPane.locator('text=13 行').waitFor({ timeout: 60000 });
+  check(
+    'リロード後もたたんだままになる',
+    !(await page.locator('[data-testid="lesson"]').innerText()).includes(lessonBody),
+  );
+  await page.click('[data-testid="lesson-toggle"]');
+  await page.waitForTimeout(200);
+
   // 4. クエリ実行
   await typeSql('SELECT class, AVG(score) FROM students GROUP BY class');
   await page.click('[data-testid="run"]');
-  await page.waitForSelector('table tbody tr', { timeout: 30000 });
-  const cells = await page.locator('table tbody tr').count();
+  await rightPane.locator('table tbody tr').first().waitFor({ timeout: 30000 });
+  const cells = await rightPane.locator('table tbody tr').count();
   check('実行結果が表示される（4クラス）', cells === 4, `${cells} 行`);
 
   // 5. 不正解の採点
@@ -169,7 +208,7 @@ try {
   await typeSql('SELECT 7 AS lucky');
   await page.keyboard.press('F5');
   await page.waitForTimeout(900);
-  const f5cell = await page.locator('table tbody tr td').nth(1).innerText();
+  const f5cell = await rightPane.locator('table tbody tr td').nth(1).innerText();
   check('F5 でクエリを実行できる', f5cell === '7', f5cell);
   check(
     'F5 のブラウザ既定動作（リロード）を抑止する',
@@ -184,7 +223,7 @@ try {
   check('Ctrl+Enter で空行が挿入されない', (await page.locator('.cm-line').count()) === linesBefore);
   check(
     'Ctrl+Enter でクエリを実行できる',
-    (await page.locator('table tbody tr td').nth(1).innerText()) === '8',
+    (await rightPane.locator('table tbody tr td').nth(1).innerText()) === '8',
   );
 
   // 8e. リロードされても書きかけの SQL と直近の結果が戻ること
@@ -198,7 +237,7 @@ try {
   );
   check(
     'リロード後も直近の実行結果が復元される',
-    (await page.locator('table tbody tr td').nth(1).innerText()) === '8',
+    (await rightPane.locator('table tbody tr td').nth(1).innerText()) === '8',
   );
 
   // 8f. F5 を抑止できないブラウザ向けの案内

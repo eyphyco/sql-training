@@ -1,0 +1,50 @@
+{
+  "phase": 1,
+  "title": "集計の基礎",
+  "lead": "SQL がどの順序で評価されるかを押さえると、WHERE と HAVING の使い分けも、集約と NULL の関係も自然に決まる。",
+  "sections": [
+    {
+      "id": "p1-eval-order",
+      "title": "SQL が評価される順序",
+      "problems": [
+        "phase1-lv1-001",
+        "phase1-lv1-003",
+        "phase1-lv3-007"
+      ],
+      "body_md": "SQL は**書く順序と評価される順序が違う**。ここを押さえると、「なぜ WHERE に COUNT が書けないのか」「なぜ SELECT で付けた別名が WHERE で使えないのか」がすべて説明できる。\n\n論理的な評価順序は次のとおり。\n\n```\nFROM  →  WHERE  →  GROUP BY  →  HAVING  →  SELECT  →  DISTINCT  →  ORDER BY  →  LIMIT\n```\n\nこれは「オプティマイザが実際にこの順で動く」という意味ではなく、**結果がこの順序で計算されたのと同じになる**という決まり（意味論）だ。実行計画はこれと違う順序で処理してよい。\n\n### ここから導けること\n\n| 疑問 | 答え |\n| --- | --- |\n| WHERE に `COUNT(*)` を書けないのはなぜ？ | WHERE は GROUP BY より前。まだグループが存在しない |\n| HAVING には書けるのはなぜ？ | HAVING は GROUP BY の後。グループが確定している |\n| SELECT の別名が WHERE で使えないのはなぜ？ | WHERE は SELECT より前。別名はまだ存在しない |\n| ORDER BY で別名が使えるのはなぜ？ | ORDER BY は SELECT の後だから |\n\nなお GROUP BY と ORDER BY で SELECT の別名が使えるかは処理系による。DuckDB と PostgreSQL は使えるが、標準ではないので**移植性を気にするなら式をそのまま書く**ほうが安全。\n\n### WHERE と HAVING の使い分け\n\n判断基準はひとつだけ。**「行の性質」で絞るなら WHERE、「グループの性質」で絞るなら HAVING**。\n\n```sql\nSELECT store_id, sum(amount) AS total\n  FROM sales\n WHERE sold_on >= DATE '2024-01-01'   -- 行の性質（この行の日付）\n GROUP BY store_id\nHAVING sum(amount) >= 100000;         -- グループの性質（合計）\n```\n\n`sold_on` の条件は HAVING に書いても結果が同じになる場合があるが、**WHERE に書くべき**だ。WHERE なら集計する前に行が減るので、集計対象そのものが小さくなる。HAVING に書くと全行を集計してから捨てることになる。\n\n逆に `sum(amount) >= 100000` は WHERE には書けない。書こうとするとエラーになる。"
+    },
+    {
+      "id": "p1-aggregate-null",
+      "title": "集約関数と NULL",
+      "problems": [
+        "phase1-lv2-004"
+      ],
+      "body_md": "集約関数の挙動は **NULL をどう扱うか**でほぼ決まる。試験でも実務でも、ここの取り違えが「件数が合わない」の原因になりやすい。\n\n### 原則：集約関数は NULL を無視する\n\n`COUNT(*)` を除くすべての集約関数は、**NULL の行を計算に入れない**。\n\n```sql\n-- score が NULL の行が 2 行ある students テーブルで\nSELECT count(*)          AS 行数,          -- 13\n       count(score)      AS 得点のある行数, -- 11\n       count(DISTINCT class) AS クラス数,   -- 重複を除いた個数\n       sum(score)        AS 合計,\n       avg(score)        AS 平均\n  FROM students;\n```\n\n| 式 | 数えるもの |\n| --- | --- |\n| `count(*)` | **行数**。NULL も数える |\n| `count(列)` | その列が **NULL でない行**の数 |\n| `count(DISTINCT 列)` | NULL を除いた**異なる値**の個数 |\n\n### いちばん効く帰結：`avg` の分母\n\n```\navg(score)  =  sum(score) / count(score)     ← count(*) ではない\n```\n\n「NULL は 0 点として平均したい」なら、**自分で分母を決める**必要がある。\n\n```sql\nSELECT avg(score)                      AS 未受験を除いた平均,\n       sum(score) / count(*)           AS 未受験を0点とした平均,\n       avg(coalesce(score, 0))         AS 同上（別の書き方）\n  FROM students;\n```\n\n`avg(coalesce(score,0))` と `coalesce(avg(score),0)` は**まったく違う**。前者は NULL を 0 に置き換えてから平均（分母は全行）、後者は平均を計算してから、結果が NULL のときだけ 0 にする。\n\n### 対象が 0 行のとき\n\nグループに 1 行もない、あるいは全部 NULL のとき、`sum` は **0 ではなく NULL** を返す。`count` だけが 0 を返す。金額の合計をそのまま表示すると空欄になるので、`coalesce(sum(amount), 0)` で受けるのが定石。"
+    },
+    {
+      "id": "p1-group-granularity",
+      "title": "GROUP BY が決める粒度",
+      "problems": [
+        "phase1-lv1-002",
+        "phase1-lv2-005"
+      ],
+      "body_md": "GROUP BY は「集計する」命令ではなく、**結果の 1 行が何を表すかを決める**命令だと考えるとよい。これを結果の**粒度**と呼ぶ。\n\n```sql\nGROUP BY store_id             -- 1 行 = 1 店舗\nGROUP BY store_id, month      -- 1 行 = 1 店舗の 1 か月\n```\n\n### SELECT に書ける列の制約\n\n粒度が決まると、「グループの中で 1 つに定まる値」しか SELECT に書けなくなる。\n\n- グループ化キーそのもの → 書ける（定義上 1 つに定まる）\n- 集約関数で包んだ式 → 書ける（複数の値を 1 つに畳むから）\n- **それ以外 → 書けない**\n\n```sql\n-- エラー: name はグループ内で 1 つに定まらない\nSELECT class, name, avg(score) FROM students GROUP BY class;\n```\n\nどうしても出したいときは意図を明示する。「どれでもいい」なら `any_value()`、「最大のものが欲しい」なら `max()` を使う。\n\n```sql\nSELECT class, max(name) AS 代表者名, avg(score) FROM students GROUP BY class;\n```\n\nなお MySQL は既定の設定次第でこれをエラーにせず、**勝手にどれか 1 行を返す**ことがある。値が不定になるので、移植する際の事故要因として知っておきたい。\n\n### 複数キーと、キーを作ってからグループ化する\n\n「月別」のように**元の列にない粒度**でまとめたいときは、式でキーを作ってからグループ化する。\n\n```sql\nSELECT store_id,\n       date_trunc('month', sold_on) AS month,   -- 日付を月初に丸めてキーにする\n       sum(amount) AS total\n  FROM sales\n GROUP BY store_id, date_trunc('month', sold_on)\n ORDER BY store_id, month;\n```\n\n`strftime(sold_on, '%Y-%m')` のように文字列にしてもよいが、**文字列にすると日付として並べ替えられなくなる**点に注意（`'2024-10'` と `'2024-9'` の比較など）。ゼロ埋めされた `%Y-%m` なら辞書順と時系列順が一致するので実用上は問題ない。"
+    },
+    {
+      "id": "p1-conditional-agg",
+      "title": "条件付き集計と比率",
+      "problems": [
+        "phase1-lv2-006"
+      ],
+      "body_md": "「全体の件数」と「条件を満たす件数」を**1 回のスキャンで同時に**出したいことは多い。テーブルを 2 回読んで結合するのではなく、集約関数の中に条件を持ち込む。\n\n### CASE 式を集約関数に入れる\n\n```sql\nSELECT dept_id,\n       count(*)                                        AS 人数,\n       sum(CASE WHEN salary >= 600000 THEN 1 ELSE 0 END) AS 高給与者数,\n       avg(CASE WHEN salary >= 600000 THEN 1.0 ELSE 0.0 END) AS 比率\n  FROM employees\n GROUP BY dept_id;\n```\n\n`sum(CASE ... THEN 1 ELSE 0 END)` が「条件を満たす行数」になる。`ELSE 0` を省いて `ELSE NULL`（既定）にすると、`count()` でも同じことができる。\n\n```sql\ncount(CASE WHEN salary >= 600000 THEN 1 END)   -- 条件を満たさない行は NULL → count が無視する\n```\n\n### FILTER 句（読みやすい書き方）\n\nDuckDB と PostgreSQL は標準 SQL の `FILTER` に対応している。CASE より意図が明快。\n\n```sql\nSELECT dept_id,\n       count(*)                                   AS 人数,\n       count(*) FILTER (WHERE salary >= 600000)   AS 高給与者数\n  FROM employees\n GROUP BY dept_id;\n```\n\n### 比率を出すときの罠：整数除算\n\n多くの処理系で `整数 / 整数` は**整数除算**になり、小数点以下が切り捨てられる。`3 / 4` が `0` になる、という事故だ。\n\n```sql\n-- 危険（処理系によっては常に 0）\ncount(*) FILTER (WHERE salary >= 600000) / count(*)\n\n-- 安全: 明示的に実数にする\n1.0 * count(*) FILTER (WHERE salary >= 600000) / count(*)\nCAST(count(*) FILTER (WHERE salary >= 600000) AS DOUBLE) / count(*)\n```\n\nDuckDB の `/` は実数除算なのでそのままでも小数になるが、**Oracle・SQL Server・PostgreSQL の整数同士では切り捨てられる**。試験でも問われるところなので、比率を書くときは反射的に `1.0 *` を付ける癖をつけておくとよい。"
+    },
+    {
+      "id": "p1-rollup",
+      "title": "小計と総合計（ROLLUP）",
+      "problems": [
+        "phase1-lv3-008"
+      ],
+      "body_md": "「明細・小計・総合計を 1 つの結果に出したい」は帳票で頻出する。UNION ALL で 3 本のクエリをつなぐこともできるが、**同じテーブルを 3 回読む**ことになる。`ROLLUP` を使えば 1 回で済む。\n\n```sql\nSELECT store_id, product_id, sum(amount) AS total\n  FROM sales\n GROUP BY ROLLUP (store_id, product_id);\n```\n\nこれは次の 3 つの粒度の集計をまとめて返す。\n\n1. `(store_id, product_id)` … 明細\n2. `(store_id)` … 店舗ごとの小計\n3. `()` … 総合計\n\n上位の階層になるほど、集計しない列は **NULL** で埋まる。\n\n| store_id | product_id | total | 意味 |\n| --- | --- | --- | --- |\n| 1 | 100 | 5000 | 明細 |\n| 1 | 200 | 3000 | 明細 |\n| 1 | NULL | 8000 | 店舗 1 の小計 |\n| NULL | NULL | 20000 | 総合計 |\n\n### 小計行の NULL と、元データの NULL を区別する\n\nこの NULL は「小計行だから空」という意味の NULL であって、元データの NULL とは違う。両方が混ざりうる場合、見分けるには `GROUPING()` を使う。\n\n```sql\nSELECT CASE WHEN grouping(store_id) = 1 THEN '総合計' ELSE store_id::VARCHAR END AS 店舗,\n       sum(amount) AS total\n  FROM sales\n GROUP BY ROLLUP (store_id);\n```\n\n`grouping(列)` は、**その列が小計のために潰された行なら 1**、そうでなければ 0 を返す。\n\n### ROLLUP / CUBE / GROUPING SETS\n\n| 構文 | 出す粒度 |\n| --- | --- |\n| `ROLLUP (a, b)` | `(a,b)`, `(a)`, `()` … **階層的**な小計 |\n| `CUBE (a, b)` | `(a,b)`, `(a)`, `(b)`, `()` … **全組み合わせ** |\n| `GROUPING SETS ((a,b),(b))` | 指定したものだけ |\n\n「店舗 > 商品」のような階層があるなら ROLLUP、軸に上下関係がなくクロス集計したいなら CUBE を選ぶ。"
+    }
+  ]
+}

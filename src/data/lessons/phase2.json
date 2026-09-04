@@ -1,0 +1,52 @@
+{
+  "phase": 2,
+  "title": "ウィンドウ関数",
+  "lead": "GROUP BY は行を潰す。ウィンドウ関数は行を残したまま集計する。この違いと「フレーム」が分かれば怖くない。",
+  "sections": [
+    {
+      "id": "p2-window-vs-group",
+      "title": "集約とウィンドウの違い",
+      "problems": [
+        "phase2-lv1-001",
+        "phase2-lv3-007"
+      ],
+      "body_md": "GROUP BY による集約とウィンドウ関数は、計算そのものは同じ `sum` や `avg` を使う。違うのは**行を潰すかどうか**だけだ。\n\n```sql\n-- 集約: クラスごとに 1 行になる（元の 13 行 → 4 行）\nSELECT class, avg(score) FROM students GROUP BY class;\n\n-- ウィンドウ: 13 行のまま、各行に「自分のクラスの平均」が付く\nSELECT name, class, score,\n       avg(score) OVER (PARTITION BY class) AS class_avg\n  FROM students;\n```\n\n`OVER (...)` が付いた瞬間、その関数は**行を減らさない**。「明細を見せながら、その行が属するグループの集計も見せたい」ときはウィンドウ一択になる。\n\n### 構成比・偏差はウィンドウが素直\n\n```sql\nSELECT product_id, amount,\n       amount / sum(amount) OVER () AS 全体構成比,\n       amount - avg(amount) OVER (PARTITION BY category_id) AS カテゴリ平均との差\n  FROM sales;\n```\n\n`OVER ()` は「パーティションを切らない」＝**全行がひとつの窓**。合計を出すためにサブクエリでテーブルをもう一度読む必要がない。\n\n### OVER の中身\n\n```\n関数() OVER ( PARTITION BY 窓を分ける列  ORDER BY 窓の中の順序  フレーム指定 )\n```\n\n- **PARTITION BY** … どの範囲で計算するか。GROUP BY のキーに相当。省略すると全行\n- **ORDER BY** … 窓の中での並び。順位づけと累積計算に必須\n- **フレーム** … 窓の中の「どこからどこまで」。次節で扱う"
+    },
+    {
+      "id": "p2-ranking",
+      "title": "順位づけ：RANK / DENSE_RANK / ROW_NUMBER",
+      "problems": [
+        "phase2-lv1-002",
+        "phase2-lv2-003"
+      ],
+      "body_md": "3 つの順位関数の違いは、**同点をどう扱うか**の 1 点に尽きる。得点 90, 90, 80, 70 の 4 人で比べる。\n\n| score | ROW_NUMBER | RANK | DENSE_RANK |\n| --- | --- | --- | --- |\n| 90 | 1 | 1 | 1 |\n| 90 | 2 | **1** | **1** |\n| 80 | 3 | **3** | **2** |\n| 70 | 4 | 4 | 3 |\n\n- **ROW_NUMBER** … 同点でも必ず異なる連番。順位が飛ばず、重複もしない\n- **RANK** … 同点は同順位。次は**人数分飛ぶ**（1,1,3）。いわゆる競技順位\n- **DENSE_RANK** … 同点は同順位。次は**飛ばない**（1,1,2）\n\n```sql\nSELECT class, name, score,\n       row_number() OVER (PARTITION BY class ORDER BY score DESC) AS rn,\n       rank()       OVER (PARTITION BY class ORDER BY score DESC) AS rnk,\n       dense_rank() OVER (PARTITION BY class ORDER BY score DESC) AS drnk\n  FROM students;\n```\n\n### 「各グループの上位 N 件」をどれで取るか\n\nここが実務での分かれ目になる。\n\n- **ちょうど N 行だけ欲しい** → `ROW_NUMBER() <= N`。同点でも N 行に切る\n- **同点は全員入れたい** → `RANK() <= N`。3 位タイが 2 人いれば N を超える行数になる\n\n「各クラスの 1 位を 1 人だけ」なら ROW_NUMBER。「上位 2 名（同点なら全員）」なら RANK。**どちらが正しいかは要件次第**なので、問題文の「1人だけ」「上位2名」という言い回しを読み落とさないこと。\n\nなお ROW_NUMBER で同点があると、どの行が選ばれるかは ORDER BY だけでは決まらない（実行のたびに変わりうる）。結果を安定させたいなら、`ORDER BY score DESC, id` のように**タイブレーク用の一意な列**を足す。"
+    },
+    {
+      "id": "p2-frame",
+      "title": "フレーム：累積和と移動平均、そして LAST_VALUE の罠",
+      "problems": [
+        "phase2-lv2-004",
+        "phase2-lv3-006",
+        "phase2-lv3-008"
+      ],
+      "body_md": "フレームは「窓の中の、さらにどこからどこまでを計算対象にするか」を決める。ここがウィンドウ関数でいちばん誤解されやすい。\n\n### 既定のフレームを覚える\n\n**`OVER` に `ORDER BY` を書くと、フレームが暗黙に指定される。**\n\n```sql\nOVER (PARTITION BY x ORDER BY y)\n-- ↓ 実際にはこう解釈される\nOVER (PARTITION BY x ORDER BY y RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)\n```\n\nつまり「窓の先頭から**現在行まで**」。だから ORDER BY を付けるだけで `sum()` が累積和になる。\n\n```sql\nSELECT store_id, sold_on, amount,\n       sum(amount) OVER (PARTITION BY store_id ORDER BY sold_on) AS 累計\n  FROM sales;\n```\n\n逆に ORDER BY を書かなければフレームは窓全体になり、`sum()` はパーティションの総計になる。**ORDER BY の有無で意味が変わる**のがポイント。\n\n### LAST_VALUE が最後の値を返さない理由\n\n```sql\n-- 期待に反して「現在行の値」が返る\nlast_value(score) OVER (PARTITION BY class ORDER BY score)\n```\n\n既定フレームが「現在行まで」なので、その範囲の最後の行＝現在行になってしまう。正しくはフレームを窓全体に広げる。\n\n```sql\nlast_value(score) OVER (\n  PARTITION BY class ORDER BY score\n  ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING\n)\n```\n\n`first_value` は既定フレームでも窓の先頭を指すので問題が起きない。**バグが `last_value` にだけ出る**ので気づきにくい。回避策として、降順にして `first_value` を使う手もある。\n\n### ROWS と RANGE の違い\n\n| 指定 | 数え方 |\n| --- | --- |\n| `ROWS` | **物理的な行数**で数える |\n| `RANGE` | **値が同じ行をひとかたまり**として扱う |\n\n移動平均のように「直近 3 件」を数えたいときは `ROWS` を使う。\n\n```sql\navg(amount) OVER (\n  PARTITION BY store_id ORDER BY month\n  ROWS BETWEEN 2 PRECEDING AND CURRENT ROW      -- 当月を含む直近3か月\n)\n```\n\nここで `RANGE BETWEEN 2 PRECEDING ...` と書くと「値が 2 以内の行」という意味になり、同じ月が複数行あるとまとめて 1 つに扱われる。**件数で区切りたいなら必ず ROWS**。\n\nなお期間の先頭では対象が 3 件に満たない。それでも平均は計算されるので、「3 件揃った行だけ出したい」なら `count(*) OVER (同じフレーム) = 3` で絞る。"
+    },
+    {
+      "id": "p2-lag-lead",
+      "title": "前後の行を参照する（LAG / LEAD）",
+      "problems": [
+        "phase2-lv2-005"
+      ],
+      "body_md": "`LAG` / `LEAD` は、**同じ窓の中で n 行前 / n 行後の値**を持ってくる。前月比・前日差・次回来店までの日数といった「隣の行との比較」がこれ一発で書ける。\n\n```sql\nSELECT month, amount,\n       lag(amount)  OVER (ORDER BY month) AS 前月,\n       lead(amount) OVER (ORDER BY month) AS 翌月\n  FROM monthly_sales;\n```\n\n自己結合（`a.month = b.month + 1`）でも同じことはできるが、テーブルを 2 回読むうえ、月が飛んでいると壊れる。**ウィンドウ関数なら「並べたときの隣」**なので、欠測月があっても隣同士でつながる。逆に言えば「暦の上での前月」が欲しいなら、欠測を埋めた月次テーブルを作ってから使う必要がある。\n\n### 先頭行は必ず NULL になる\n\n1 行目には「前の行」が存在しないので `lag` は NULL を返す。前月比を計算すると全体が NULL に伝播する。\n\n```sql\nSELECT month, amount,\n       amount - lag(amount) OVER (ORDER BY month) AS 増減,\n       -- NULL のまま出す（データが無いことを表す）\n       round(100.0 * amount / lag(amount) OVER (ORDER BY month), 1) AS 前月比\n  FROM monthly_sales;\n```\n\n第 3 引数で既定値を指定できるが、**安易に 0 を入れない**こと。\n\n```sql\nlag(amount, 1, 0) OVER (ORDER BY month)   -- 前月が無いとき 0\n```\n\n0 を入れると `amount / 0` でゼロ除算になるか、増減が「amount そのもの」になって急増したように見える。「前月のデータが無い」ことは NULL のまま表現し、表示側で「—」にするのが素直だ。\n\n### ゼロ除算を避ける\n\n前月が 0 のときに備えて `nullif` を挟むと安全。\n\n```sql\n100.0 * amount / nullif(lag(amount) OVER (ORDER BY month), 0)\n```\n\n`nullif(x, 0)` は x が 0 なら NULL を返す。NULL で割ると結果は NULL になり、エラーにならない。"
+    },
+    {
+      "id": "p2-window-eval-order",
+      "title": "ウィンドウ関数はいつ評価されるか",
+      "problems": [
+        "phase2-lv1-001",
+        "phase2-lv2-003"
+      ],
+      "body_md": "フェーズ 1 の評価順序に、ウィンドウ関数を書き足すとこうなる。\n\n```\nFROM → WHERE → GROUP BY → HAVING → 【ウィンドウ関数】 → SELECT → DISTINCT → ORDER BY → LIMIT\n```\n\nウィンドウ関数は **WHERE / GROUP BY / HAVING より後**に評価される。ここから重要な制約が出る。\n\n### WHERE でウィンドウ関数の結果を絞れない\n\n```sql\n-- エラー: この時点で rn はまだ計算されていない\nSELECT name, class,\n       row_number() OVER (PARTITION BY class ORDER BY score DESC) AS rn\n  FROM students\n WHERE rn = 1;\n```\n\n**いったんサブクエリか CTE で計算し、外側で絞る**のが定石。\n\n```sql\nWITH ranked AS (\n  SELECT name, class, score,\n         row_number() OVER (PARTITION BY class ORDER BY score DESC) AS rn\n    FROM students\n)\nSELECT name, class, score\n  FROM ranked\n WHERE rn = 1;\n```\n\n`QUALIFY` に対応した処理系（DuckDB, Snowflake, Teradata など）なら 1 段で書ける。便利だが**標準 SQL ではない**ので、試験の解答としては CTE 版を書けるようにしておくこと。\n\n```sql\nSELECT name, class, score\n  FROM students\nQUALIFY row_number() OVER (PARTITION BY class ORDER BY score DESC) = 1;\n```\n\n### WHERE はウィンドウ関数より先に効く\n\n順序を逆に使えば、**窓に入れる行をあらかじめ絞る**ことができる。\n\n```sql\nSELECT name, class,\n       rank() OVER (PARTITION BY class ORDER BY score DESC) AS rnk\n  FROM students\n WHERE score IS NOT NULL;     -- 未受験者は窓に入れない\n```\n\n「順位づけの母集団に何を含めるか」は WHERE で決まる。ここを意識しないと、除外したはずの行が順位に影響してしまう。"
+    }
+  ]
+}

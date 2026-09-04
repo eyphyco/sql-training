@@ -23,6 +23,7 @@ function svg(path: React.ReactNode, { className = '', size = 16 }: IconProps) {
 export const IconCheck = (p: IconProps) => svg(<path d="m4.5 12.5 5 5 10-11" />, p);
 export const IconX = (p: IconProps) => svg(<path d="M6 6l12 12M18 6 6 18" />, p);
 export const IconDash = (p: IconProps) => svg(<path d="M6 12h12" />, p);
+export const IconChevronDown = (p: IconProps) => svg(<path d="m5 9 7 7 7-7" />, p);
 export const IconSun = (p: IconProps) =>
   svg(
     <>

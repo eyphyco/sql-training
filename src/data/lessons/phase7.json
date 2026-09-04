@@ -1,0 +1,34 @@
+{
+  "phase": 7,
+  "title": "応用・総合問題",
+  "lead": "ここまでの道具を組み合わせる。長いクエリは一気に書かず、CTE で段階に分けて積み上げる。",
+  "sections": [
+    {
+      "id": "p7-build-in-stages",
+      "title": "長いクエリを CTE で段階に分ける",
+      "problems": [
+        "phase7-lv2-001",
+        "phase7-lv2-002",
+        "phase7-lv3-003"
+      ],
+      "body_md": "総合問題は「難しい 1 つの技」ではなく「基本の積み重ね」で解く。いきなり完成形を書こうとせず、**CTE で段階を作って 1 段ずつ確かめる**。\n\n### 型：集める → 集計する → 加工する\n\n```sql\nWITH base AS (          -- ① 必要な行と列を集める（結合・絞り込み）\n  SELECT o.ordered_on, oi.product_id, oi.quantity * oi.unit_price AS amount\n    FROM orders o\n    JOIN order_items oi ON o.id = oi.order_id\n   WHERE o.status = 'done'\n),\nmonthly AS (            -- ② 粒度を決めて集計する\n  SELECT date_trunc('month', ordered_on) AS month,\n         sum(amount) AS total\n    FROM base\n   GROUP BY 1\n)\nSELECT month, total,    -- ③ ウィンドウ関数などで加工する\n       lag(total) OVER (ORDER BY month) AS 前月,\n       total - lag(total) OVER (ORDER BY month) AS 増減\n  FROM monthly\n ORDER BY month;\n```\n\nこの形にすると、**各段を単独で `SELECT * FROM base` して確認できる**。どこで行数がおかしくなったかがすぐ分かる。\n\n### 段ごとに行数を確認する\n\n長いクエリのバグは、ほぼ**粒度**の取り違えで起きる。段を進めるたびに「いま 1 行は何を表しているか」を口に出して確認する。\n\n| 段 | 1 行の意味 | 行数の目安 |\n| --- | --- | --- |\n| base | 注文明細 1 件 | 明細の件数 |\n| monthly | 1 か月 | 月数 |\n| 最終 | 1 か月 | 月数 |\n\n途中で「明細の件数より増えている」なら、どこかで結合が増やしている（フェーズ 3 のファンアウト）。\n\n### 前年同月比のような自己参照\n\n`lag()` は「並べたときの隣」なので、**欠測月があるとずれる**。暦の上での前年同月と比べたいなら、キーを作って自己結合するほうが正確。\n\n```sql\nSELECT t.month, t.total, p.total AS 前年同月\n  FROM monthly t\n  LEFT JOIN monthly p ON p.month = t.month - INTERVAL 1 YEAR;\n```\n\n**LEFT JOIN にする**こと。前年のデータが無い最初の 1 年が消えてしまう。"
+    },
+    {
+      "id": "p7-combine-window-agg",
+      "title": "集約とウィンドウを重ねる",
+      "problems": [
+        "phase7-lv3-004",
+        "phase7-lv3-005"
+      ],
+      "body_md": "「カテゴリ別に集計して、その中で順位を付け、全体に対する構成比も出す」——総合問題で頻出する形。**集約とウィンドウは同じ SELECT に混ぜられる**が、評価順序を意識する必要がある。\n\n### 同じ段で書けるケース\n\nウィンドウ関数は GROUP BY の**後**に評価される。だから**集約結果に対してウィンドウをかけるのは 1 段で書ける**。\n\n```sql\nSELECT category_id,\n       sum(amount)                                   AS 売上,\n       rank() OVER (ORDER BY sum(amount) DESC)       AS 順位,\n       sum(amount) / sum(sum(amount)) OVER ()        AS 構成比\n  FROM sales\n GROUP BY category_id;\n```\n\n`sum(sum(amount)) OVER ()` は入れ子に見えて正しい。内側の `sum(amount)` がグループの合計、それを**ウィンドウで全グループぶん合計**している。慣れないうちは CTE に分けたほうが読みやすい。\n\n```sql\nWITH agg AS (SELECT category_id, sum(amount) AS total FROM sales GROUP BY category_id)\nSELECT category_id, total,\n       rank() OVER (ORDER BY total DESC)   AS 順位,\n       total / sum(total) OVER ()          AS 構成比\n  FROM agg;\n```\n\n### 分けなければならないケース\n\n**ウィンドウ関数の結果で絞る**なら、必ず段を分ける（フェーズ 2 参照）。\n\n```sql\nWITH agg AS (\n  SELECT category_id, product_id, sum(amount) AS total\n    FROM sales GROUP BY category_id, product_id\n),\nranked AS (\n  SELECT *, row_number() OVER (PARTITION BY category_id ORDER BY total DESC) AS rn,\n            sum(total)   OVER (PARTITION BY category_id) AS cat_total\n    FROM agg\n)\nSELECT category_id, product_id, total, total / cat_total AS カテゴリ内シェア\n  FROM ranked\n WHERE rn <= 2;                     -- トップ2に絞るのはここ\n```\n\n**シェアの分母をどこで計算するか**に注意。`rn <= 2` で絞った後に `sum() OVER ()` を取ると、分母がトップ2の合計になってしまう。「カテゴリ全体に対するシェア」が欲しいなら、**絞る前**に計算しておく必要がある。上の例で `cat_total` を `ranked` の段で計算しているのはそのためだ。\n\n### 日付の差を取る\n\n「初回購入から 2 回目までの日数」のような設問は、`row_number()` で回数を振ってから `lag()` で差を取る、あるいは条件付き集計で 1 行に畳む。\n\n```sql\nWITH x AS (\n  SELECT customer_id, ordered_on,\n         row_number() OVER (PARTITION BY customer_id ORDER BY ordered_on) AS nth\n    FROM orders\n)\nSELECT customer_id,\n       max(ordered_on) FILTER (WHERE nth = 2) - max(ordered_on) FILTER (WHERE nth = 1) AS 日数\n  FROM x\n WHERE nth <= 2\n GROUP BY customer_id\nHAVING count(*) = 2;               -- 2回目がある顧客だけ\n```\n\n`HAVING count(*) = 2` を忘れると、1 回しか買っていない顧客が NULL のまま残る。**「2 回目が無い人をどう扱うか」は要件で必ず確認する。**"
+    },
+    {
+      "id": "p7-exam-approach",
+      "title": "記述式・設計問題の答え方",
+      "problems": [
+        "phase7-lv3-006"
+      ],
+      "body_md": "データベーススペシャリスト午後問題のような設計・記述の設問は、**知識より「読み取って、根拠を添えて書く」力**が問われる。型を持っておくと安定する。\n\n### 問題文から拾うもの\n\n| 拾うもの | どこに効くか |\n| --- | --- |\n| 「〜は複数持てる」「1 つだけ」 | 多重度 → 表の分割、主キー |\n| 「〜のときは登録しない」 | 任意（0 を許す）→ NULL 可否、外部結合 |\n| 「変更されても過去の記録は変わらない」 | 履歴の持ち方 → 時点の値を明細に持つ |\n| 「同時に複数の利用者が」 | トランザクション・排他制御 |\n| 「〜件程度」「毎秒〜回」 | 索引設計・非正規化の判断材料 |\n\n**業務ルールの言い回しがそのまま設計制約になる。**読み飛ばさず、拾って明示的に設計へ反映する。\n\n### 排他制御の定番論点\n\n座席予約・在庫引当のような設問では、**同時実行の話が必ず出る**。\n\n- **なぜ問題になるか**：確認（SELECT）と確保（UPDATE）の間に他の利用者が割り込むと、二重予約が起きる\n- **対策 1：悲観ロック**。`SELECT ... FOR UPDATE` で対象行をロックしてから更新する。確実だが待ちが発生する\n- **対策 2：楽観ロック**。バージョン列を持ち、更新時に `WHERE version = 読んだ値` を付ける。更新件数が 0 なら競合として再試行する\n- **対策 3：制約で守る**。座席と公演の組に一意制約を張れば、アプリが間違えても DB が二重登録を拒否する\n\n**最後の「制約で守る」を必ず書く**とよい。アプリのロジックは間違えるが、DB の制約は間違えない。\n\n### 分離レベルと起きうる異常\n\n| 分離レベル | ダーティリード | ノンリピータブルリード | ファントムリード |\n| --- | --- | --- | --- |\n| READ UNCOMMITTED | 起きる | 起きる | 起きる |\n| READ COMMITTED | 防ぐ | 起きる | 起きる |\n| REPEATABLE READ | 防ぐ | 防ぐ | 起きる |\n| SERIALIZABLE | 防ぐ | 防ぐ | 防ぐ |\n\n強くするほど安全だが待ちが増える。「どの異常が業務上許容できないか」から選ぶ、という答え方をする。\n\n### 書き方の型\n\n答案は**結論 → 根拠**の順で、問題文の言葉を使って書く。\n\n> 「座席と公演の組に一意制約を設ける。予約処理は確認と確保の間に他トランザクションが割り込みうるため、アプリケーションの検査だけでは二重予約を防げないためである。」\n\n字数が限られるので、**一般論ではなく、その設問の固有名詞を入れる**。「適切に排他制御する」ではなく「座席と公演の組に一意制約を設ける」と書く。"
+    }
+  ]
+}
