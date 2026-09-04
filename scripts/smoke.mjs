@@ -272,6 +272,16 @@ try {
   await page.waitForSelector('text=SEQ_SCAN', { timeout: 30000 });
   check('EXPLAIN の実行計画が表示される', true);
 
+  // 空のまま EXPLAIN を押しても「EXPLAIN undefined」を投げない
+  await typeSql('');
+  await page.click('[data-testid="explain"]');
+  await page.waitForTimeout(600);
+  const emptyExplain = await page.locator('[data-testid="result-pane"]').innerText();
+  check(
+    '空のまま EXPLAIN しても実行と同じ案内が出る',
+    emptyExplain.includes('SQL が入力されていません') && !emptyExplain.includes('undefined'),
+  );
+
   // 8b. Tab の挙動: 候補が出ているときは確定、出ていなければインデント
   await typeSql('');
   await page.click('.cm-content');

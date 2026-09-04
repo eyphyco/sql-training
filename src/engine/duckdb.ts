@@ -220,6 +220,8 @@ export async function explainQuery(
   sql: string,
 ): Promise<string> {
   const statements = splitStatements(sql);
+  // 空のまま押されると EXPLAIN undefined を投げてしまうので、実行と同じ文言で止める
+  if (statements.length === 0) throw new Error('SQL が入力されていません。');
   const target = statements[statements.length - 1];
   const table = (await conn.query(`EXPLAIN ${target}`)) as unknown as Table;
   const parts: string[] = [];
