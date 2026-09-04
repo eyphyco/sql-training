@@ -81,6 +81,18 @@ export function judgeResultSet(
     };
   }
   const e = projectColumns(expected, judge.compare_columns);
+  // 模範解答側に指定の列が無いのは問題データの不備。
+  // npm run validate で弾いているが、ここで不正解として黙らせない
+  if (e.missing.length > 0) {
+    return {
+      correct: false,
+      message: '問題データの不備です（採点に使う列が模範解答の結果にありません）',
+      details: [
+        `見つからない列: ${e.missing.join(', ')}`,
+        `模範解答の列: ${expected.columns.join(', ')}`,
+      ],
+    };
+  }
 
   if (!judge.compare_columns && actual.columns.length !== expected.columns.length) {
     return {

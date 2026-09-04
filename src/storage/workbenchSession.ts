@@ -38,6 +38,18 @@ export function saveSession(problemId: string, session: WorkbenchSession): void 
   }
 }
 
+function isLastRun(value: unknown): value is WorkbenchSession['lastRun'] {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as { sql?: unknown; result?: { columns?: unknown; rows?: unknown } };
+  return (
+    typeof v.sql === 'string' &&
+    typeof v.result === 'object' &&
+    v.result !== null &&
+    Array.isArray(v.result.columns) &&
+    Array.isArray(v.result.rows)
+  );
+}
+
 export function loadSession(problemId: string): WorkbenchSession | null {
   try {
     const raw = sessionStorage.getItem(key(problemId));
@@ -48,7 +60,8 @@ export function loadSession(problemId: string): WorkbenchSession | null {
     if (typeof v.sql !== 'string') return null;
     return {
       sql: v.sql,
-      lastRun: v.lastRun ?? null,
+      // 形の壊れた結果を返すと、復元後の ANSWER で落ちる
+      lastRun: isLastRun(v.lastRun) ? v.lastRun : null,
       planText: v.planText ?? null,
       tab: v.tab === 'result' || v.tab === 'plan' ? v.tab : 'schema',
     };

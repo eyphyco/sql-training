@@ -24,7 +24,29 @@ npm run dev        # http://localhost:5173
 | `npm run show -- <問題ID>` | その問題の模範解答を実行して結果を表示（作問時の確認用） |
 | `npm run smoke` | Playwright によるブラウザ疎通確認（先に `npm run preview` が必要） |
 | `npm run contrast` | 配色のコントラスト比を実描画のピクセルから測る（同じく `preview` が必要） |
+| `npm run test` | 単体テスト（vitest、211 件・約 1 秒） |
 | `npm run lint` | oxlint |
+
+## 確かめかた
+
+4 段構えにしてある。上ほど速く、下ほど本物に近い。
+
+| | 対象 | 実行 |
+| --- | --- | --- |
+| `npm run test` | 純粋なロジック（採点・SQL 分割・進捗・テーマ・教材の対応表） | 約 1 秒 |
+| `npm run validate` | 問題データ。全問の SQL を Node の DuckDB で実際に流す | 数十秒 |
+| `npm run smoke` | ブラウザでの通し操作（要 `npm run preview`） | 約 1 分 |
+| `npm run contrast` | 配色のコントラスト比を実描画のピクセルから測る | 約 20 秒 |
+
+単体テストは `src/**/*.test.ts` に、対象と同じ場所へ置く。`jsdom` 上で走るので `localStorage` / `sessionStorage` / `document` を使うモジュールもそのまま試せる。**日付の丸めを確かめるため、実行時のタイムゾーンは `Asia/Tokyo` に固定**してある（`vite.config.ts`）。
+
+重点は「間違えると黙って損をするところ」に置いている。
+
+- **採点**（`judgeResultSet`）… 浮動小数の誤差、NULL と空文字、重複行の個数、列名の大小、並び順の要否
+- **SQL の分割**（`splitStatements`）… 文字列・識別子・コメント・ドル引用符の中のセミコロン、閉じ忘れ、空入力
+- **進捗**（`recordAttempt`）… 一度正解したら下がらないこと、履歴の上限、壊れた保存データの読み飛ばし
+- **保存の復元**（`loadSession`）… 形の壊れた実行結果を返さないこと、2000 行を超える結果を捨てること
+- **読んでいる位置**（`pickActiveSection`）… 境界値、短い最終節、要素が無いとき
 
 ## 収録している問題
 

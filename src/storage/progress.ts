@@ -32,7 +32,16 @@ export function saveProgress(data: ProgressData): void {
   }
 }
 
-const today = (): string => new Date().toISOString().slice(0, 10);
+/**
+ * 端末のローカル日付（YYYY-MM-DD）。
+ * toISOString() は UTC なので、JST の朝に解いた分が前日として記録されてしまう。
+ */
+const today = (): string => {
+  const d = new Date();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+};
 
 /** 1回の解答を記録する。solved は一度 true になったら下がらない */
 export function recordAttempt(

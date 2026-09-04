@@ -2,33 +2,20 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { animate, motion, useReducedMotion } from 'motion/react';
 import { Card } from './ui';
 import { EASE_OUT, SLIDE } from './motion';
+import { HEADER_OFFSET, pickActiveSection, scrollDuration } from './reading';
 import type { LessonSection } from '../types';
 
-/** 見出しがこの高さより上に来たら「その節を読んでいる」とみなす */
-const READING_LINE = 140;
-
-/** 固定ヘッダのぶん上を空けて止める（節に付けた scroll-mt-20 と同じ） */
-const HEADER_OFFSET = 80;
-
-/**
- * いま画面で読んでいる節を返す。
- * 判定は「READING_LINE より上に出た最後の節」。最下部まで来たときは
- * 最終節にする（短い節が一度も選ばれないまま終わるのを防ぐ）。
- */
+/** いま画面で読んでいる節を返す。判定そのものは reading.ts に置いてある */
 function useActiveSection(ids: string[]): string {
   const [active, setActive] = useState(ids[0] ?? '');
   useEffect(() => {
     let raf = 0;
     const pick = () => {
       raf = 0;
-      let current = ids[0] ?? '';
-      for (const id of ids) {
-        const el = document.getElementById(id);
-        if (el && el.getBoundingClientRect().top <= READING_LINE) current = id;
-      }
-      if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 8) {
-        current = ids[ids.length - 1] ?? current;
-      }
+      const tops = ids.map((id) => document.getElementById(id)?.getBoundingClientRect().top ?? null);
+      const atBottom =
+        window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 8;
+      const current = pickActiveSection(ids, tops, atBottom);
       setActive((prev) => (prev === current ? prev : current));
     };
     // スクロールは 1 フレームに 1 回だけ読む
@@ -80,8 +67,7 @@ export default function ChapterNav({ sections }: { sections: LessonSection[] }) 
     }
 
     const from = window.scrollY;
-    // 距離なりに 0.24〜0.44 秒。長い章でも待たされない範囲に収める
-    const duration = Math.min(0.44, Math.max(0.24, Math.abs(to - from) / 5000));
+    const duration = scrollDuration(from, to);
 
     // 途中でユーザーが動かしたら、こちらは引き下がる。
     // stop() だけでは間に合わないことがあるので、書き込み側でも見る

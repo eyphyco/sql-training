@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
@@ -12,5 +13,13 @@ export default defineConfig({
     // apache-arrow / duckdb-wasm が BigInt リテラルと top-level await を使うため
     target: 'esnext',
     chunkSizeWarningLimit: 2000,
+  },
+  test: {
+    // localStorage / sessionStorage / document を使うモジュールがあるため
+    environment: 'jsdom',
+    include: ['src/**/*.test.ts'],
+    restoreMocks: true,
+    // 日付の丸めを確かめるので、実行環境の時間帯を固定する
+    env: { TZ: 'Asia/Tokyo' },
   },
 });

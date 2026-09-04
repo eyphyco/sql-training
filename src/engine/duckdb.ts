@@ -76,6 +76,17 @@ export function splitStatements(sql: string): string[] {
       i = stop;
       continue;
     }
+    // ドル引用符 $$...$$ / $tag$...$tag$。$1 のような番号は引用符ではない
+    if (ch === '$') {
+      const tag = /^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/.exec(sql.slice(i))?.[0];
+      if (tag) {
+        const end = sql.indexOf(tag, i + tag.length);
+        const stop = end === -1 ? sql.length : end + tag.length;
+        buf += sql.slice(i, stop);
+        i = stop;
+        continue;
+      }
+    }
     if (ch === "'" || ch === '"') {
       const quote = ch;
       let j = i + 1;
