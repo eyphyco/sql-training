@@ -90,11 +90,31 @@ try {
     Math.abs(thumbMid - thumbEnd) > 2,
     `途中 ${thumbMid.toFixed(0)} / 到達 ${thumbEnd.toFixed(0)}`,
   );
-  // 選ばれた瞬間、アイコンが回りながら起き上がる
-  const iconTransform = await page
-    .locator('button[aria-label="システム設定に従う"] span')
-    .evaluate((el) => getComputedStyle(el).transform);
-  check('切り替えた側のアイコンが元の姿勢に戻っている', iconTransform === 'none', iconTransform);
+  // 切り替えた瞬間、外れた側は沈み、選ばれた側は下から昇る
+  const iconY = (label) =>
+    page
+      .locator(`button[aria-label="${label}"] span`)
+      .evaluate((el) => Math.round(new DOMMatrixReadOnly(getComputedStyle(el).transform).m42));
+  await page.click('button[aria-label="ライト"]');
+  await page.waitForTimeout(700);
+  await page.click('button[aria-label="ダーク"]');
+  await page.waitForTimeout(150);
+  const sinking = await iconY('ライト');
+  const rising = await iconY('ダーク');
+  await page.waitForTimeout(700);
+  check(
+    '外れた側のアイコンが沈む',
+    sinking > 4,
+    `y=${sinking}`,
+  );
+  check(
+    '選ばれた側のアイコンが下から昇る',
+    rising > 4 && (await iconY('ダーク')) === 0,
+    `途中 y=${rising} → ${await iconY('ダーク')}`,
+  );
+  check('沈んだアイコンは元の位置に戻る', (await iconY('ライト')) === 0);
+  await page.click('button[aria-label="システム設定に従う"]');
+  await page.waitForTimeout(700);
   check(
     'システム追従に戻せる',
     (await page.evaluate(() => localStorage.getItem('sql-training:theme'))) === null,

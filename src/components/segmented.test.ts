@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { nearestIndex } from './ThemeToggle';
+import { nearestIndex } from './segmented';
 
 // 実測値に近い並び（2px の内側余白 + 幅 28px + 隙間 2px）
 const POS = [2, 32, 62];

@@ -1,5 +1,15 @@
-/** 1.5px ストロークで統一した線画アイコン。色は currentColor に従う */
+/**
+ * 線画アイコン。色は currentColor に従う。
+ *
+ * 線の太さは「画面上で何 px に見えるか」で決める。viewBox は 24 固定なので、
+ * strokeWidth を据え置くと小さいアイコンほど線が細くなり、
+ * 1px を割ったところでにじんで見える（14px なら 1.5 → 0.88px）。
+ * 表示サイズで割り戻して、どの大きさでも同じ太さに見えるようにする。
+ */
 type IconProps = { className?: string; size?: number };
+
+/** 画面上での線の太さ（CSS px） */
+const STROKE_PX = 1.2;
 
 function svg(path: React.ReactNode, { className = '', size = 16 }: IconProps) {
   return (
@@ -9,9 +19,10 @@ function svg(path: React.ReactNode, { className = '', size = 16 }: IconProps) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={1.5}
+      strokeWidth={(STROKE_PX * 24) / size}
       strokeLinecap="round"
       strokeLinejoin="round"
+      shapeRendering="geometricPrecision"
       className={className}
       aria-hidden="true"
     >
@@ -24,11 +35,20 @@ export const IconCheck = (p: IconProps) => svg(<path d="m4.5 12.5 5 5 10-11" />,
 export const IconX = (p: IconProps) => svg(<path d="M6 6l12 12M18 6 6 18" />, p);
 export const IconDash = (p: IconProps) => svg(<path d="M6 12h12" />, p);
 export const IconChevronDown = (p: IconProps) => svg(<path d="m5 9 7 7 7-7" />, p);
+/*
+  小さく出したときに崩れやすいので、他と作りを変えている。
+
+  - 芯は塗りにする。線で描くと直径 4px 前後になったところで内側が潰れ、
+    光条とつながって「※」のような塊に見えてしまう
+  - 光条は長さ 2 単位（14px 表示なら 1.2px）しかなく点になっていたので、
+    3.3 単位まで伸ばして芯との間を空ける
+*/
 export const IconSun = (p: IconProps) =>
   svg(
     <>
-      <circle cx="12" cy="12" r="4" />
-      <path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4" />
+      <circle cx="12" cy="12" r="4" fill="currentColor" stroke="none" />
+      <path d="M12 2.2v3.3M12 18.5v3.3M2.2 12h3.3M18.5 12h3.3" />
+      <path d="m5.05 5.05 2.35 2.35M16.6 16.6l2.35 2.35M18.95 5.05 16.6 7.4M7.4 16.6l-2.35 2.35" />
     </>,
     p,
   );

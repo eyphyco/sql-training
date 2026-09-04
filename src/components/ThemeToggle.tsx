@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { animate, motion, useMotionValue, useReducedMotion } from 'motion/react';
 import { useTheme } from '../theme/themeContext';
 import { SLIDE } from './motion';
+import { nearestIndex } from './segmented';
 import type { ThemeChoice } from '../theme/theme';
 import { IconMonitor, IconMoon, IconSun } from './icons';
 
@@ -11,14 +12,8 @@ const OPTIONS: { value: ThemeChoice; label: string; Icon: typeof IconSun }[] = [
   { value: 'system', label: 'システム設定に従う', Icon: IconMonitor },
 ];
 
-/** つまみを離したとき、いちばん近い選択肢を返す */
-export function nearestIndex(x: number, positions: number[]): number {
-  let best = 0;
-  for (let i = 1; i < positions.length; i += 1) {
-    if (Math.abs(positions[i] - x) < Math.abs(positions[best] - x)) best = i;
-  }
-  return best;
-}
+/** 昇る／沈むときの移動量（px）。ボタンの高さより大きくして地平線の下に隠す */
+const RISE_FROM = 14;
 
 /**
  * セグメンテッドコントロール。3状態（ライト / ダーク / システム）を1つの操作子にまとめる。
@@ -119,19 +114,32 @@ export default function ThemeToggle() {
             aria-label={label}
             title={label}
             onClick={() => setChoice(value)}
-            className={`relative flex h-6 w-7 items-center justify-center rounded-full transition-colors ${
+            // 円の内側で切り抜いて、下辺を地平線に見立てる
+            className={`relative flex h-6 w-7 items-center justify-center overflow-hidden rounded-full transition-colors ${
               active ? 'text-fg' : 'text-subtle hover:text-muted'
             }`}
           >
-            {/* 選ばれた瞬間だけ、アイコンが起き上がる */}
+            {/*
+              選んだ側は下から昇り、外れた側は下へ沈む。
+              沈んだあとは見えないまま元の位置へ戻し、控えめな明るさで出し直す
+              （ラベルとして残す必要があるので、沈みっぱなしにはできない）。
+            */}
             <motion.span
+              initial={false}
               animate={
-                active ? { rotate: [-45, 0], scale: [0.7, 1.15, 1] } : { rotate: 0, scale: 1 }
+                active
+                  ? { y: [RISE_FROM, 0], opacity: [0, 1], scale: [0.86, 1] }
+                  : { y: [0, RISE_FROM, 0, 0], opacity: [1, 0, 0, 1], scale: 1 }
               }
-              transition={{ duration: 0.36, ease: 'easeOut' }}
+              transition={
+                active
+                  ? // ゆっくり顔を出して、静かに収まる
+                    { duration: 0.52, ease: [0.45, 0, 0.25, 1] }
+                  : { duration: 0.5, times: [0, 0.42, 0.44, 1], ease: 'easeInOut' }
+              }
               className="pointer-events-none relative z-20 flex"
             >
-              <Icon size={14} />
+              <Icon size={16} />
             </motion.span>
           </button>
         );
