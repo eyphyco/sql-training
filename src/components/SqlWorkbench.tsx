@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import type { AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
 import type { SqlQueryProblem } from '../types';
 import { connect, describeTables, explainQuery, resetEnvironment, runQuery } from '../engine/duckdb';
@@ -10,6 +11,7 @@ import ResultTable from './ResultTable';
 import SchemaPanel from './SchemaPanel';
 import Markdown from './Markdown';
 import { Button, Card } from './ui';
+import { RISE, SLIDE } from './motion';
 import { IconBook, IconBulb, IconCheck, IconLayers, IconPlay, IconX } from './icons';
 import { useProgress } from '../storage/progressContext';
 import {
@@ -51,6 +53,8 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
   const [tab, setTab] = useState<RightTab>(restored?.tab ?? 'schema');
   const [reloadNotice, setReloadNotice] = useState(detectUnpreventedReload);
   const [judgement, setJudgement] = useState<JudgeResult | null>(null);
+  // 採点のたびに増やす。結果パネルの key にして、同じ文言でも動きを出す
+  const [judgeSeq, setJudgeSeq] = useState(0);
   const [busy, setBusy] = useState(false);
   const [hintLevel, setHintLevel] = useState(0);
   const [revealed, setRevealed] = useState(false);
@@ -133,6 +137,7 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
     const conn = connRef.current;
     if (!conn || runningRef.current) return;
     if (!lastRun) {
+      setJudgeSeq((n) => n + 1);
       setJudgement({
         correct: false,
         message: 'まず「実行」してください',
@@ -143,6 +148,7 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
       return;
     }
     if (lastRun.sql.trim() !== sqlText.trim()) {
+      setJudgeSeq((n) => n + 1);
       setJudgement({
         correct: false,
         message: 'エディタの内容が実行後に変更されています',
@@ -184,11 +190,13 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
         }
       }
 
+      setJudgeSeq((n) => n + 1);
       setJudgement(result);
       attempt(problem.id, result.correct);
       if (result.correct) setRevealed(true);
       setSchema(await describeTables(conn));
     } catch (e) {
+      setJudgeSeq((n) => n + 1);
       setJudgement({
         correct: false,
         message: '採点中にエラーが発生しました',
@@ -333,12 +341,17 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
                 key={key}
                 onClick={() => setTab(key)}
                 className={`relative text-[11.5px] font-medium transition-colors ${
-                  tab === key
-                    ? 'text-fg after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:bg-accent'
-                    : 'text-subtle hover:text-muted'
+                  tab === key ? 'text-fg' : 'text-subtle hover:text-muted'
                 }`}
               >
                 {label}
+                {tab === key && (
+                  <motion.span
+                    layoutId="tab-underline"
+                    transition={SLIDE}
+                    className="absolute inset-x-0 -bottom-px h-0.5 bg-accent"
+                  />
+                )}
               </button>
             ))}
             {lastRun && tab === 'result' && !runError && (
@@ -418,7 +431,11 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
       </div>
 
       {judgement && (
-        <div
+        <motion.div
+          key={judgeSeq}
+          variants={RISE}
+          initial="hidden"
+          animate="shown"
           className={`rounded-lg border p-4 ${
             judgement.correct
               ? 'border-success-line bg-success-soft'
@@ -471,25 +488,34 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
               )}
             </div>
           )}
-        </div>
+        </motion.div>
       )}
 
       {hintLevel > 0 && (
         <div className="space-y-2">
-          {hints.slice(0, hintLevel).map((h, i) => (
-            <Card key={i} className="border-warning-line bg-warning-soft p-4">
-              <p className="mb-1 flex items-center gap-1.5 text-[11.5px] font-semibold text-warning">
-                <IconBulb size={13} />
-                ヒント {i + 1}
-              </p>
-              <Markdown>{h}</Markdown>
-            </Card>
-          ))}
+          <AnimatePresence initial={false}>
+            {hints.slice(0, hintLevel).map((h, i) => (
+              <motion.div key={i} variants={RISE} initial="hidden" animate="shown" exit="gone">
+                <Card className="border-warning-line bg-warning-soft p-4">
+                  <p className="mb-1 flex items-center gap-1.5 text-[11.5px] font-semibold text-warning">
+                    <IconBulb size={13} />
+                    ヒント {i + 1}
+                  </p>
+                  <Markdown>{h}</Markdown>
+                </Card>
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
       )}
 
       {canReveal && (
-        <div className="max-w-prose-wide space-y-3">
+        <motion.div
+          variants={RISE}
+          initial="hidden"
+          animate="shown"
+          className="max-w-prose-wide space-y-3"
+        >
           <Card className="overflow-hidden">
             <p className="border-b border-line bg-raised px-4 py-2 text-[11.5px] font-medium text-muted">
               模範解答
@@ -512,7 +538,7 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
               <Markdown>{problem.explanation_md}</Markdown>
             </div>
           </Card>
-        </div>
+        </motion.div>
       )}
     </div>
   );

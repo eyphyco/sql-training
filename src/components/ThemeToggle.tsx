@@ -1,4 +1,6 @@
+import { motion } from 'motion/react';
 import { useTheme } from '../theme/themeContext';
+import { SLIDE } from './motion';
 import type { ThemeChoice } from '../theme/theme';
 import { IconMonitor, IconMoon, IconSun } from './icons';
 
@@ -28,11 +30,18 @@ export default function ThemeToggle() {
             title={label}
             onClick={() => setChoice(value)}
             // 選択中だけ不透明なつまみを乗せる（溝の上を滑る物理的な操作子に見せる）
-            className={`flex h-6 w-7 items-center justify-center rounded-full transition-colors ${
-              active ? 'glass-edge bg-solid text-fg shadow-card' : 'text-subtle hover:text-muted'
+            className={`relative flex h-6 w-7 items-center justify-center rounded-full transition-colors ${
+              active ? 'text-fg' : 'text-subtle hover:text-muted'
             }`}
           >
-            <Icon size={14} />
+            {active && (
+              <motion.span
+                layoutId="theme-thumb"
+                transition={SLIDE}
+                className="glass-edge absolute inset-0 rounded-full bg-solid shadow-card"
+              />
+            )}
+            <Icon size={14} className="relative" />
           </button>
         );
       })}

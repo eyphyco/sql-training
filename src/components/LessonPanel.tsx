@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { PHASE_BY_SECTION, sectionsForProblem } from '../data/lessons';
 import { readLessonOpen, writeLessonOpen } from '../storage/preferences';
 import Markdown from './Markdown';
 import { IconBook, IconChevronDown } from './icons';
+import { COLLAPSE, SLIDE } from './motion';
 
 /**
  * 問題を解く前に読む教材。開閉の状態は端末に覚えさせるので、
@@ -52,23 +54,36 @@ export default function LessonPanel({ problemId }: { problemId: string }) {
           className={`${phase ? '' : 'ml-auto'} flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] text-muted hover:bg-surface hover:text-fg`}
         >
           {open ? 'たたむ' : '読む'}
-          <IconChevronDown
-            size={13}
-            className={`transition-transform ${open ? '' : '-rotate-90'}`}
-          />
+          <motion.span animate={{ rotate: open ? 0 : -90 }} transition={SLIDE} className="flex">
+            <IconChevronDown size={13} />
+          </motion.span>
         </button>
       </header>
 
-      {open && (
-        <div className="divide-y divide-line">
-          {sections.map((s) => (
-            <article key={s.id} className="p-5">
-              <h3 className="mb-2 text-[14px] font-semibold tracking-tight text-fg">{s.title}</h3>
-              <Markdown>{s.body_md}</Markdown>
-            </article>
-          ))}
-        </div>
-      )}
+      {/* initial={false} で、最初の描画では開閉アニメーションを走らせない */}
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            key="body"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={COLLAPSE}
+            className="overflow-hidden"
+          >
+            <div className="divide-y divide-line">
+              {sections.map((s) => (
+                <article key={s.id} className="p-5">
+                  <h3 className="mb-2 text-[14px] font-semibold tracking-tight text-fg">
+                    {s.title}
+                  </h3>
+                  <Markdown>{s.body_md}</Markdown>
+                </article>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   );
 }

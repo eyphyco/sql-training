@@ -57,7 +57,22 @@ try {
   check('ライトに切り替わる', (await themeOf()) === 'light');
   const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   check('ライトの背景色が明るい', bg === 'rgb(233, 237, 245)', bg);
+  // つまみは layoutId で位置を繋いで滑らせている。途中位置を取れれば動いている
+  const thumbX = () =>
+    page.evaluate(() => {
+      const el = document.querySelector('[role="radiogroup"] button[aria-checked="true"] span');
+      return el ? el.getBoundingClientRect().x : null;
+    });
   await page.click('button[aria-label="システム設定に従う"]');
+  await page.waitForTimeout(45);
+  const thumbMid = await thumbX();
+  await page.waitForTimeout(600);
+  const thumbEnd = await thumbX();
+  check(
+    'テーマのつまみが滑って移動する',
+    thumbMid !== null && thumbEnd !== null && Math.abs(thumbMid - thumbEnd) > 2,
+    `途中 ${thumbMid?.toFixed(0)} / 到達 ${thumbEnd?.toFixed(0)}`,
+  );
   check(
     'システム追従に戻せる',
     (await page.evaluate(() => localStorage.getItem('sql-training:theme'))) === null,
@@ -120,8 +135,16 @@ try {
   const lessonBody = '論理的な評価順序';
   check('教材の本文が開いている（既定）', (await lessonPanel.innerText()).includes(lessonBody));
   await page.click('[data-testid="lesson-toggle"]');
-  await page.waitForTimeout(200);
-  check('教材をたためる', !(await lessonPanel.innerText()).includes(lessonBody));
+  // 開閉はアニメーションするので、消えるまで待つ（固定待ちだと閉じ切る前に読んでしまう）
+  const collapsed = await page
+    .waitForFunction(
+      (needle) => !(document.querySelector('[data-testid="lesson"]')?.innerText ?? '').includes(needle),
+      lessonBody,
+      { timeout: 5000 },
+    )
+    .then(() => true)
+    .catch(() => false);
+  check('教材をたためる', collapsed);
   await page.reload({ waitUntil: 'networkidle' });
   await rightPane.locator('text=13 行').waitFor({ timeout: 60000 });
   check(
@@ -307,6 +330,26 @@ try {
   const p6 = ALL_PROBLEMS.filter((p) => p.phase === 6).length;
   const shown = await page.locator('ul li a[href*="/problems/"]').count();
   check('フェーズでフィルタできる', shown === p6, `${shown} / ${p6} 件`);
+
+  // 14. 「視差効果を減らす」設定を尊重する（MotionConfig reducedMotion="user"）
+  const reducedCtx = await browser.newContext({ reducedMotion: 'reduce' });
+  const reducedPage = await reducedCtx.newPage();
+  await reducedPage.goto(`${base}#/problems/phase1-lv1-001`, { waitUntil: 'domcontentloaded' });
+  await reducedPage.waitForSelector('[data-testid="lesson-toggle"]', { timeout: 60000 });
+  await reducedPage.waitForTimeout(500); // 描画が落ち着いてから押す
+  await reducedPage.click('[data-testid="lesson-toggle"]');
+  await reducedPage.waitForTimeout(60); // 通常なら 260ms かけて縮む
+  // 高さで見る。通常は 60ms 時点でまだ半分以上残っているが、
+  // 設定が効いていれば見出しの高さまで縮み切っている
+  const reducedHeight = await reducedPage
+    .locator('[data-testid="lesson"]')
+    .evaluate((el) => el.getBoundingClientRect().height);
+  check(
+    '視差効果を減らす設定では開閉が即座に終わる',
+    reducedHeight < 120,
+    `${reducedHeight.toFixed(0)}px`,
+  );
+  await reducedCtx.close();
 
   check('コンソールエラーが無い', consoleErrors.length === 0, consoleErrors.slice(0, 3).join(' | '));
 } catch (e) {
