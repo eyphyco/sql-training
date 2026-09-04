@@ -69,6 +69,8 @@ try {
   const darkLuma = await bodyLuma();
   await page.click('button[aria-label="ライト"]');
   check('ライトに切り替わる', (await themeOf()) === 'light');
+  // 色は一瞬では入れ替わらない（.theme-fading）。落ち着いてから測る
+  await page.waitForTimeout(700);
   const lightLuma = await bodyLuma();
   check(
     'ライトの下地が明るく、ダークの下地が暗い',
@@ -119,6 +121,63 @@ try {
     'システム追従に戻せる',
     (await page.evaluate(() => localStorage.getItem('sql-training:theme'))) === null,
   );
+
+  // 配色は一瞬で入れ替えず、短く色をつなぐ
+  const fade = await page.evaluate(async () => {
+    const lin = (c) => {
+      const v = c / 255;
+      return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+    };
+    const lum = (s) => {
+      const [r, g, b] = s.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number);
+      return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+    };
+    document.querySelector('button[aria-label="ライト"]').click();
+    await new Promise((r) => setTimeout(r, 600));
+    const from = lum(getComputedStyle(document.body).backgroundColor);
+    const samples = [];
+    const t0 = performance.now();
+    document.querySelector('button[aria-label="ダーク"]').click();
+    await new Promise((done) => {
+      const tick = () => {
+        const t = performance.now() - t0;
+        const cs = getComputedStyle(document.body);
+        const bg = lum(cs.backgroundColor);
+        const fg = lum(cs.color);
+        const hi = Math.max(bg, fg) + 0.05;
+        const lo = Math.min(bg, fg) + 0.05;
+        samples.push({ t, bg, ratio: hi / lo });
+        if (t > 900) return done();
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    const to = samples[samples.length - 1].bg;
+    const between = samples.filter((s) => s.bg < from - 0.05 && s.bg > to + 0.02).length;
+    let dip = 0;
+    let prev = 0;
+    for (const s of samples) {
+      if (s.ratio < 3) dip += s.t - prev;
+      prev = s.t;
+    }
+    return { from, to, between, dip, minRatio: Math.min(...samples.map((s) => s.ratio)) };
+  });
+  check(
+    '配色は一瞬で入れ替わらず、途中の色を通る',
+    fade.from > 0.6 && fade.to < 0.05 && fade.between >= 3,
+    `途中の色 ${fade.between} コマ`,
+  );
+  /*
+    黒い文字と白い下地が入れ替わる以上、途中で必ず両方が中間の灰色になる
+    瞬間を通る。避けられないので「短く抜けること」だけを見る。
+    フレームの取り方で数十 ms ぶれるため、閾値はゆるめの回帰検知にしてある。
+  */
+  check(
+    '入れ替わりの途中で文字が読めなくなる時間が短い',
+    fade.dip < 110,
+    `最小 ${fade.minRatio.toFixed(2)}:1 / 3:1 未満 ${Math.round(fade.dip)}ms`,
+  );
+  await page.waitForTimeout(400);
 
   // つまみをつまんで動かしても切り替えられる
   await page.click('button[aria-label="ライト"]');

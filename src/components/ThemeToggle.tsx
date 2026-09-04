@@ -98,7 +98,7 @@ export default function ThemeToggle() {
         // つかんでいる間は横に伸びる。縦に太らせると溝からはみ出す
         whileTap={{ scaleX: 1.12 }}
         style={{ x, width: box.width }}
-        className="glass-edge absolute inset-y-0.5 left-0 z-10 cursor-grab rounded-full bg-solid shadow-card active:cursor-grabbing"
+        className="glass-edge absolute inset-y-0.5 left-0 z-10 cursor-pointer rounded-full bg-solid shadow-card"
       />
 
       {OPTIONS.map(({ value, label, Icon }, i) => {

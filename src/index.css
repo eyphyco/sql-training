@@ -309,6 +309,43 @@ body {
   }
 }
 
+/* ==================================================================
+   配色の切り替え
+   ------------------------------------------------------------------
+   白と黒が 1 フレームで入れ替わると目に痛いので、短い間だけ色をつなぐ。
+   常時 * に transition を掛けると操作のたびに重くなるため、
+   切り替えの前後だけ :root にクラスを付けて有効にする（theme.ts）。
+
+   transform と opacity は入れない。Motion が動かしているものと
+   二重に効いてしまうため。
+
+   文字だけ短くしてある。黒い文字と白い下地が入れ替わる以上、
+   途中で必ず「どちらも中間の灰色」になる瞬間を通る。同じ時間で
+   動かすとそこに長く留まるので、文字を先に着地させて短く抜ける。
+   実測（下地と文字のコントラスト比）:
+
+     200 / 200ms … 最小 1.25:1、3:1 を下回るのが 64ms
+     200 / 140ms … 最小 2.04:1、             20ms  ← これ
+     200 / 100ms … 最小 1.32:1、             78ms
+
+   「視差効果を減らす」設定でも止めない。ここで避けたいのは動きではなく
+   明暗の急変で、一瞬で飛ばすほうがつらいため。
+   ================================================================== */
+:root.theme-fading,
+:root.theme-fading *,
+:root.theme-fading *::before,
+:root.theme-fading *::after {
+  transition:
+    background-color 200ms ease,
+    border-color 200ms ease,
+    box-shadow 200ms ease,
+    outline-color 200ms ease,
+    color 140ms ease,
+    fill 140ms ease,
+    stroke 140ms ease !important;
+  transition-delay: 0s !important;
+}
+
 :where(a, button, input, select, textarea, [tabindex]):focus-visible {
   outline: 2px solid var(--c-accent);
   outline-offset: 2px;
