@@ -171,7 +171,36 @@ try {
     `${tocYFrom.toFixed(0)} → 途中 ${tocYMid.toFixed(0)} → ${tocYTo.toFixed(0)}`,
   );
   await page.mouse.wheel(0, -3000);
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(700);
+
+  // 目次を押すと、そのページのまま節まで滑って移動する
+  // （HashRouter なので href="#節id" だと別ページへ飛んでしまう）
+  const scrollY = () => page.evaluate(() => window.scrollY);
+  const hashOf = () => page.evaluate(() => location.hash);
+  const jumpFrom = await scrollY();
+  await page.locator('[data-testid="chapter-nav"] button').nth(2).click();
+  await page.waitForTimeout(120);
+  const jumpMid = await scrollY();
+  await page.waitForTimeout(700);
+  const jumpTo = await scrollY();
+  check(
+    '目次を押すと URL を変えずに節へ送る',
+    (await hashOf()).includes('/learn/2') && jumpTo > jumpFrom + 200,
+    `${await hashOf()} / scrollY ${jumpFrom.toFixed(0)} → ${jumpTo.toFixed(0)}`,
+  );
+  check(
+    '節への移動が滑らかに進む',
+    Math.abs(jumpMid - jumpTo) > 50,
+    `${jumpFrom.toFixed(0)} → 途中 ${jumpMid.toFixed(0)} → ${jumpTo.toFixed(0)}`,
+  );
+  // 固定ヘッダに隠れない位置で止まる
+  const headTop = await page
+    .locator('section[id]')
+    .nth(2)
+    .evaluate((el) => el.getBoundingClientRect().top);
+  check('節の見出しがヘッダに隠れない', headTop > 56 && headTop < 120, `上端 ${headTop.toFixed(0)}px`);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(300);
 
   // 2. 問題一覧
   await page.goto(`${base}#/problems`, { waitUntil: 'networkidle' });
