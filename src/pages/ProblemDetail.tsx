@@ -34,63 +34,69 @@ export default function ProblemDetail() {
   return (
     <div className="space-y-5">
       {/*
-        読む列（最大 62rem）とサイドバーを左右の端に寄せる。
+        左にサイドバー、右に読む列（最大 62rem）。
         SQL エディタと実行結果はこの下に全幅で置くので、
         サイドバーを出しても作業領域の幅は減らない。
       */}
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,62rem)_minmax(15rem,19rem)] lg:justify-between">
-        <div className="min-w-0 space-y-5">
-      <div className="max-w-prose-wide">
-        <div className="flex flex-wrap items-center gap-2 text-[12px]">
-          <Link to="/problems" className="text-muted hover:text-fg">
-            問題
-          </Link>
-          <span className="text-subtle">/</span>
-          <Link to={`/problems?phase=${problem.phase}`} className="text-muted hover:text-fg">
-            {phase?.name}
-          </Link>
-          <span className="ml-auto font-mono text-[10.5px] text-subtle">{problem.id}</span>
-        </div>
+      <div className="grid gap-6 lg:grid-cols-[minmax(15rem,19rem)_minmax(0,62rem)]">
+        {/*
+          本文を DOM の先に置き、サイドバーはグリッド配置で左へ回す。
+          読み上げやタブ移動が目次 52 件から始まらないようにするため。
+        */}
+        <div className="min-w-0 space-y-5 lg:col-start-2 lg:row-start-1">
+          <div>
+            <div className="flex flex-wrap items-center gap-2 text-[12px]">
+              <Link to="/problems" className="text-muted hover:text-fg">
+                問題
+              </Link>
+              <span className="text-subtle">/</span>
+              <Link to={`/problems?phase=${problem.phase}`} className="text-muted hover:text-fg">
+                {phase?.name}
+              </Link>
+              <span className="ml-auto font-mono text-[10.5px] text-subtle">{problem.id}</span>
+            </div>
 
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <h1 className="text-[19px] leading-snug font-semibold tracking-tight text-fg">
-            {problem.title}
-          </h1>
-          <Tag tone={LEVEL_TONE[problem.level]}>{LEVEL_FULL_LABEL[problem.level]}</Tag>
-          {isSolved(problem.id) && (
-            <Tag tone="success">
-              <IconCheck size={11} />
-              正解済み
-            </Tag>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <h1 className="text-[19px] leading-snug font-semibold tracking-tight text-fg">
+                {problem.title}
+              </h1>
+              <Tag tone={LEVEL_TONE[problem.level]}>{LEVEL_FULL_LABEL[problem.level]}</Tag>
+              {isSolved(problem.id) && (
+                <Tag tone="success">
+                  <IconCheck size={11} />
+                  正解済み
+                </Tag>
+              )}
+            </div>
+
+            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+              {problem.tags.map((t) => (
+                <Link
+                  key={t}
+                  to={`/problems?tag=${encodeURIComponent(t)}`}
+                  className="text-[11.5px] text-subtle hover:text-accent"
+                >
+                  #{t}
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          {/* 教材 → 問題文 → 作業領域の順に読ませる */}
+          <LessonPanel problemId={problem.id} />
+
+          <Card className="p-5">
+            <Markdown>{problem.prompt_md}</Markdown>
+          </Card>
+
+          {/* 選択式と記述式は読み物なので、この列に収める */}
+          {problem.type === 'multiple_choice' && (
+            <ChoiceQuestion key={problem.id} problem={problem} />
           )}
+          {problem.type === 'written' && <WrittenQuestion key={problem.id} problem={problem} />}
         </div>
 
-        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
-          {problem.tags.map((t) => (
-            <Link
-              key={t}
-              to={`/problems?tag=${encodeURIComponent(t)}`}
-              className="text-[11.5px] text-subtle hover:text-accent"
-            >
-              #{t}
-            </Link>
-          ))}
-        </div>
-      </div>
-
-      {/* 教材 → 問題文 → 作業領域の順に読ませる */}
-      <LessonPanel problemId={problem.id} />
-
-      <Card className="max-w-prose-wide p-5">
-        <Markdown>{problem.prompt_md}</Markdown>
-      </Card>
-
-      {/* 選択式と記述式は読み物なので、この列に収める */}
-      {problem.type === 'multiple_choice' && <ChoiceQuestion key={problem.id} problem={problem} />}
-      {problem.type === 'written' && <WrittenQuestion key={problem.id} problem={problem} />}
-        </div>
-
-        <aside className="hidden lg:block">
+        <aside className="hidden lg:col-start-1 lg:row-start-1 lg:block">
           <div className="sticky top-20">
             <ProblemNav currentId={problem.id} />
           </div>
@@ -99,7 +105,7 @@ export default function ProblemDetail() {
 
       {problem.type === 'sql_query' && <SqlWorkbench key={problem.id} problem={problem} />}
 
-      <nav className="flex max-w-prose-wide items-center justify-between border-t border-line pt-4">
+      <nav className="flex items-center justify-between border-t border-line pt-4">
         {prev ? (
           <Link
             to={`/problems/${prev}`}
