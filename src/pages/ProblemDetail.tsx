@@ -6,6 +6,7 @@ import { Card, Tag } from '../components/ui';
 import { IconCheck, IconChevronLeft, IconChevronRight } from '../components/icons';
 import SqlWorkbench from '../components/SqlWorkbench';
 import LessonPanel from '../components/LessonPanel';
+import ProblemNav from '../components/ProblemNav';
 import ChoiceQuestion from '../components/ChoiceQuestion';
 import WrittenQuestion from '../components/WrittenQuestion';
 import { useProgress } from '../storage/progressContext';
@@ -32,7 +33,13 @@ export default function ProblemDetail() {
 
   return (
     <div className="space-y-5">
-      {/* 見出しと問題文は読みやすい幅で止める。左端は作業領域と揃える */}
+      {/*
+        読む列（最大 62rem）とサイドバーを左右の端に寄せる。
+        SQL エディタと実行結果はこの下に全幅で置くので、
+        サイドバーを出しても作業領域の幅は減らない。
+      */}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,62rem)_minmax(15rem,19rem)] lg:justify-between">
+        <div className="min-w-0 space-y-5">
       <div className="max-w-prose-wide">
         <div className="flex flex-wrap items-center gap-2 text-[12px]">
           <Link to="/problems" className="text-muted hover:text-fg">
@@ -78,9 +85,19 @@ export default function ProblemDetail() {
         <Markdown>{problem.prompt_md}</Markdown>
       </Card>
 
-      {problem.type === 'sql_query' && <SqlWorkbench key={problem.id} problem={problem} />}
+      {/* 選択式と記述式は読み物なので、この列に収める */}
       {problem.type === 'multiple_choice' && <ChoiceQuestion key={problem.id} problem={problem} />}
       {problem.type === 'written' && <WrittenQuestion key={problem.id} problem={problem} />}
+        </div>
+
+        <aside className="hidden lg:block">
+          <div className="sticky top-20">
+            <ProblemNav currentId={problem.id} />
+          </div>
+        </aside>
+      </div>
+
+      {problem.type === 'sql_query' && <SqlWorkbench key={problem.id} problem={problem} />}
 
       <nav className="flex max-w-prose-wide items-center justify-between border-t border-line pt-4">
         {prev ? (

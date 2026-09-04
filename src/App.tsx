@@ -69,11 +69,16 @@ function Header() {
  * 画面の中身。遷移時に不透明度だけ戻す。
  * 位置を動かさないのは、DuckDB の初期化中でも画面が跳ねないようにするため。
  * 退場は入れていない（待ち時間が増えて操作が重く感じるので）。
+ *
+ * key はパス全体ではなく先頭の区画（problems / learn / settings）にしている。
+ * 同じ区画の中を移動するとき（問題 A → 問題 B）は作り直さないので、
+ * サイドバーの現在位置がその場で滑って移動できる。
  */
 function Pages() {
   const location = useLocation();
+  const section = location.pathname.split('/')[1] ?? '';
   return (
-    <motion.div key={location.pathname} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={PAGE}>
+    <motion.div key={section} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={PAGE}>
       <Routes location={location}>
         <Route path="/" element={<Home />} />
         <Route path="/learn" element={<Learn />} />

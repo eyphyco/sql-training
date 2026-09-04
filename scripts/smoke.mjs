@@ -316,6 +316,32 @@ try {
       (await page.locator('text=「実行」を押すと').count()) > 0,
   );
 
+  // 8h. 進捗サイドバーから移動できる / 現在地が滑って動く
+  const nav = page.locator('[data-testid="problem-nav"]');
+  check('問題ページに進捗サイドバーが出る', (await nav.count()) === 1);
+  check('現在の問題が 1 つだけ強調される', (await page.locator('[data-testid="nav-current"]').count()) === 1);
+  const currentY = () =>
+    page
+      .locator('[data-testid="nav-current"] span')
+      .first()
+      .evaluate((el) => el.getBoundingClientRect().y);
+  const navFrom = await currentY();
+  await nav.locator('a[href*="phase1-lv2-005"]').click();
+  await page.waitForTimeout(45);
+  const navMid = await currentY();
+  await page.waitForTimeout(700);
+  const navTo = await currentY();
+  check(
+    'サイドバーから別の問題へ移動できる',
+    page.url().includes('phase1-lv2-005') && navTo !== navFrom,
+    page.url().split('#')[1],
+  );
+  check(
+    '現在地の帯が滑って移動する',
+    Math.abs(navMid - navTo) > 3,
+    `${navFrom.toFixed(0)} → 途中 ${navMid.toFixed(0)} → ${navTo.toFixed(0)}`,
+  );
+
   // 9. 進捗が localStorage に残る
   await page.goto(base, { waitUntil: 'networkidle' });
   const stored = await page.evaluate(() => localStorage.getItem('sql-training:progress:v1'));
