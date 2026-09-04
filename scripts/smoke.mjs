@@ -75,12 +75,11 @@ try {
     lightLuma > 0.6 && darkLuma < 0.05,
     `light ${lightLuma.toFixed(3)} / dark ${darkLuma.toFixed(3)}`,
   );
-  // つまみは layoutId で位置を繋いで滑らせている。途中位置を取れれば動いている
-  const thumbX = () =>
-    page.evaluate(() => {
-      const el = document.querySelector('[role="radiogroup"] button[aria-checked="true"] span');
-      return el ? el.getBoundingClientRect().x : null;
-    });
+  // つまみは 1 つの要素を動かしている。途中位置を取れれば滑っている
+  const thumb = page.locator('[data-testid="theme-thumb"]');
+  const thumbX = () => thumb.evaluate((el) => el.getBoundingClientRect().x);
+  const checkedLabel = () =>
+    page.locator('[role="radiogroup"] button[aria-checked="true"]').getAttribute('aria-label');
   await page.click('button[aria-label="システム設定に従う"]');
   await page.waitForTimeout(45);
   const thumbMid = await thumbX();
@@ -88,13 +87,64 @@ try {
   const thumbEnd = await thumbX();
   check(
     'テーマのつまみが滑って移動する',
-    thumbMid !== null && thumbEnd !== null && Math.abs(thumbMid - thumbEnd) > 2,
-    `途中 ${thumbMid?.toFixed(0)} / 到達 ${thumbEnd?.toFixed(0)}`,
+    Math.abs(thumbMid - thumbEnd) > 2,
+    `途中 ${thumbMid.toFixed(0)} / 到達 ${thumbEnd.toFixed(0)}`,
   );
+  // 選ばれた瞬間、アイコンが回りながら起き上がる
+  const iconTransform = await page
+    .locator('button[aria-label="システム設定に従う"] span')
+    .evaluate((el) => getComputedStyle(el).transform);
+  check('切り替えた側のアイコンが元の姿勢に戻っている', iconTransform === 'none', iconTransform);
   check(
     'システム追従に戻せる',
     (await page.evaluate(() => localStorage.getItem('sql-training:theme'))) === null,
   );
+
+  // つまみをつまんで動かしても切り替えられる
+  await page.click('button[aria-label="ライト"]');
+  await page.waitForTimeout(500);
+  const grab = await thumb.boundingBox();
+  await page.mouse.move(grab.x + grab.width / 2, grab.y + grab.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grab.x + grab.width / 2 + 20, grab.y + grab.height / 2, { steps: 6 });
+  const dragMid = await thumbX();
+  await page.mouse.move(grab.x + grab.width / 2 + 32, grab.y + grab.height / 2, { steps: 6 });
+  await page.mouse.up();
+  await page.waitForTimeout(600);
+  check(
+    'つまみを引いてテーマを変えられる',
+    (await checkedLabel()) === 'ダーク' && (await themeOf()) === 'dark',
+    `${await checkedLabel()} / 引いている途中 x=${dragMid.toFixed(0)}`,
+  );
+
+  // 端を越えて引いても外れない
+  const edge = await thumb.boundingBox();
+  await page.mouse.move(edge.x + edge.width / 2, edge.y + edge.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(edge.x + edge.width / 2 - 400, edge.y + edge.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(600);
+  const leftEnd = await thumbX();
+  check(
+    'つまみは端で止まる',
+    (await checkedLabel()) === 'ライト' && Math.abs(leftEnd - (await thumbX())) < 1,
+    `${await checkedLabel()} / x=${leftEnd.toFixed(0)}`,
+  );
+
+  // 半端な位置で離すと近い方へ吸い付く（選択は変わらない）
+  const half = await thumb.boundingBox();
+  await page.mouse.move(half.x + half.width / 2, half.y + half.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(half.x + half.width / 2 + 9, half.y + half.height / 2, { steps: 4 });
+  await page.mouse.up();
+  await page.waitForTimeout(600);
+  check(
+    '半端な位置で離すと元の区画へ戻る',
+    (await checkedLabel()) === 'ライト' && Math.abs((await thumbX()) - leftEnd) < 1,
+    `${await checkedLabel()} / x=${(await thumbX()).toFixed(0)}`,
+  );
+  await page.click('button[aria-label="システム設定に従う"]');
+  await page.waitForTimeout(400);
 
   // 1c. ガラス（背後をぼかす面）が実際に効いていること
   const glass = await page.evaluate(() => {
