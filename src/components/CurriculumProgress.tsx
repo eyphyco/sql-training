@@ -1,32 +1,30 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { animate, motion, useMotionValue, useReducedMotion } from 'motion/react';
+import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
 import { PHASES } from '../data/phases';
 import { useProgress } from '../storage/progressContext';
 import { EASE_OUT } from './motion';
 import type { PhaseId } from '../types';
 
-/** 0 から目的の数まで数え上げる。視差効果を減らす設定では最初から結果を出す */
+/**
+ * 0 から目的の数まで数え上げる。視差効果を減らす設定では最初から結果を出す。
+ * MotionValue をそのまま描画するので、フレームごとの再描画は起きない。
+ */
 function CountUp({ value }: { value: number }) {
   const reduced = useReducedMotion();
-  const mv = useMotionValue(0);
-  const [shown, setShown] = useState(value);
+  const count = useMotionValue(reduced ? value : 0);
+  const rounded = useTransform(count, (v) => Math.round(v));
 
   useEffect(() => {
     if (reduced) {
-      setShown(value);
+      count.set(value);
       return;
     }
-    setShown(0);
-    const controls = animate(mv, value, {
-      duration: 0.7,
-      ease: EASE_OUT,
-      onUpdate: (v) => setShown(Math.round(v)),
-    });
+    const controls = animate(count, value, { duration: 0.7, ease: EASE_OUT });
     return () => controls.stop();
-  }, [value, reduced, mv]);
+  }, [value, reduced, count]);
 
-  return <>{shown}</>;
+  return <motion.span>{rounded}</motion.span>;
 }
 
 /**
