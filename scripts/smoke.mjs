@@ -238,6 +238,9 @@ try {
 
   // 1d. 教材
   await page.goto(`${base}#/learn`, { waitUntil: 'networkidle' });
+  // ルートは遅延読み込みなので、networkidle のあとに本体を取りに行く。
+  // 中身が出るまで待ってから数える
+  await page.waitForSelector('[data-testid="chapter-card"]');
   // 進捗バーの区切りも /learn/N へのリンクなので、カードだけを数える
   const chapters = await page.locator('[data-testid="chapter-card"]').count();
   check(
@@ -662,6 +665,8 @@ try {
 
   // 12. 進捗のエクスポート
   await page.goto(`${base}#/settings`, { waitUntil: 'networkidle' });
+  // 「進捗データ」はヘッダのナビにも出るので、ページ側の見出しで待つ
+  await page.waitForSelector('main h1:has-text("設定")');
   check(
     '進捗データ画面が表示される',
     (await page.locator('button:has-text("エクスポート")').count()) > 0,
@@ -685,6 +690,7 @@ try {
 
   // 13. フェーズでフィルタできる
   await page.goto(`${base}#/problems?phase=6`, { waitUntil: 'networkidle' });
+  await page.waitForSelector('ul li a[href*="/problems/"]');
   const p6 = ALL_PROBLEMS.filter((p) => p.phase === 6).length;
   const shown = await page.locator('ul li a[href*="/problems/"]').count();
   check('フェーズでフィルタできる', shown === p6, `${shown} / ${p6} 件`);
@@ -708,6 +714,40 @@ try {
     `${reducedHeight.toFixed(0)}px`,
   );
   await reducedCtx.close();
+
+  // 15. 狭い画面でヘッダが崩れない
+  const narrowCtx = await browser.newContext({
+    viewport: { width: 390, height: 800 },
+    isMobile: true,
+    hasTouch: true,
+  });
+  const narrowPage = await narrowCtx.newPage();
+  await narrowPage.goto(`${base}#/problems`, { waitUntil: 'networkidle' });
+  await narrowPage.waitForSelector('ul li a[href*="/problems/"]');
+  const narrow = await narrowPage.evaluate(() => {
+    // whitespace-nowrap なので、入り切らなければ中身がはみ出す
+    const items = [...document.querySelectorAll('header nav a')].map((a) => ({
+      t: a.textContent.trim(),
+      bad: a.scrollWidth > a.clientWidth + 1 || a.getBoundingClientRect().right > window.innerWidth,
+    }));
+    return {
+      // 版面が要求より広がっていたら、内容が入り切らず縮小されたということ
+      layout: window.innerWidth,
+      docW: document.documentElement.scrollWidth,
+      broken: items.filter((i) => i.bad).map((i) => i.t),
+    };
+  });
+  check(
+    '狭い画面（390px）でナビが折れも切れもしない',
+    narrow.broken.length === 0 && narrow.layout === 390,
+    `版面 ${narrow.layout}px${narrow.broken.length ? ' / ' + narrow.broken.join(',') : ''}`,
+  );
+  check(
+    '狭い画面で横スクロールが出ない',
+    narrow.docW <= narrow.layout,
+    `文書 ${narrow.docW}px / 画面 ${narrow.layout}px`,
+  );
+  await narrowCtx.close();
 
   check(
     'コンソールエラーが無い',

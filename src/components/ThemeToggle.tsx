@@ -115,7 +115,7 @@ export default function ThemeToggle() {
             title={label}
             onClick={() => setChoice(value)}
             // 円の内側で切り抜いて、下辺を地平線に見立てる
-            className={`relative flex h-6 w-7 items-center justify-center overflow-hidden rounded-full transition-colors ${
+            className={`relative flex h-6 w-6 items-center justify-center overflow-hidden rounded-full transition-colors sm:w-7 ${
               active ? 'text-fg' : 'text-subtle hover:text-muted'
             }`}
           >

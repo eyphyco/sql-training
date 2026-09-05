@@ -31,6 +31,8 @@ export default function QueryEditor({ value, onChange, schema, height = '100%' }
       Prec.highest(keymap.of([{ key: 'Tab', run: acceptCompletion }])),
       // ペインが狭いので長い行は折り返す（横スクロールで式が見切れるのを防ぐ）
       EditorView.lineWrapping,
+      // CodeMirror の編集領域は contenteditable なので、読み上げ名を自分で付ける
+      EditorView.contentAttributes.of({ 'aria-label': 'SQL エディタ' }),
       editorTheme(resolved === 'dark'),
     ];
   }, [schema, resolved]);

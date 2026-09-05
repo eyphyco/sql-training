@@ -19,9 +19,13 @@ const OK =
   'SELECT class, AVG(score) AS avg_score\nFROM students\nGROUP BY class\nHAVING AVG(score) >= 70;';
 
 /** 画像の一部を読み、明暗の両端からコントラスト比を出す */
-function ratioOfRegion([dataUrl, box]) {
+function ratioOfRegion([base64, box]) {
   return (async () => {
-    const img = await createImageBitmap(await (await fetch(dataUrl)).blob());
+    // CSP の connect-src が data: を許していないので fetch は使わず、自前で復号する
+    const bin = atob(base64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+    const img = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
     const canvas = new OffscreenCanvas(img.width, img.height);
     const cx = canvas.getContext('2d');
     cx.drawImage(img, 0, 0);
@@ -65,10 +69,7 @@ for (const theme of ['light', 'dark']) {
       w: Math.round(r.width * SCALE),
       h: Math.round(r.height * SCALE),
     };
-    const ratio = await page.evaluate(ratioOfRegion, [
-      `data:image/png;base64,${shot.toString('base64')}`,
-      box,
-    ]);
+    const ratio = await page.evaluate(ratioOfRegion, [shot.toString('base64'), box]);
     rows.push([theme, label, ratio]);
   };
 

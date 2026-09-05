@@ -27,8 +27,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      # 画面に触らないロジックの単体テスト（jsdom / 約 1 秒）
+      - run: npm run test
       # 問題データの SQL を実際に DuckDB で実行して壊れていないか検証する
       - run: npm run validate
+      # build は tsc -b を含むので、型の誤りもここで落ちる
       - run: npm run build
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v4

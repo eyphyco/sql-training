@@ -105,6 +105,7 @@ export default function ProblemList() {
           <span className="w-14 shrink-0 text-[11px] text-subtle">タグ</span>
           {/* タグは70種類以上あるのでチップではなくセレクトで選ぶ */}
           <select
+            aria-label="タグで絞り込む"
             value={tag ?? ''}
             onChange={(e) => setParam('tag', e.target.value === '' ? null : e.target.value)}
             className="glass-edge rounded-full border border-line bg-surface px-3 py-1 text-[11.5px] text-fg"

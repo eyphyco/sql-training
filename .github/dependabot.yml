@@ -1,0 +1,19 @@
+# 依存の更新を週 1 でまとめて提案させる。
+# 手で追うと放置されるので、PR にして気づけるようにする。
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # 個別に PR が飛ぶと数が多いので、種類ごとにまとめる
+      dev:
+        dependency-type: development
+      prod:
+        dependency-type: production
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

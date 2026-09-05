@@ -39,7 +39,8 @@ export default function Home() {
         <Card className="overflow-hidden">
           <div className="flex flex-wrap items-end justify-between gap-6 p-5">
             <div className="min-w-[14rem] flex-1">
-              <p className="text-[11.5px] font-medium tracking-tight text-muted">学習の進捗</p>
+              {/* このページの見出し。他ページと同じく h1 を 1 つ置く */}
+              <h1 className="text-[11.5px] font-medium tracking-tight text-muted">学習の進捗</h1>
               <div className="mt-2 mb-3 flex items-baseline gap-1.5">
                 <span className="tnum text-[2.5rem] leading-none font-semibold tracking-tight text-fg">
                   {totalSolved}

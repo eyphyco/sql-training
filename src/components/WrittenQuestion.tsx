@@ -38,6 +38,7 @@ export default function WrittenQuestion({ problem }: { problem: WrittenProblem }
           <span className="text-[11px] text-subtle">入力内容はこのブラウザに自動保存されます</span>
         </header>
         <textarea
+          aria-label="あなたの解答"
           value={text}
           onChange={(e) => save(e.target.value)}
           rows={14}
