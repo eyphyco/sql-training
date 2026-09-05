@@ -31,5 +31,15 @@ export const RISE: Variants = {
   gone: { opacity: 0, y: -4, transition: { duration: 0.14, ease: EASE_OUT } },
 };
 
+/**
+ * 続けて出る塊。親に付けると、RISE を持つ子が少しずつ遅れて出る。
+ * 一度に 3〜4 枚出るところ（模範解答・解説・自己採点）で、
+ * 上から順に読ませたいときに使う。
+ */
+export const STAGGER: Variants = {
+  hidden: {},
+  shown: { transition: { staggerChildren: 0.05 } },
+};
+
 /** 画面遷移。位置は動かさず、切り替わりの断絶だけ和らげる */
 export const PAGE: Transition = { duration: 0.15, ease: EASE_OUT };

@@ -36,7 +36,20 @@ export const PROBLEM_METAS: ProblemMeta[] = ALL_PROBLEMS.map((p) => ({
   tags: p.tags,
 }));
 
-export const ALL_TAGS: string[] = [...new Set(ALL_PROBLEMS.flatMap((p) => p.tags))].sort();
+/** タグごとの問題数 */
+export const TAG_COUNTS: Map<string, number> = ALL_PROBLEMS.reduce((m, p) => {
+  for (const t of p.tags) m.set(t, (m.get(t) ?? 0) + 1);
+  return m;
+}, new Map<string, number>());
+
+/*
+  タグは 70 種類以上ある。既定の sort() だと符号位置順（数字 → 英大 → 英小 →
+  カタカナ → 漢字）に並び、利用者からは何順か読み取れない。
+  「問題数の多い順、同数なら五十音順」にして、画面にも件数を出す。
+*/
+export const ALL_TAGS: string[] = [...TAG_COUNTS.keys()].sort(
+  (a, b) => (TAG_COUNTS.get(b) ?? 0) - (TAG_COUNTS.get(a) ?? 0) || a.localeCompare(b, 'ja'),
+);
 
 export function problemsOfPhase(phase: PhaseId): ProblemMeta[] {
   return PROBLEM_METAS.filter((p) => p.phase === phase);

@@ -1,12 +1,24 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
-import { ALL_TAGS, PROBLEM_METAS } from '../data/problems';
-import { LEVEL_LABEL, LEVEL_TONE, PHASES, PHASE_BY_ID } from '../data/phases';
+import { ALL_TAGS, PROBLEM_METAS, TAG_COUNTS } from '../data/problems';
+import { LEVEL_FULL_LABEL, LEVEL_LABEL, LEVEL_TONE, PHASES, PHASE_BY_ID } from '../data/phases';
 import { useProgress } from '../storage/progressContext';
-import { Tag } from '../components/ui';
-import { IconCheck, IconDash } from '../components/icons';
-import { SLIDE } from '../components/motion';
+import { AnimatedNumber, Tag } from '../components/ui';
+import { IconCheck, IconChevronDown, IconDash, IconSearch, IconX } from '../components/icons';
+import { COLLAPSE, EASE_OUT, SLIDE } from '../components/motion';
+import {
+  applyFilter,
+  countByLevel,
+  countByPhase,
+  countByTag,
+  isEmptyFilter,
+  parseFilter,
+  toggleValue,
+  writeFilter,
+  type Filter,
+  type Status,
+} from './problemFilter';
 import type { LevelId, PhaseId, ProblemType } from '../types';
 
 const TYPE_LABEL: Record<ProblemType, string> = {
@@ -15,117 +27,324 @@ const TYPE_LABEL: Record<ProblemType, string> = {
   written: '記述',
 };
 
+const LEVELS: LevelId[] = [1, 2, 3];
+const STATUSES: { id: Status; label: string }[] = [
+  { id: 'unsolved', label: '未正解' },
+  { id: 'solved', label: '正解済み' },
+];
+
+/** 畳んでいるときに出すタグの数。多い順の上位だけ見せる */
+const TAGS_COLLAPSED = 12;
+
+/**
+ * 絞り込みのチップ。押している間だけ少し縮み、選択の下地は
+ * 敷かれるときに膨らんで出る（色が唐突に変わるより、押した手応えが出る）。
+ */
+function Chip({
+  active,
+  count,
+  disabled = false,
+  onClick,
+  children,
+  testId,
+}: {
+  active: boolean;
+  count?: number;
+  disabled?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  testId?: string;
+}) {
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-pressed={active}
+      data-testid={testId}
+      data-count={count}
+      layout
+      transition={SLIDE}
+      whileTap={disabled ? undefined : { scale: 0.94 }}
+      className={`glass-edge relative isolate flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[11.5px] font-medium transition-colors disabled:pointer-events-none disabled:opacity-35 ${
+        active
+          ? 'border-accent-line text-accent'
+          : 'border-line bg-surface text-muted hover:border-line-strong hover:text-fg'
+      }`}
+    >
+      <AnimatePresence initial={false}>
+        {active && (
+          <motion.span
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            transition={{ duration: 0.18, ease: EASE_OUT }}
+            className="absolute inset-0 -z-10 rounded-full bg-accent-soft"
+          />
+        )}
+      </AnimatePresence>
+      {children}
+      {count !== undefined && <span className="tnum ml-1.5 text-[10px] opacity-55">{count}</span>}
+    </motion.button>
+  );
+}
+
+/** 「フェーズ」「レベル」などの見出しつきの行 */
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="w-14 shrink-0 text-[11px] text-subtle">{label}</span>
+      {children}
+    </div>
+  );
+}
+
 export default function ProblemList() {
   const [params, setParams] = useSearchParams();
   const { isSolved } = useProgress();
+  const filter = useMemo(() => parseFilter(params), [params]);
 
-  const phase = params.get('phase');
-  const level = params.get('level');
-  const tag = params.get('tag');
-  const status = params.get('status');
-  const hasFilter = Boolean(phase || level || tag || status);
+  const [tagsOpen, setTagsOpen] = useState(false);
+  const [tagQuery, setTagQuery] = useState('');
 
-  const setParam = (key: string, value: string | null) => {
-    const next = new URLSearchParams(params);
-    if (value === null || next.get(key) === value) next.delete(key);
-    else next.set(key, value);
-    setParams(next, { replace: true });
-  };
+  const commit = (next: Filter) => setParams(writeFilter(next), { replace: true });
+  const togglePhase = (v: number) => commit({ ...filter, phases: toggleValue(filter.phases, v) });
+  const toggleLevel = (v: number) => commit({ ...filter, levels: toggleValue(filter.levels, v) });
+  const toggleTag = (v: string) => commit({ ...filter, tags: toggleValue(filter.tags, v) });
+  const toggleStatus = (v: Status) => commit({ ...filter, status: toggleValue(filter.status, v) });
 
-  const filtered = useMemo(
-    () =>
-      PROBLEM_METAS.filter((p) => {
-        if (phase && p.phase !== Number(phase)) return false;
-        if (level && p.level !== Number(level)) return false;
-        if (tag && !p.tags.includes(tag)) return false;
-        if (status === 'solved' && !isSolved(p.id)) return false;
-        if (status === 'unsolved' && isSolved(p.id)) return false;
-        return true;
-      }),
-    [phase, level, tag, status, isSolved],
+  const shown = useMemo(() => applyFilter(PROBLEM_METAS, filter, isSolved), [filter, isSolved]);
+
+  /*
+    チップに出す件数は、その種類だけ外して数える。
+    「Lv1 を選んでいる状態で Lv3 に出ている数」は、Lv3 も足したら
+    何件増えるかを表す。自分の選択で 0 が並ぶと選び直せない。
+  */
+  const phaseCounts = useMemo(
+    () => countByPhase(applyFilter(PROBLEM_METAS, filter, isSolved, 'phases')),
+    [filter, isSolved],
   );
+  const levelCounts = useMemo(
+    () => countByLevel(applyFilter(PROBLEM_METAS, filter, isSolved, 'levels')),
+    [filter, isSolved],
+  );
+  const tagCounts = useMemo(
+    () => countByTag(applyFilter(PROBLEM_METAS, filter, isSolved, 'tags')),
+    [filter, isSolved],
+  );
+  const statusCounts = useMemo(() => {
+    const pool = applyFilter(PROBLEM_METAS, filter, isSolved, 'status');
+    const solved = pool.filter((p) => isSolved(p.id)).length;
+    return { solved, unsolved: pool.length - solved };
+  }, [filter, isSolved]);
 
-  const chip = (active: boolean) =>
-    `rounded-full border px-2.5 py-1 text-[11.5px] font-medium transition-colors ${
-      active
-        ? 'border-accent-line bg-accent-soft text-accent'
-        : 'glass-edge border-line bg-surface text-muted hover:border-line-strong hover:text-fg'
-    }`;
+  /*
+    畳んでいるときは上位だけ。ただし選んだタグは常に見えるようにする
+    （見えない所で絞り込みが効いていると、件数の理由が分からなくなる）。
+  */
+  const tagList = useMemo(() => {
+    const q = tagQuery.trim().toLowerCase();
+    if (tagsOpen) {
+      return q === '' ? ALL_TAGS : ALL_TAGS.filter((t) => t.toLowerCase().includes(q));
+    }
+    const head = ALL_TAGS.filter((t) => !filter.tags.includes(t)).slice(0, TAGS_COLLAPSED);
+    return [...filter.tags, ...head].slice(0, Math.max(TAGS_COLLAPSED, filter.tags.length));
+  }, [filter.tags, tagQuery, tagsOpen]);
+
+  /** 「いま何で絞っているか」を 1 行にまとめる。× で 1 つずつ外せる */
+  const active = [
+    ...filter.phases.map((id) => ({
+      key: `phase-${id}`,
+      label: PHASE_BY_ID.get(id as PhaseId)?.name ?? `フェーズ ${id}`,
+      remove: () => togglePhase(id),
+    })),
+    ...filter.levels.map((l) => ({
+      key: `level-${l}`,
+      label: LEVEL_FULL_LABEL[l as LevelId],
+      remove: () => toggleLevel(l),
+    })),
+    ...filter.status.map((s) => ({
+      key: `status-${s}`,
+      label: s === 'solved' ? '正解済み' : '未正解',
+      remove: () => toggleStatus(s),
+    })),
+    ...filter.tags.map((t) => ({
+      key: `tag-${t}`,
+      label: `#${t}`,
+      remove: () => toggleTag(t),
+    })),
+  ];
 
   return (
     <div className="space-y-5">
       <div className="flex items-baseline justify-between gap-4">
         <h1 className="text-lg font-semibold tracking-tight text-fg">問題</h1>
         <span className="tnum text-[12px] text-subtle">
-          {filtered.length} / {PROBLEM_METAS.length} 問
+          <AnimatedNumber value={shown.length} className="text-fg" /> / {PROBLEM_METAS.length} 問
         </span>
       </div>
 
-      <div className="glass space-y-2.5 rounded-lg border border-line bg-surface p-4">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="w-14 shrink-0 text-[11px] text-subtle">フェーズ</span>
+      {/*
+        同じ種類の中は OR、種類どうしは AND。Lv1 と Lv3 のように
+        飛び飛びの難易度をまとめて見たい場面があるので、単一選択にしない。
+      */}
+      <div
+        data-testid="filter-panel"
+        className="glass space-y-2.5 rounded-lg border border-line bg-surface p-4"
+      >
+        <Row label="フェーズ">
           {PHASES.map((p) => (
-            <button
+            <Chip
               key={p.id}
-              onClick={() => setParam('phase', String(p.id))}
-              data-testid="phase-chip"
-              className={chip(phase === String(p.id))}
+              testId="phase-chip"
+              active={filter.phases.includes(p.id)}
+              count={phaseCounts.get(p.id) ?? 0}
+              disabled={!filter.phases.includes(p.id) && !phaseCounts.get(p.id)}
+              onClick={() => togglePhase(p.id)}
             >
               <span className="tnum mr-1 font-mono text-subtle">{p.id}</span>
               {p.name}
-            </button>
+            </Chip>
           ))}
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="w-14 shrink-0 text-[11px] text-subtle">レベル</span>
-          {([1, 2, 3] as LevelId[]).map((l) => (
-            <button
+        </Row>
+
+        <Row label="レベル">
+          {LEVELS.map((l) => (
+            <Chip
               key={l}
-              onClick={() => setParam('level', String(l))}
-              className={chip(level === String(l))}
+              testId="level-chip"
+              active={filter.levels.includes(l)}
+              count={levelCounts.get(l) ?? 0}
+              disabled={!filter.levels.includes(l) && !levelCounts.get(l)}
+              onClick={() => toggleLevel(l)}
             >
               {LEVEL_LABEL[l]}
-            </button>
+            </Chip>
           ))}
-          <span className="ml-4 w-8 shrink-0 text-[11px] text-subtle">状態</span>
-          <button
-            onClick={() => setParam('status', 'unsolved')}
-            className={chip(status === 'unsolved')}
-          >
-            未正解
-          </button>
-          <button
-            onClick={() => setParam('status', 'solved')}
-            className={chip(status === 'solved')}
-          >
-            正解済み
-          </button>
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="w-14 shrink-0 text-[11px] text-subtle">タグ</span>
-          {/* タグは70種類以上あるのでチップではなくセレクトで選ぶ */}
-          <select
-            aria-label="タグで絞り込む"
-            value={tag ?? ''}
-            onChange={(e) => setParam('tag', e.target.value === '' ? null : e.target.value)}
-            className="glass-edge rounded-full border border-line bg-surface px-3 py-1 text-[11.5px] text-fg"
-          >
-            <option value="">すべて</option>
-            {ALL_TAGS.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-          {hasFilter && (
-            <button
-              onClick={() => setParams(new URLSearchParams(), { replace: true })}
-              className="ml-auto text-[11.5px] text-muted underline underline-offset-2 hover:text-fg"
+          <span className="mx-2 h-4 w-px shrink-0 bg-line" />
+          <span className="shrink-0 text-[11px] text-subtle">状態</span>
+          {STATUSES.map((s) => (
+            <Chip
+              key={s.id}
+              testId="status-chip"
+              active={filter.status.includes(s.id)}
+              count={statusCounts[s.id]}
+              onClick={() => toggleStatus(s.id)}
             >
-              フィルタをクリア
-            </button>
+              {s.label}
+            </Chip>
+          ))}
+        </Row>
+
+        <Row label="タグ">
+          {/*
+            何順か分かるように、並びの規則と件数を必ず出す。
+            開いているときは 70 件以上並ぶので、代わりに検索を置く。
+          */}
+          <motion.span layout className="mr-1 shrink-0 text-[10.5px] text-subtle">
+            問題数の多い順
+          </motion.span>
+          <AnimatePresence initial={false} mode="popLayout">
+            {tagsOpen && (
+              <motion.label
+                key="tag-search"
+                layout
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={SLIDE}
+                className="flex w-40 shrink-0 items-center gap-1.5 rounded-full border border-line bg-sunken px-2.5 py-1"
+              >
+                <IconSearch size={12} className="shrink-0 text-subtle" />
+                <input
+                  type="search"
+                  value={tagQuery}
+                  onChange={(e) => setTagQuery(e.target.value)}
+                  placeholder="タグを探す"
+                  aria-label="タグを探す"
+                  className="w-full bg-transparent text-[11.5px] text-fg placeholder:text-subtle focus:outline-none"
+                />
+              </motion.label>
+            )}
+          </AnimatePresence>
+          <AnimatePresence initial={false} mode="popLayout">
+            {tagList.map((t) => (
+              <Chip
+                key={t}
+                testId="tag-chip"
+                active={filter.tags.includes(t)}
+                count={tagCounts.get(t) ?? 0}
+                disabled={!filter.tags.includes(t) && !tagCounts.get(t)}
+                onClick={() => toggleTag(t)}
+              >
+                #{t}
+                <span className="sr-only">（全 {TAG_COUNTS.get(t) ?? 0} 問）</span>
+              </Chip>
+            ))}
+          </AnimatePresence>
+          <motion.button
+            type="button"
+            layout
+            transition={SLIDE}
+            onClick={() => {
+              setTagsOpen((v) => !v);
+              setTagQuery('');
+            }}
+            aria-expanded={tagsOpen}
+            className="flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11.5px] text-muted hover:text-fg"
+          >
+            {tagsOpen ? '畳む' : `ほか ${Math.max(0, ALL_TAGS.length - tagList.length)} 件`}
+            <motion.span
+              animate={{ rotate: tagsOpen ? 180 : 0 }}
+              transition={SLIDE}
+              className="flex"
+            >
+              <IconChevronDown size={12} />
+            </motion.span>
+          </motion.button>
+        </Row>
+
+        <AnimatePresence initial={false}>
+          {!isEmptyFilter(filter) && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={COLLAPSE}
+              className="overflow-hidden"
+            >
+              <div className="flex flex-wrap items-center gap-1.5 border-t border-line pt-2.5">
+                <span className="w-14 shrink-0 text-[11px] text-subtle">絞り込み中</span>
+                <AnimatePresence initial={false} mode="popLayout">
+                  {active.map((a) => (
+                    <motion.button
+                      key={a.key}
+                      type="button"
+                      data-testid="active-chip"
+                      layout
+                      onClick={a.remove}
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
+                      transition={SLIDE}
+                      className="flex shrink-0 items-center gap-1 rounded-full border border-accent-line bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent"
+                    >
+                      {a.label}
+                      <IconX size={10} />
+                      <span className="sr-only">を外す</span>
+                    </motion.button>
+                  ))}
+                </AnimatePresence>
+                <button
+                  onClick={() => setParams(new URLSearchParams(), { replace: true })}
+                  className="ml-auto shrink-0 text-[11.5px] text-muted underline underline-offset-2 hover:text-fg"
+                >
+                  すべて解除
+                </button>
+              </div>
+            </motion.div>
           )}
-        </div>
+        </AnimatePresence>
       </div>
 
       {/*
@@ -134,7 +353,7 @@ export default function ProblemList() {
       */}
       <ul className="glass overflow-hidden rounded-lg border border-line bg-surface">
         <AnimatePresence initial={false} mode="popLayout">
-          {filtered.map((p) => {
+          {shown.map((p) => {
             const solved = isSolved(p.id);
             return (
               <motion.li
@@ -176,10 +395,15 @@ export default function ProblemList() {
             );
           })}
         </AnimatePresence>
-        {filtered.length === 0 && (
-          <li className="px-4 py-8 text-center text-[13px] text-subtle">
+        {shown.length === 0 && (
+          <motion.li
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.22, ease: EASE_OUT }}
+            className="px-4 py-8 text-center text-[13px] text-subtle"
+          >
             条件に一致する問題がありません。
-          </li>
+          </motion.li>
         )}
       </ul>
     </div>

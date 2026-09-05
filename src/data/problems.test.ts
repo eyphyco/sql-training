@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ALL_PROBLEMS,
   ALL_TAGS,
+  TAG_COUNTS,
   getProblem,
   nextProblemId,
   PHASE_TOTALS,
@@ -37,8 +38,24 @@ describe('読み込みの結果', () => {
     expect(PROBLEM_METAS.map((p) => p.id)).toEqual(ALL_PROBLEMS.map((p) => p.id));
   });
 
-  it('タグは重複なしの昇順', () => {
-    expect(ALL_TAGS).toEqual([...new Set(ALL_TAGS)].sort());
+  it('タグは重複なし', () => {
+    expect(ALL_TAGS).toEqual([...new Set(ALL_TAGS)]);
+  });
+
+  it('タグは問題数の多い順、同数なら五十音順に並ぶ', () => {
+    for (let i = 1; i < ALL_TAGS.length; i += 1) {
+      const [prev, cur] = [ALL_TAGS[i - 1], ALL_TAGS[i]];
+      const a = TAG_COUNTS.get(prev) ?? 0;
+      const b = TAG_COUNTS.get(cur) ?? 0;
+      expect(a).toBeGreaterThanOrEqual(b);
+      if (a === b) expect(prev.localeCompare(cur, 'ja')).toBeLessThan(0);
+    }
+  });
+
+  it('タグごとの件数は実データと一致する', () => {
+    for (const [tag, n] of TAG_COUNTS) {
+      expect(n).toBe(ALL_PROBLEMS.filter((p) => p.tags.includes(tag)).length);
+    }
   });
 
   it('タグ一覧は実際に使われているものだけ', () => {

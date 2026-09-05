@@ -58,6 +58,17 @@ CI（`main` への push）では `lint` → `format:check` → `test` → `valid
 
 形式は 3 種類。**`sql_query`**（37 問・結果セットで自動採点）、**`multiple_choice`**（11 問）、**`written`**（4 問・模範解答を出して自己採点）。
 
+### 問題の探しかた
+
+一覧のチップで絞り込む。**同じ種類の中は OR、種類どうしは AND**。Lv2 を飛ばして「Lv1 と Lv3」だけ見たい場面があるので、単一選択にしていない。
+
+- 選んだ条件は URL に載る（`?level=1,3&tag=NULL`）。値が 1 つだけの `?phase=6` も読めるので、問題ページから貼っているリンクはそのまま動く
+- チップの数字は**その種類だけ外して数えた件数**。「Lv3 も足したら何件になるか」を表す。自分の選択を含めて数えると 0 が並んで選び直せなくなる
+- 0 件になるチップは押せない（押しても結果が変わらないため）
+- **タグは問題数の多い順**、同数なら五十音順。72 種類あるうえ、既定の `sort()` では符号位置順（数字 → 英大 → 英小 → カタカナ → 漢字）に並んで何順か読み取れなかった。上位 12 件だけ出し、残りは開いてから名前で探す
+
+絞り込みの規則は [src/pages/problemFilter.ts](src/pages/problemFilter.ts) に純粋な関数として切り出し、状態は URL のクエリだけに持たせている（画面を動かさずに単体テストで確かめられる）。
+
 ## 教材
 
 問題を解く前に読む教科書を `/learn` に置いている。**フェーズ = 章**で、章は節に分かれる（7 章 / 32 節）。
@@ -214,8 +225,9 @@ DOM 上は本文を先に置き、サイドバーは `lg:col-start-1` で左へ�
 | 目的 | どこ | 仕組み |
 | --- | --- | --- |
 | 位置が入れ替わったことを見せる | テーマのつまみ、ナビの下線、サイドバーの現在地 | `layoutId` で 1 つの要素を繋いで滑らせる |
-| 現れた・消えたことを見せる | 教材の開閉、採点結果、ヒント | `AnimatePresence` と高さ / 不透明度 |
-| 何が変わったかを見せる | 問題一覧のフィルタ（残った行が滑って詰まる）、選択式の採点 | `layout` + `popLayout` |
+| 現れた・消えたことを見せる | 教材の開閉、採点結果、ヒント、記述式の模範解答（4 枚を上から順に）、スキーマ一覧 | `AnimatePresence` / `variants` の `staggerChildren` |
+| 何が変わったかを見せる | 問題一覧のフィルタ（残った行が滑って詰まる・件数が数えて動く・選択の下地が膨らむ） | `layout` + `popLayout`、`useMotionValue` |
+| どこを指しているかを示す | 教材の章カード、前後送りの矢印 | `whileHover` で 2px |
 
 時間・イージング・移動量は [src/components/motion.ts](src/components/motion.ts) に集約（配色を `index.css` に集めたのと同じ理由）。移動は 4〜8px、入りは 220ms 以内、位置が入れ替わるものだけ跳ね返らないバネ。
 
@@ -252,12 +264,13 @@ DuckDB の WebAssembly は `dist/` 上で約 77MB、配信時は gzip で約 8MB
 src/
 ├── components/   SqlWorkbench / QueryEditor / ResultTable / ChoiceQuestion / WrittenQuestion
 │                 ProblemNav / ChapterNav / LessonPanel / ThemeToggle
-│                 ui.tsx（Button・Card・Meter・Tag）、icons.tsx、motion.ts
+│                 ui.tsx（Button・Card・Meter・Tag・AnimatedNumber）、icons.tsx、motion.ts
 ├── theme/        ライト/ダーク切り替え
 ├── data/         problems/*.json、lessons/*.json、phases.ts、problems.ts、lessons.ts
 ├── engine/       duckdb.ts（初期化・実行・EXPLAIN）、judge.ts（採点・エラー解説）
 ├── storage/      progress.ts（localStorage）、workbenchSession.ts（sessionStorage）
 ├── pages/        Home / Learn / LearnChapter / ProblemList / ProblemDetail / Settings
+│                 problemFilter.ts（一覧の絞り込み。URL ↔ 条件の変換と照合）
 └── types.ts      問題データと進捗の型定義
 ```
 

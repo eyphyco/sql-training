@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { useProgress } from '../storage/progressContext';
 import { useTheme } from '../theme/themeContext';
-import { Button, Card, SectionTitle } from '../components/ui';
+import { AnimatedNumber, Button, Card, SectionTitle } from '../components/ui';
 import { IconDownload, IconTrash, IconUpload } from '../components/icons';
 import type { ThemeChoice } from '../theme/theme';
 import { PROBLEM_METAS } from '../data/problems';
@@ -75,6 +75,7 @@ export default function Settings() {
         <SectionTitle>進捗データ</SectionTitle>
         <Card className="divide-y divide-line">
           <div className="grid grid-cols-3 divide-x divide-line">
+            {/* 取り込みや消去で数が変わるので、書き換えず数えて動かす */}
             {[
               ['着手', attempted],
               ['正解', solved],
@@ -82,7 +83,9 @@ export default function Settings() {
             ].map(([label, value]) => (
               <div key={label} className="px-4 py-3">
                 <p className="text-[11px] text-muted">{label}</p>
-                <p className="tnum mt-0.5 text-[17px] font-medium text-fg">{value}</p>
+                <p className="mt-0.5 text-[17px] font-medium text-fg">
+                  <AnimatedNumber value={Number(value)} />
+                </p>
               </div>
             ))}
           </div>

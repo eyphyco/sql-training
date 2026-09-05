@@ -1,5 +1,6 @@
+import { useEffect } from 'react';
 import type { ReactNode } from 'react';
-import { motion } from 'motion/react';
+import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
 import { EASE_OUT } from './motion';
 
 /* ボタン: バリアントとサイズを固定し、画面ごとに書き分けないようにする。
@@ -142,4 +143,28 @@ export function Tag({
       {children}
     </span>
   );
+}
+
+/**
+ * 数字が変わるとき、その場で書き換えず数えて動かす。
+ * 絞り込みの件数のように「何件減ったか」を見せたい所で使う。
+ *
+ * MotionValue を motion 要素の子に渡すと、React の再描画を挟まずに
+ * 文字だけが差し替わる（1 フレームごとに setState しなくて済む）。
+ */
+export function AnimatedNumber({ value, className = '' }: { value: number; className?: string }) {
+  const reduced = useReducedMotion();
+  const raw = useMotionValue(value);
+  const text = useTransform(raw, (v) => String(Math.round(v)));
+
+  useEffect(() => {
+    if (reduced) {
+      raw.set(value);
+      return;
+    }
+    const controls = animate(raw, value, { duration: 0.32, ease: EASE_OUT });
+    return () => controls.stop();
+  }, [raw, reduced, value]);
+
+  return <motion.span className={`tnum ${className}`}>{text}</motion.span>;
 }

@@ -1,4 +1,5 @@
 import { Link, useParams } from 'react-router-dom';
+import { motion } from 'motion/react';
 import { getProblem, nextProblemId, prevProblemId } from '../data/problems';
 import { LEVEL_FULL_LABEL, LEVEL_TONE, PHASE_BY_ID } from '../data/phases';
 import Markdown from '../components/Markdown';
@@ -10,6 +11,7 @@ import ProblemNav from '../components/ProblemNav';
 import ChoiceQuestion from '../components/ChoiceQuestion';
 import WrittenQuestion from '../components/WrittenQuestion';
 import { useProgress } from '../storage/progressContext';
+import { SLIDE } from '../components/motion';
 
 export default function ProblemDetail() {
   const { id = '' } = useParams();
@@ -105,26 +107,35 @@ export default function ProblemDetail() {
 
       {problem.type === 'sql_query' && <SqlWorkbench key={problem.id} problem={problem} />}
 
+      {/* 前後送り。指すと矢印だけが進む向きへ 2px 動く */}
       <nav className="flex items-center justify-between border-t border-line pt-4">
         {prev ? (
-          <Link
-            to={`/problems/${prev}`}
-            className="flex items-center gap-1 text-[12.5px] text-muted hover:text-fg"
-          >
-            <IconChevronLeft size={14} />
-            前の問題
-          </Link>
+          <motion.div initial={false} whileHover="hover" transition={SLIDE}>
+            <Link
+              to={`/problems/${prev}`}
+              className="flex items-center gap-1 text-[12.5px] text-muted hover:text-fg"
+            >
+              <motion.span variants={{ hover: { x: -2 } }} transition={SLIDE} className="flex">
+                <IconChevronLeft size={14} />
+              </motion.span>
+              前の問題
+            </Link>
+          </motion.div>
         ) : (
           <span />
         )}
         {next ? (
-          <Link
-            to={`/problems/${next}`}
-            className="flex items-center gap-1 text-[12.5px] text-muted hover:text-fg"
-          >
-            次の問題
-            <IconChevronRight size={14} />
-          </Link>
+          <motion.div initial={false} whileHover="hover" transition={SLIDE}>
+            <Link
+              to={`/problems/${next}`}
+              className="flex items-center gap-1 text-[12.5px] text-muted hover:text-fg"
+            >
+              次の問題
+              <motion.span variants={{ hover: { x: 2 } }} transition={SLIDE} className="flex">
+                <IconChevronRight size={14} />
+              </motion.span>
+            </Link>
+          </motion.div>
         ) : (
           <span />
         )}

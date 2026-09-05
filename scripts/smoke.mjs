@@ -695,6 +695,115 @@ try {
   const shown = await page.locator('ul li a[href*="/problems/"]').count();
   check('フェーズでフィルタできる', shown === p6, `${shown} / ${p6} 件`);
 
+  // 13b. 同じ種類の中は OR。Lv1 と Lv3 を同時に見られる
+  await page.goto(`${base}#/problems`, { waitUntil: 'networkidle' });
+  await page.waitForSelector('[data-testid="level-chip"]');
+  /*
+    AnimatePresence は退場中の行を DOM に残す（消える行の席を先に空けるため）。
+    その場で数えると消える前の数を拾い、逆に「変わらなくなるまで待つ」だけだと
+    退場が始まる前の静止を掴んでしまう。期待値に届くまで待ち、届いた数を返す。
+  */
+  const countOf = (selector) => page.locator(selector).count();
+  const waitCount = async (selector, want) => {
+    await page
+      .waitForFunction(
+        ([sel, n]) => document.querySelectorAll(sel).length === n,
+        [selector, want],
+        { timeout: 4000 },
+      )
+      .catch(() => {});
+    return countOf(selector);
+  };
+  const ROW = 'ul li a[href*="/problems/"]';
+  const levelChip = (n) => page.locator('[data-testid="level-chip"]').nth(n - 1);
+  const expected1 = ALL_PROBLEMS.filter((p) => p.level === 1).length;
+  const expected13 = ALL_PROBLEMS.filter((p) => p.level === 1 || p.level === 3).length;
+  await levelChip(1).click();
+  const onlyLv1 = await waitCount(ROW, expected1);
+  await levelChip(3).click();
+  const lv1and3 = await waitCount(ROW, expected13);
+  check(
+    'レベルを 2 つ同時に選べる（Lv1 と Lv3）',
+    onlyLv1 === expected1 && lv1and3 === expected13,
+    `Lv1 ${onlyLv1}/${expected1} → Lv1+Lv3 ${lv1and3}/${expected13}`,
+  );
+
+  // 選んだ条件は URL に載る（この状態を貼って共有できる）
+  const shareUrl = page.url();
+  check(
+    '複数選択が URL に載る',
+    shareUrl.includes('level=1%2C3') || shareUrl.includes('level=1,3'),
+    shareUrl.split('?')[1] ?? '',
+  );
+
+  // 13c. 種類どうしは AND（フェーズ 1 かつ Lv1・Lv3）
+  const expectedAnd = ALL_PROBLEMS.filter((p) => p.phase === 1 && p.level !== 2).length;
+  await page.locator('[data-testid="phase-chip"]').first().click();
+  const andCount = await waitCount(ROW, expectedAnd);
+  check('種類どうしは AND で効く', andCount === expectedAnd, `${andCount} / ${expectedAnd} 件`);
+
+  // 13d. 「絞り込み中」から 1 つずつ外せる
+  const activeBefore = await countOf('[data-testid="active-chip"]');
+  await page.locator('[data-testid="active-chip"]').first().click();
+  const activeAfter = await waitCount('[data-testid="active-chip"]', 2);
+  check(
+    '絞り込み中の札を押すとその条件だけ外れる',
+    activeBefore === 3 && activeAfter === 2,
+    `${activeBefore} → ${activeAfter} 件`,
+  );
+
+  // 13e. タグは問題数の多い順。チップの件数が単調に減る
+  await page.goto(`${base}#/problems`, { waitUntil: 'networkidle' });
+  await page.waitForSelector('[data-testid="tag-chip"]');
+  const tagCounts = await page
+    .locator('[data-testid="tag-chip"]')
+    .evaluateAll((els) => els.map((el) => Number(el.dataset.count)));
+  const descending = tagCounts.every((n, i) => i === 0 || tagCounts[i - 1] >= n);
+  check(
+    'タグが問題数の多い順に並ぶ',
+    tagCounts.length > 0 && tagCounts[0] > 1 && descending,
+    tagCounts.join(' ≥ '),
+  );
+
+  // 13f. チップの件数は他の条件に追随し、0 件になるものは押せなくなる
+  await page.goto(`${base}#/problems?phase=6`, { waitUntil: 'networkidle' });
+  await page.waitForSelector('[data-testid="level-chip"]');
+  const levelShown = await page
+    .locator('[data-testid="level-chip"]')
+    .evaluateAll((els) => els.map((el) => Number(el.dataset.count)));
+  const levelReal = [1, 2, 3].map(
+    (l) => ALL_PROBLEMS.filter((p) => p.phase === 6 && p.level === l).length,
+  );
+  // 0 件のチップは押せない（この条件だと大半のタグが 0 件になる）
+  const tagState = await page
+    .locator('[data-testid="tag-chip"]')
+    .evaluateAll((els) => els.map((el) => ({ n: Number(el.dataset.count), off: el.disabled })));
+  check(
+    'チップの件数が他の条件に追随する',
+    JSON.stringify(levelShown) === JSON.stringify(levelReal),
+    `表示 ${levelShown.join('/')} 実データ ${levelReal.join('/')}`,
+  );
+  // 13g. 開いたタグを検索で絞れる
+  await page.goto(`${base}#/problems`, { waitUntil: 'networkidle' });
+  await page.waitForSelector('[data-testid="tag-chip"]');
+  await page.getByRole('button', { name: /ほか \d+ 件/ }).click();
+  const allTags = await waitCount('[data-testid="tag-chip"]', 72);
+  await page.getByLabel('タグを探す').fill('join');
+  const joinTags = await page
+    .locator('[data-testid="tag-chip"]')
+    .evaluateAll((els) => els.map((el) => el.textContent));
+  check(
+    'タグを検索で絞り込める',
+    allTags > 60 && joinTags.length > 0 && joinTags.every((t) => t.includes('join')),
+    `${allTags} → ${joinTags.length} 件（${joinTags.join(' ')}）`,
+  );
+
+  check(
+    '0 件になるチップは押せない',
+    tagState.some((t) => t.n === 0) && tagState.every((t) => t.off === (t.n === 0)),
+    `${tagState.filter((t) => t.off).length} / ${tagState.length} 個が無効`,
+  );
+
   // 14. 「視差効果を減らす」設定を尊重する（MotionConfig reducedMotion="user"）
   const reducedCtx = await browser.newContext({ reducedMotion: 'reduce' });
   const reducedPage = await reducedCtx.newPage();

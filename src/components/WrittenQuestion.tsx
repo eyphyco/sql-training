@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import type { WrittenProblem } from '../types';
 import Markdown from './Markdown';
 import { Button, Card } from './ui';
 import { IconBook, IconBulb, IconCheck } from './icons';
 import { useProgress } from '../storage/progressContext';
+import { RISE, STAGGER } from './motion';
 
 const draftKey = (id: string) => `sql-training:draft:${id}`;
 
@@ -68,71 +70,84 @@ export default function WrittenQuestion({ problem }: { problem: WrittenProblem }
 
       {hintLevel > 0 && !submitted && (
         <div className="space-y-2">
-          {hints.slice(0, hintLevel).map((h, i) => (
-            <Card key={i} className="border-warning-line bg-warning-soft p-4">
-              <p className="mb-1 flex items-center gap-1.5 text-[11.5px] font-semibold text-warning">
-                <IconBulb size={13} />
-                ヒント {i + 1}
-              </p>
-              <Markdown>{h}</Markdown>
-            </Card>
-          ))}
+          <AnimatePresence initial={false}>
+            {hints.slice(0, hintLevel).map((h, i) => (
+              <motion.div key={i} variants={RISE} initial="hidden" animate="shown" exit="gone">
+                <Card className="border-warning-line bg-warning-soft p-4">
+                  <p className="mb-1 flex items-center gap-1.5 text-[11.5px] font-semibold text-warning">
+                    <IconBulb size={13} />
+                    ヒント {i + 1}
+                  </p>
+                  <Markdown>{h}</Markdown>
+                </Card>
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
       )}
 
+      {/* 模範解答・観点・解説・自己採点の 4 枚を、上から順に浮かせて出す */}
       {submitted && (
-        <div className="space-y-3">
-          <Card className="overflow-hidden">
-            <p className="border-b border-line bg-raised px-4 py-2 text-[11.5px] font-medium text-muted">
-              模範解答
-            </p>
-            <div className="p-5">
-              <Markdown>{problem.sample_answer_md}</Markdown>
-            </div>
-          </Card>
-          <Card className="overflow-hidden border-warning-line">
-            <p className="border-b border-warning-line bg-warning-soft px-4 py-2 text-[11.5px] font-medium text-warning">
-              自己採点の観点
-            </p>
-            <div className="p-5">
-              <Markdown>{problem.grading_note_md}</Markdown>
-            </div>
-          </Card>
-          <Card className="overflow-hidden">
-            <p className="flex items-center gap-1.5 border-b border-line bg-raised px-4 py-2 text-[11.5px] font-medium text-muted">
-              <IconBook size={13} />
-              解説
-            </p>
-            <div className="p-5">
-              <Markdown>{problem.explanation_md}</Markdown>
-            </div>
-          </Card>
-          <Card className="flex flex-wrap items-center gap-3 p-4">
-            <span className="text-[13px] text-muted">自己採点</span>
-            <Button
-              onClick={() => rate(problem.id, 'understood')}
-              className={
-                rating === 'understood' ? 'border-success-line bg-success-soft text-success' : ''
-              }
-            >
-              <IconCheck size={13} />
-              理解できた
-            </Button>
-            <Button
-              onClick={() => rate(problem.id, 'review')}
-              className={
-                rating === 'review' ? 'border-warning-line bg-warning-soft text-warning' : ''
-              }
-            >
-              要復習
-            </Button>
-            {rating && (
-              <span className="text-[11.5px] text-subtle">
-                {rating === 'understood' ? '正解として記録しました' : '要復習として記録しました'}
-              </span>
-            )}
-          </Card>
-        </div>
+        <motion.div variants={STAGGER} initial="hidden" animate="shown" className="space-y-3">
+          <motion.div variants={RISE}>
+            <Card className="overflow-hidden">
+              <p className="border-b border-line bg-raised px-4 py-2 text-[11.5px] font-medium text-muted">
+                模範解答
+              </p>
+              <div className="p-5">
+                <Markdown>{problem.sample_answer_md}</Markdown>
+              </div>
+            </Card>
+          </motion.div>
+          <motion.div variants={RISE}>
+            <Card className="overflow-hidden border-warning-line">
+              <p className="border-b border-warning-line bg-warning-soft px-4 py-2 text-[11.5px] font-medium text-warning">
+                自己採点の観点
+              </p>
+              <div className="p-5">
+                <Markdown>{problem.grading_note_md}</Markdown>
+              </div>
+            </Card>
+          </motion.div>
+          <motion.div variants={RISE}>
+            <Card className="overflow-hidden">
+              <p className="flex items-center gap-1.5 border-b border-line bg-raised px-4 py-2 text-[11.5px] font-medium text-muted">
+                <IconBook size={13} />
+                解説
+              </p>
+              <div className="p-5">
+                <Markdown>{problem.explanation_md}</Markdown>
+              </div>
+            </Card>
+          </motion.div>
+          <motion.div variants={RISE}>
+            <Card className="flex flex-wrap items-center gap-3 p-4">
+              <span className="text-[13px] text-muted">自己採点</span>
+              <Button
+                onClick={() => rate(problem.id, 'understood')}
+                className={
+                  rating === 'understood' ? 'border-success-line bg-success-soft text-success' : ''
+                }
+              >
+                <IconCheck size={13} />
+                理解できた
+              </Button>
+              <Button
+                onClick={() => rate(problem.id, 'review')}
+                className={
+                  rating === 'review' ? 'border-warning-line bg-warning-soft text-warning' : ''
+                }
+              >
+                要復習
+              </Button>
+              {rating && (
+                <span className="text-[11.5px] text-subtle">
+                  {rating === 'understood' ? '正解として記録しました' : '要復習として記録しました'}
+                </span>
+              )}
+            </Card>
+          </motion.div>
+        </motion.div>
       )}
     </div>
   );
