@@ -101,6 +101,21 @@ for (const theme of ['light', 'dark']) {
   await measure('実行ボタン (on-accent)', '[data-testid="run"]');
   await measure('サイドバー現在地 (accent)', '[data-testid="nav-current"] span', 2);
   await measure('問題 ID (subtle)', 'span.font-mono');
+
+  // 右ペイン: 型のチップと、1 行おきに敷いた帯の上の値
+  const pane = page.locator('[data-testid="result-pane"]');
+  await pane.getByRole('button', { name: 'スキーマ' }).click();
+  await page.waitForTimeout(500);
+  await measure('列の型チップ (subtle)', '[data-testid="schema-type"]');
+  await pane.getByRole('button', { name: '実行結果' }).click();
+  await page.locator('.cm-content').click();
+  await page.keyboard.insertText('SELECT * FROM monthly_sales;');
+  await page.locator('[data-testid="run"]').click();
+  await page.waitForTimeout(1200);
+  await measure('帯を敷いた行の値 (fg)', '[data-testid="result-pane"] tbody tr:nth-child(3) td', 1);
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('Control+a');
+  await page.keyboard.press('Backspace');
   await page.locator('.cm-content').click();
   await page.keyboard.insertText('SELECT store FROM monthly_sales;');
   await page.waitForTimeout(400);

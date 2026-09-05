@@ -562,6 +562,65 @@ try {
       (await page.locator('text=「実行」を押すと').count()) > 0,
   );
 
+  // 8i. 実行結果とスキーマの読みやすさ
+  await typeSql("SELECT DATE '2024-03-05' AS d, 1234 AS n, 'x' AS s");
+  await page.click('[data-testid="run"]');
+  await rightPane.locator('table tbody tr').first().waitFor({ timeout: 30000 });
+  const bodyCells = await rightPane.locator('table tbody tr td').allInnerTexts();
+  check(
+    'DATE 列が日付として表示される',
+    bodyCells.includes('2024-03-05'),
+    bodyCells.filter(Boolean).join(' | '),
+  );
+  // 数値だけの列は右に寄せる（# 列・d 列・n 列・s 列の順）
+  const aligns = await rightPane
+    .locator('table tbody tr td')
+    .evaluateAll((els) => els.map((el) => getComputedStyle(el).textAlign));
+  check(
+    '数値の列だけ右に寄る',
+    aligns[1] === 'left' && aligns[2] === 'right' && aligns[3] === 'left',
+    `d=${aligns[1]} n=${aligns[2]} s=${aligns[3]}`,
+  );
+  const weights = await page.evaluate(() => {
+    const pane = document.querySelector('[data-testid="result-pane"]');
+    const th = pane.querySelector('table thead th:nth-child(2)');
+    const td = pane.querySelector('table tbody td:nth-child(2)');
+    return [getComputedStyle(th).fontWeight, getComputedStyle(td).fontWeight].map(Number);
+  });
+  check(
+    '見出しがデータより太い（どこからがデータか分かる）',
+    weights[0] > weights[1],
+    `見出し ${weights[0]} / データ ${weights[1]}`,
+  );
+
+  await rightPane.getByRole('button', { name: 'スキーマ' }).click();
+  await page.waitForTimeout(600);
+  const look = await page.evaluate(() => {
+    const table = document.querySelector('[data-testid="schema-table"]');
+    const col = document.querySelector('[data-testid="schema-column"]');
+    const read = (el) => {
+      const s = getComputedStyle(el);
+      return {
+        weight: Number(s.fontWeight),
+        color: s.color,
+        left: el.getBoundingClientRect().left,
+      };
+    };
+    return {
+      table: read(table),
+      col: read(col),
+      sticky: getComputedStyle(table.closest('header')).position,
+    };
+  });
+  check(
+    'スキーマでテーブル名と列名が見分けられる',
+    look.table.weight > look.col.weight &&
+      look.table.color !== look.col.color &&
+      look.col.left - look.table.left > 8,
+    `太さ ${look.table.weight}/${look.col.weight}・字下げ ${(look.col.left - look.table.left).toFixed(0)}px`,
+  );
+  check('テーブル名の帯が貼り付く（列を送っても迷子にならない）', look.sticky === 'sticky');
+
   // 8h. 進捗サイドバーから移動できる / 現在地が滑って動く
   const nav = page.locator('[data-testid="problem-nav"]');
   check('問題ページに進捗サイドバーが出る', (await nav.count()) === 1);
@@ -653,6 +712,30 @@ try {
     lifts[answerIndex] < 0 && lifts.filter((y) => y < 0).length === 1,
     `translateY = [${lifts.join(', ')}]`,
   );
+
+  // 10b. 日付を含む問題が正解と判定される
+  //     （DATE を数値のまま扱っていた頃の表示バグを直したので、採点も一緒に見る）
+  const dateProblem = ALL_PROBLEMS.find((p) => p.id === 'phase3-lv1-001');
+  await page.goto(`${base}#/problems/${dateProblem.id}`, { waitUntil: 'networkidle' });
+  await page.locator('[data-testid="result-pane"]').locator('text=行').first().waitFor({
+    timeout: 60000,
+  });
+  await typeSql(dateProblem.expected_query);
+  await page.click('[data-testid="run"]');
+  await page.locator('[data-testid="result-pane"] table tbody tr').first().waitFor({
+    timeout: 30000,
+  });
+  const dateCells = await page
+    .locator('[data-testid="result-pane"] table tbody td')
+    .allInnerTexts();
+  check(
+    '日付の列が結果でも日付のまま出る',
+    dateCells.some((t) => /^\d{4}-\d{2}-\d{2}$/.test(t.trim())),
+    dateCells.slice(0, 5).join(' | '),
+  );
+  await page.click('[data-testid="answer"]');
+  await page.waitForSelector('text=解説', { timeout: 30000 });
+  check('日付を含む問題が正解と判定される', (await page.locator('text=不正解').count()) === 0);
 
   // 11. 記述式問題を解く
   const wrId = ALL_PROBLEMS.find((p) => p.type === 'written');

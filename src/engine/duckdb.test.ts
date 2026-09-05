@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { splitStatements } from './duckdb';
+import { TimeUnit, Type } from 'apache-arrow';
+import type { DataType } from 'apache-arrow';
+import { normalizeValue, splitStatements } from './duckdb';
 
 describe('splitStatements — 基本', () => {
   it('セミコロンで分ける', () => {
@@ -123,5 +125,65 @@ describe('splitStatements — ドル引用符', () => {
 
   it('閉じ忘れたドル引用符は最後まで 1 文にする', () => {
     expect(splitStatements('SELECT $$a; SELECT 2')).toEqual(['SELECT $$a; SELECT 2']);
+  });
+});
+
+/*
+  DuckDB-WASM は DATE / TIMESTAMP を数値で返す。単位はビルドや型で変わるため、
+  どちらで来ても読める形に直しているかを確かめる。
+  （素通しすると実行結果に 1709596800000 と出る）
+*/
+const DATE_TYPE = { typeId: Type.Date } as unknown as DataType;
+const ts = (unit?: number) => ({ typeId: Type.Timestamp, unit }) as unknown as DataType;
+
+describe('normalizeValue — 日付', () => {
+  it('1970-01-01 からの日数を日付にする', () => {
+    expect(normalizeValue(19787, DATE_TYPE)).toBe('2024-03-05');
+  });
+
+  it('ミリ秒で来ても同じ日付になる', () => {
+    expect(normalizeValue(1_709_596_800_000, DATE_TYPE)).toBe('2024-03-05');
+  });
+
+  it('BigInt で来ても読める', () => {
+    expect(normalizeValue(19787n, DATE_TYPE)).toBe('2024-03-05');
+  });
+
+  it('1970-01-01 は 0', () => {
+    expect(normalizeValue(0, DATE_TYPE)).toBe('1970-01-01');
+  });
+
+  it('1970 年より前も戻せる', () => {
+    expect(normalizeValue(-3653, DATE_TYPE)).toBe('1960-01-01');
+  });
+
+  it('型が分からない数値は数値のまま（勝手に日付にしない）', () => {
+    expect(normalizeValue(19787, undefined)).toBe(19787);
+  });
+
+  it('NULL はそのまま', () => {
+    expect(normalizeValue(null, DATE_TYPE)).toBeNull();
+  });
+});
+
+describe('normalizeValue — 時刻', () => {
+  it('単位が無ければマイクロ秒として読む（DuckDB の既定）', () => {
+    expect(normalizeValue(1_709_638_496_000_000, ts())).toBe('2024-03-05 11:34:56');
+  });
+
+  it('型が持つ単位に従う', () => {
+    expect(normalizeValue(1_709_638_496_000, ts(TimeUnit.MILLISECOND))).toBe('2024-03-05 11:34:56');
+    expect(normalizeValue(1_709_638_496, ts(TimeUnit.SECOND))).toBe('2024-03-05 11:34:56');
+    expect(normalizeValue(1_709_638_496_000_000_000, ts(TimeUnit.NANOSECOND))).toBe(
+      '2024-03-05 11:34:56',
+    );
+  });
+
+  it('ちょうど 0 時なら日付だけにする', () => {
+    expect(normalizeValue(1_709_596_800_000_000, ts())).toBe('2024-03-05');
+  });
+
+  it('現実的な年にならない値は数値のまま返す', () => {
+    expect(normalizeValue(1e30, ts())).toBe('1e+30');
   });
 });

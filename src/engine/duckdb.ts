@@ -1,6 +1,6 @@
 import * as duckdb from '@duckdb/duckdb-wasm';
 import type { Table, DataType } from 'apache-arrow';
-import { Type } from 'apache-arrow';
+import { TimeUnit, Type } from 'apache-arrow';
 
 // wasm / worker はローカルにバンドルする（CDN 依存なし・GitHub Pages のサブパスでも動く）
 import mvpWasm from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
@@ -113,9 +113,58 @@ export function splitStatements(sql: string): string[] {
   return out;
 }
 
+/*
+  日時の単位あわせ。DuckDB-WASM は DATE も TIMESTAMP も数値で返す。
+
+  DATE は Arrow の Date32（1970-01-01 からの日数）と Date64（ミリ秒）があり、
+  duckdb-wasm のビルドによってどちらで来るか変わる。ただし DATE に時刻は無く、
+  ミリ秒なら必ず 86400000 の倍数になるので、値の桁で見分けられる
+  （日数なら西暦 4000 年でも 74 万、ミリ秒なら 0 以外は必ず 1e7 を超える）。
+
+  TIMESTAMP は時刻があるので桁では見分けられない。Arrow の型が持つ単位に従い、
+  無ければ DuckDB の既定であるマイクロ秒として扱う。
+*/
+const SANE_MIN = Date.UTC(1000, 0, 1);
+const SANE_MAX = Date.UTC(4000, 0, 1);
+
+function dateToIso(n: number): string {
+  const ms = Math.abs(n) < 1e7 ? n * 86_400_000 : n;
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+/** Arrow の時間単位 → ミリ秒に直す倍率 */
+const TO_MS: Record<number, number> = {
+  [TimeUnit.SECOND]: 1000,
+  [TimeUnit.MILLISECOND]: 1,
+  [TimeUnit.MICROSECOND]: 0.001,
+  [TimeUnit.NANOSECOND]: 1e-6,
+};
+
+function timestampToIso(n: number, unit: number | undefined): string {
+  const ms = n * (TO_MS[unit ?? TimeUnit.MICROSECOND] ?? 0.001);
+  if (ms < SANE_MIN || ms > SANE_MAX) return String(n);
+  const iso = new Date(ms).toISOString();
+  // ちょうど 0 時なら日付だけを出す（見比べるときに桁が増えない）
+  return iso.endsWith('T00:00:00.000Z') ? iso.slice(0, 10) : iso.slice(0, 19).replace('T', ' ');
+}
+
 /** Arrow の値を JS の素の値に落とす（BigInt / DECIMAL / DATE などを吸収） */
-function normalizeValue(value: unknown, type: DataType | undefined): unknown {
+export function normalizeValue(value: unknown, type: DataType | undefined): unknown {
   if (value === null || value === undefined) return null;
+  /*
+    DATE と TIMESTAMP は数値で来る。素直に出すと 1709596800000 と表示され、
+    実行結果が読めない（DATE は問題データ全体で最も多い型）。
+  */
+  if (
+    type &&
+    (type.typeId === Type.Date || type.typeId === Type.Timestamp) &&
+    (typeof value === 'number' || typeof value === 'bigint')
+  ) {
+    const n = Number(value);
+    return type.typeId === Type.Date
+      ? dateToIso(n)
+      : timestampToIso(n, (type as unknown as { unit?: number }).unit);
+  }
   if (typeof value === 'bigint') {
     return value >= BigInt(Number.MIN_SAFE_INTEGER) && value <= BigInt(Number.MAX_SAFE_INTEGER)
       ? Number(value)
