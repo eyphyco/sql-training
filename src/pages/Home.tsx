@@ -154,7 +154,9 @@ export default function Home() {
                     to={`/problems/${h.problemId}`}
                     className="flex items-start gap-2 rounded-sm px-2 py-1.5 hover:bg-raised"
                   >
-                    <span className={`mt-0.5 shrink-0 ${h.correct ? 'text-success' : 'text-subtle'}`}>
+                    <span
+                      className={`mt-0.5 shrink-0 ${h.correct ? 'text-success' : 'text-subtle'}`}
+                    >
                       {h.correct ? <IconCheck size={12} /> : <IconX size={12} />}
                     </span>
                     <span className="min-w-0 flex-1">

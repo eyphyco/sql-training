@@ -17,11 +17,13 @@ for (const p of all.filter((p) => ids.length === 0 || ids.includes(p.id))) {
   const t = await c.runAndReadAll(
     "SELECT table_name, table_type FROM information_schema.tables WHERE table_schema='main'",
   );
-  for (const [n, ty] of t.getRows()) await c.run(`DROP ${ty === 'VIEW' ? 'VIEW' : 'TABLE'} IF EXISTS "${n}" CASCADE`);
+  for (const [n, ty] of t.getRows())
+    await c.run(`DROP ${ty === 'VIEW' ? 'VIEW' : 'TABLE'} IF EXISTS "${n}" CASCADE`);
   await c.run(p.schema_sql);
   await c.run(p.seed_data_sql);
   const r = await c.runAndReadAll(p.expected_query);
   console.log(`\n=== ${p.id} ${p.title}`);
   console.log(r.columnNames().join(' | '));
-  for (const row of r.getRows()) console.log(row.map((v) => (v === null ? 'NULL' : String(v))).join(' | '));
+  for (const row of r.getRows())
+    console.log(row.map((v) => (v === null ? 'NULL' : String(v))).join(' | '));
 }

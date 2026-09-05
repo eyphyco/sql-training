@@ -3,8 +3,7 @@ export type ResolvedTheme = 'light' | 'dark';
 
 export const THEME_KEY = 'sql-training:theme';
 
-const isChoice = (v: unknown): v is ThemeChoice =>
-  v === 'light' || v === 'dark' || v === 'system';
+const isChoice = (v: unknown): v is ThemeChoice => v === 'light' || v === 'dark' || v === 'system';
 
 export function readStoredTheme(): ThemeChoice {
   try {

@@ -65,7 +65,10 @@ describe('saveSession — 大きすぎる結果', () => {
   });
 
   it('結果を捨てても SQL は残す', () => {
-    saveSession('p1', session({ sql: 'SELECT * FROM range(3000)', lastRun: { sql: 'q', result: res(3000) } }));
+    saveSession(
+      'p1',
+      session({ sql: 'SELECT * FROM range(3000)', lastRun: { sql: 'q', result: res(3000) } }),
+    );
     expect(loadSession('p1')?.sql).toBe('SELECT * FROM range(3000)');
   });
 });

@@ -89,7 +89,15 @@ export function SectionTitle({ children, right }: { children: ReactNode; right?:
  * 進捗バー。高さ3px、単色。グラデーションは使わない。
  * 0 から伸びる。`delay` を渡すと、並べたときに順に伸びていく。
  */
-export function Meter({ value, total, delay = 0 }: { value: number; total: number; delay?: number }) {
+export function Meter({
+  value,
+  total,
+  delay = 0,
+}: {
+  value: number;
+  total: number;
+  delay?: number;
+}) {
   const pct = total === 0 ? 0 : Math.round((value / total) * 100);
   return (
     <div

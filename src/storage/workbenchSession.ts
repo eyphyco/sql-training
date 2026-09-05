@@ -93,8 +93,7 @@ export function detectUnpreventedReload(): boolean {
     const at = Number(sessionStorage.getItem(F5_KEY) ?? '0');
     sessionStorage.removeItem(F5_KEY);
     const nav = performance.getEntriesByType('navigation')[0] as
-      | PerformanceNavigationTiming
-      | undefined;
+      PerformanceNavigationTiming | undefined;
     // F5 直後（3 秒以内）の reload だけを対象にする。手動の Ctrl+R を誤検出しないため
     unpreventedReload = at > 0 && Date.now() - at < 3000 && nav?.type === 'reload';
   } catch {

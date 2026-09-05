@@ -18,16 +18,38 @@ const spec = (over: Partial<JudgeSpec> = {}): JudgeSpec => ({
 });
 
 describe('judgeResultSet — 一致の判定', () => {
-  const expected = result(['class', 'avg'], [['A組', 77.5], ['C組', 70.25]]);
+  const expected = result(
+    ['class', 'avg'],
+    [
+      ['A組', 77.5],
+      ['C組', 70.25],
+    ],
+  );
 
   it('同じ内容なら正解になる', () => {
-    const r = judgeResultSet(result(['c', 'a'], [['A組', 77.5], ['C組', 70.25]]), expected, spec());
+    const r = judgeResultSet(
+      result(
+        ['c', 'a'],
+        [
+          ['A組', 77.5],
+          ['C組', 70.25],
+        ],
+      ),
+      expected,
+      spec(),
+    );
     expect(r.correct).toBe(true);
   });
 
   it('列名が違っても、数と並びが同じなら正解になる', () => {
     const r = judgeResultSet(
-      result(['クラス', '平均'], [['A組', 77.5], ['C組', 70.25]]),
+      result(
+        ['クラス', '平均'],
+        [
+          ['A組', 77.5],
+          ['C組', 70.25],
+        ],
+      ),
       expected,
       spec(),
     );
@@ -35,13 +57,29 @@ describe('judgeResultSet — 一致の判定', () => {
   });
 
   it('順不同の問題では行の並びが違っても正解になる', () => {
-    const r = judgeResultSet(result(['c', 'a'], [['C組', 70.25], ['A組', 77.5]]), expected, spec());
+    const r = judgeResultSet(
+      result(
+        ['c', 'a'],
+        [
+          ['C組', 70.25],
+          ['A組', 77.5],
+        ],
+      ),
+      expected,
+      spec(),
+    );
     expect(r.correct).toBe(true);
   });
 
   it('順序を見る問題では並びが違うと不正解になる', () => {
     const r = judgeResultSet(
-      result(['c', 'a'], [['C組', 70.25], ['A組', 77.5]]),
+      result(
+        ['c', 'a'],
+        [
+          ['C組', 70.25],
+          ['A組', 77.5],
+        ],
+      ),
       expected,
       spec({ order_sensitive: true }),
     );
@@ -82,7 +120,10 @@ describe('judgeResultSet — 差分の内訳', () => {
   });
 
   it('内訳の表示は 10 行までに切る', () => {
-    const many = result(['n'], Array.from({ length: 30 }, (_, i) => [i]));
+    const many = result(
+      ['n'],
+      Array.from({ length: 30 }, (_, i) => [i]),
+    );
     const r = judgeResultSet(many, result(['n'], []), spec());
     expect(r.extraRows).toHaveLength(10);
     // 件数そのものは省略せずに伝える
@@ -125,16 +166,34 @@ describe('judgeResultSet — 値の正規化', () => {
 });
 
 describe('judgeResultSet — compare_columns', () => {
-  const expected = result(['name', 'total'], [['A', 10], ['B', 20]]);
+  const expected = result(
+    ['name', 'total'],
+    [
+      ['A', 10],
+      ['B', 20],
+    ],
+  );
 
   it('指定した列だけを見る（余分な列は無視する）', () => {
-    const actual = result(['name', 'total', 'memo'], [['A', 10, 'x'], ['B', 20, 'y']]);
+    const actual = result(
+      ['name', 'total', 'memo'],
+      [
+        ['A', 10, 'x'],
+        ['B', 20, 'y'],
+      ],
+    );
     const r = judgeResultSet(actual, expected, spec({ compare_columns: ['name', 'total'] }));
     expect(r.correct).toBe(true);
   });
 
   it('列名の大文字小文字は区別しない', () => {
-    const actual = result(['NAME', 'Total'], [['A', 10], ['B', 20]]);
+    const actual = result(
+      ['NAME', 'Total'],
+      [
+        ['A', 10],
+        ['B', 20],
+      ],
+    );
     const r = judgeResultSet(actual, expected, spec({ compare_columns: ['name', 'total'] }));
     expect(r.correct).toBe(true);
   });
@@ -161,7 +220,13 @@ describe('judgeResultSet — compare_columns', () => {
   });
 
   it('列の並びは compare_columns の順に揃えられる', () => {
-    const actual = result(['total', 'name'], [[10, 'A'], [20, 'B']]);
+    const actual = result(
+      ['total', 'name'],
+      [
+        [10, 'A'],
+        [20, 'B'],
+      ],
+    );
     const r = judgeResultSet(actual, expected, spec({ compare_columns: ['name', 'total'] }));
     expect(r.correct).toBe(true);
   });
@@ -180,7 +245,11 @@ describe('checkPatterns', () => {
   });
 
   it('禁止パターンを検出する', () => {
-    const r = checkPatterns('SELECT * FROM a, b', '', spec({ sql_forbidden: ['FROM\\s+\\w+\\s*,'] }));
+    const r = checkPatterns(
+      'SELECT * FROM a, b',
+      '',
+      spec({ sql_forbidden: ['FROM\\s+\\w+\\s*,'] }),
+    );
     expect(r.ok).toBe(false);
   });
 
@@ -209,7 +278,10 @@ describe('checkPatterns', () => {
 describe('explainSqlError', () => {
   it.each([
     ['Binder Error: column "x" must appear in the GROUP BY clause', 'GROUP BY 漏れ'],
-    ['Binder Error: aggregate function is not allowed in WHERE clause', 'WHERE に集約関数は書けない'],
+    [
+      'Binder Error: aggregate function is not allowed in WHERE clause',
+      'WHERE に集約関数は書けない',
+    ],
     ['Catalog Error: Table with name studens does not exist!', 'テーブル名が違う'],
     ['Binder Error: Referenced column "socre" not found', '列名が違う'],
     ['Binder Error: Ambiguous reference to column name "id"', '列名が曖昧'],

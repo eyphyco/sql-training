@@ -12,7 +12,9 @@ function useActiveSection(ids: string[]): string {
     let raf = 0;
     const pick = () => {
       raf = 0;
-      const tops = ids.map((id) => document.getElementById(id)?.getBoundingClientRect().top ?? null);
+      const tops = ids.map(
+        (id) => document.getElementById(id)?.getBoundingClientRect().top ?? null,
+      );
       const atBottom =
         window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 8;
       const current = pickActiveSection(ids, tops, atBottom);

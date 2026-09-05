@@ -79,15 +79,25 @@ export default function ProblemList() {
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="w-14 shrink-0 text-[11px] text-subtle">レベル</span>
           {([1, 2, 3] as LevelId[]).map((l) => (
-            <button key={l} onClick={() => setParam('level', String(l))} className={chip(level === String(l))}>
+            <button
+              key={l}
+              onClick={() => setParam('level', String(l))}
+              className={chip(level === String(l))}
+            >
               {LEVEL_LABEL[l]}
             </button>
           ))}
           <span className="ml-4 w-8 shrink-0 text-[11px] text-subtle">状態</span>
-          <button onClick={() => setParam('status', 'unsolved')} className={chip(status === 'unsolved')}>
+          <button
+            onClick={() => setParam('status', 'unsolved')}
+            className={chip(status === 'unsolved')}
+          >
             未正解
           </button>
-          <button onClick={() => setParam('status', 'solved')} className={chip(status === 'solved')}>
+          <button
+            onClick={() => setParam('status', 'solved')}
+            className={chip(status === 'solved')}
+          >
             正解済み
           </button>
         </div>

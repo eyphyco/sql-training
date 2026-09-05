@@ -73,7 +73,9 @@ export default function CurriculumProgress({ activePhase }: { activePhase?: Phas
             >
               <div
                 className={`h-2 overflow-hidden rounded-full transition-colors ${
-                  active ? 'bg-accent-soft ring-1 ring-accent-line' : 'bg-sunken group-hover:bg-raised'
+                  active
+                    ? 'bg-accent-soft ring-1 ring-accent-line'
+                    : 'bg-sunken group-hover:bg-raised'
                 }`}
               >
                 {/* scaleX で伸ばす。transform なので視差効果を減らす設定では即座に確定する */}

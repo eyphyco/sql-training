@@ -19,7 +19,9 @@ export default function SchemaPanel({ schema }: { schema: TableSchema[] }) {
               {t.columns.map((c) => (
                 <tr key={c.name}>
                   <td className="py-1 pr-3 pl-3 font-mono text-fg">{c.name}</td>
-                  <td className="py-1 pr-3 text-right font-mono text-[11px] text-subtle">{c.type}</td>
+                  <td className="py-1 pr-3 text-right font-mono text-[11px] text-subtle">
+                    {c.type}
+                  </td>
                 </tr>
               ))}
             </tbody>

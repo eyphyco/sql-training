@@ -128,7 +128,10 @@ function normalizeValue(value: unknown, type: DataType | undefined): unknown {
     for (let w = value.length - 1; w >= 0; w -= 1) acc = (acc << 32n) | BigInt(value[w]);
     const bits = BigInt(value.length * 32);
     if (acc >= 1n << (bits - 1n)) acc -= 1n << bits;
-    const scale = type && type.typeId === Type.Decimal ? ((type as unknown as { scale: number }).scale ?? 0) : 0;
+    const scale =
+      type && type.typeId === Type.Decimal
+        ? ((type as unknown as { scale: number }).scale ?? 0)
+        : 0;
     return Number(acc) / 10 ** scale;
   }
   if (ArrayBuffer.isView(value) || Array.isArray(value)) {
@@ -190,7 +193,9 @@ export async function resetEnvironment(
     const name = String(tables.getChildAt(0)?.get(r));
     await conn.query(`DROP TABLE IF EXISTS "${name}" CASCADE`);
   }
-  const seqs = (await conn.query('SELECT sequence_name FROM duckdb_sequences()')) as unknown as Table;
+  const seqs = (await conn.query(
+    'SELECT sequence_name FROM duckdb_sequences()',
+  )) as unknown as Table;
   for (let r = 0; r < seqs.numRows; r += 1) {
     const name = String(seqs.getChildAt(0)?.get(r));
     await conn.query(`DROP SEQUENCE IF EXISTS "${name}"`);
@@ -200,9 +205,7 @@ export async function resetEnvironment(
 }
 
 /** 右ペインに表示するテーブル一覧・カラム定義・件数を取得する */
-export async function describeTables(
-  conn: duckdb.AsyncDuckDBConnection,
-): Promise<TableSchema[]> {
+export async function describeTables(conn: duckdb.AsyncDuckDBConnection): Promise<TableSchema[]> {
   const meta = (await conn.query(
     `SELECT table_name, column_name, data_type
        FROM information_schema.columns

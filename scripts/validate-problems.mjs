@@ -18,7 +18,9 @@ const warnings = [];
 const fail = (id, msg) => errors.push(`[${id}] ${msg}`);
 const warn = (id, msg) => warnings.push(`[${id}] ${msg}`);
 
-const files = readdirSync(dir).filter((f) => f.endsWith('.json')).sort();
+const files = readdirSync(dir)
+  .filter((f) => f.endsWith('.json'))
+  .sort();
 const problems = [];
 for (const f of files) {
   let parsed;
@@ -48,7 +50,8 @@ for (const p of problems) {
   if (![1, 2, 3].includes(p.level)) fail(id, `level が不正: ${p.level}`);
   if (!Array.isArray(p.tags) || p.tags.length === 0) fail(id, 'tags は 1 つ以上必要です');
   const expectedPhase = Number(String(p.id).match(/^phase(\d)/)?.[1]);
-  if (expectedPhase && expectedPhase !== p.phase) fail(id, `id の接頭辞と phase が食い違っています`);
+  if (expectedPhase && expectedPhase !== p.phase)
+    fail(id, `id の接頭辞と phase が食い違っています`);
 
   if (p.type === 'multiple_choice') {
     if (!Array.isArray(p.options) || p.options.length < 2) fail(id, 'options が 2 つ未満です');
@@ -106,12 +109,16 @@ for (const p of problems) {
   }
   const rows = reader.getRows();
   if (rows.length === 0) warn(p.id, 'expected_query の結果が 0 行です（意図的でなければ要確認）');
-  if (rows.length > 100) warn(p.id, `expected_query が ${rows.length} 行を返します（多すぎないか確認）`);
+  if (rows.length > 100)
+    warn(p.id, `expected_query が ${rows.length} 行を返します（多すぎないか確認）`);
   if (p.judge?.compare_columns) {
     const cols = reader.columnNames().map((c) => c.toLowerCase());
     for (const c of p.judge.compare_columns) {
       if (!cols.includes(c.toLowerCase())) {
-        fail(p.id, `judge.compare_columns の ${c} が expected_query の結果にありません（実際: ${cols.join(', ')}）`);
+        fail(
+          p.id,
+          `judge.compare_columns の ${c} が expected_query の結果にありません（実際: ${cols.join(', ')}）`,
+        );
       }
     }
   }
@@ -119,20 +126,24 @@ for (const p of problems) {
   const j = p.judge ?? {};
   const upperSql = p.expected_query.toUpperCase();
   for (const pat of j.sql_required ?? []) {
-    if (!new RegExp(pat, 'i').test(upperSql)) fail(p.id, `模範解答が sql_required /${pat}/ を満たしません`);
+    if (!new RegExp(pat, 'i').test(upperSql))
+      fail(p.id, `模範解答が sql_required /${pat}/ を満たしません`);
   }
   for (const pat of j.sql_forbidden ?? []) {
-    if (new RegExp(pat, 'i').test(upperSql)) fail(p.id, `模範解答が sql_forbidden /${pat}/ に抵触します`);
+    if (new RegExp(pat, 'i').test(upperSql))
+      fail(p.id, `模範解答が sql_forbidden /${pat}/ に抵触します`);
   }
   if ((j.explain_required?.length ?? 0) + (j.explain_forbidden?.length ?? 0) > 0) {
     try {
       const ex = await conn.runAndReadAll(`EXPLAIN ${p.expected_query}`);
       const plan = ex.getRows().flat().filter(Boolean).join('\n').toUpperCase();
       for (const pat of j.explain_required ?? []) {
-        if (!new RegExp(pat, 'i').test(plan)) fail(p.id, `模範解答の実行計画が explain_required /${pat}/ を満たしません`);
+        if (!new RegExp(pat, 'i').test(plan))
+          fail(p.id, `模範解答の実行計画が explain_required /${pat}/ を満たしません`);
       }
       for (const pat of j.explain_forbidden ?? []) {
-        if (new RegExp(pat, 'i').test(plan)) fail(p.id, `模範解答の実行計画が explain_forbidden /${pat}/ に抵触します`);
+        if (new RegExp(pat, 'i').test(plan))
+          fail(p.id, `模範解答の実行計画が explain_forbidden /${pat}/ に抵触します`);
       }
     } catch (e) {
       fail(p.id, `EXPLAIN の実行に失敗: ${e.message}`);
@@ -148,7 +159,9 @@ for (const p of problems) {
    ------------------------------------------------------------------ */
 const lessonDir = join(root, 'src/data/lessons');
 const lessons = [];
-for (const f of readdirSync(lessonDir).filter((x) => x.endsWith('.json')).sort()) {
+for (const f of readdirSync(lessonDir)
+  .filter((x) => x.endsWith('.json'))
+  .sort()) {
   const lesson = JSON.parse(readFileSync(join(lessonDir, f), 'utf8'));
   if (lesson.phase !== Number(f.match(/\d+/)[0])) {
     fail(f, `ファイル名と phase(${lesson.phase}) が一致しません`);
@@ -170,7 +183,8 @@ for (const lesson of lessons) {
   }
   for (const s of lesson.sections) {
     sectionCount += 1;
-    if (!s.id || !s.title || !s.body_md) fail(s.id ?? `phase${lesson.phase}`, '節の必須項目が欠けています');
+    if (!s.id || !s.title || !s.body_md)
+      fail(s.id ?? `phase${lesson.phase}`, '節の必須項目が欠けています');
     if (sectionIds.has(s.id)) fail(s.id, '節 ID が重複しています');
     sectionIds.add(s.id);
     if (!Array.isArray(s.problems) || s.problems.length === 0) {

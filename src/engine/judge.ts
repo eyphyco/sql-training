@@ -181,16 +181,20 @@ export function checkPatterns(
   const upperSql = sql.toUpperCase();
   const upperPlan = explainText.toUpperCase();
   for (const p of judge.sql_required ?? []) {
-    if (!new RegExp(p, 'i').test(upperSql)) violations.push(`SQL に必要な要素が見つかりません: /${p}/`);
+    if (!new RegExp(p, 'i').test(upperSql))
+      violations.push(`SQL に必要な要素が見つかりません: /${p}/`);
   }
   for (const p of judge.sql_forbidden ?? []) {
-    if (new RegExp(p, 'i').test(upperSql)) violations.push(`この問題で禁止されている書き方が含まれています: /${p}/`);
+    if (new RegExp(p, 'i').test(upperSql))
+      violations.push(`この問題で禁止されている書き方が含まれています: /${p}/`);
   }
   for (const p of judge.explain_required ?? []) {
-    if (!new RegExp(p, 'i').test(upperPlan)) violations.push(`実行計画に期待した演算子が現れていません: /${p}/`);
+    if (!new RegExp(p, 'i').test(upperPlan))
+      violations.push(`実行計画に期待した演算子が現れていません: /${p}/`);
   }
   for (const p of judge.explain_forbidden ?? []) {
-    if (new RegExp(p, 'i').test(upperPlan)) violations.push(`実行計画に避けるべき演算子が現れています: /${p}/`);
+    if (new RegExp(p, 'i').test(upperPlan))
+      violations.push(`実行計画に避けるべき演算子が現れています: /${p}/`);
   }
   return { ok: violations.length === 0, violations };
 }
@@ -231,7 +235,8 @@ const ERROR_HINTS: ErrorHint[] = [
   {
     pattern: /Referenced column .* not found|Binder Error: Referenced column/i,
     title: '列名が違う',
-    advice: '右ペインのスキーマで列名を確認してください。別名（AS）の綴りミスもこのエラーになります。',
+    advice:
+      '右ペインのスキーマで列名を確認してください。別名（AS）の綴りミスもこのエラーになります。',
   },
   {
     pattern: /Ambiguous reference to column/i,

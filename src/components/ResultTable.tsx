@@ -7,7 +7,12 @@ interface Props {
   emptyMessage?: string;
 }
 
-export default function ResultTable({ columns, rows, maxRows = 200, emptyMessage = '0 行' }: Props) {
+export default function ResultTable({
+  columns,
+  rows,
+  maxRows = 200,
+  emptyMessage = '0 行',
+}: Props) {
   if (columns.length === 0) {
     return <p className="p-4 text-[13px] text-muted">結果セットを返さない文が実行されました。</p>;
   }
@@ -35,7 +40,9 @@ export default function ResultTable({ columns, rows, maxRows = 200, emptyMessage
         <tbody>
           {shown.map((row, r) => (
             <tr key={r} className="border-b border-line/60 last:border-0 hover:bg-raised">
-              <td className="px-2 py-1.5 text-right font-mono text-[10.5px] text-subtle">{r + 1}</td>
+              <td className="px-2 py-1.5 text-right font-mono text-[10.5px] text-subtle">
+                {r + 1}
+              </td>
               {row.map((cell, c) => (
                 <td
                   key={c}

@@ -8,7 +8,9 @@ const emptyProgress = (): ProgressData => ({ version: 1, solvedProblems: {}, his
 function isProgressData(value: unknown): value is ProgressData {
   if (typeof value !== 'object' || value === null) return false;
   const v = value as Partial<ProgressData>;
-  return typeof v.solvedProblems === 'object' && v.solvedProblems !== null && Array.isArray(v.history);
+  return (
+    typeof v.solvedProblems === 'object' && v.solvedProblems !== null && Array.isArray(v.history)
+  );
 }
 
 export function loadProgress(): ProgressData {
@@ -113,11 +115,7 @@ export function serializeProgress(
     const phase = phaseOf(id);
     if (rec.solved && phase !== undefined && phaseProgress[phase]) phaseProgress[phase].solved += 1;
   }
-  return JSON.stringify(
-    { ...data, phaseProgress, exportedAt: new Date().toISOString() },
-    null,
-    2,
-  );
+  return JSON.stringify({ ...data, phaseProgress, exportedAt: new Date().toISOString() }, null, 2);
 }
 
 export function deserializeProgress(json: string): ProgressData {

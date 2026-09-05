@@ -15,7 +15,8 @@ const MIN = 4.5; // WCAG AA（通常サイズの文字）
 const SCALE = 2;
 
 const NG = 'SELECT class, AVG(score) AS avg_score FROM students GROUP BY class;';
-const OK = 'SELECT class, AVG(score) AS avg_score\nFROM students\nGROUP BY class\nHAVING AVG(score) >= 70;';
+const OK =
+  'SELECT class, AVG(score) AS avg_score\nFROM students\nGROUP BY class\nHAVING AVG(score) >= 70;';
 
 /** 画像の一部を読み、明暗の両端からコントラスト比を出す */
 function ratioOfRegion([dataUrl, box]) {
@@ -112,7 +113,9 @@ let low = 0;
 for (const [theme, label, ratio] of rows) {
   const ok = ratio >= MIN;
   if (!ok) low += 1;
-  console.log(`${ok ? 'OK  ' : 'LOW '} ${theme.padEnd(5)} ${label.padEnd(26)} ${ratio.toFixed(2)}:1`);
+  console.log(
+    `${ok ? 'OK  ' : 'LOW '} ${theme.padEnd(5)} ${label.padEnd(26)} ${ratio.toFixed(2)}:1`,
+  );
 }
 console.log(low === 0 ? `\n${rows.length} 件すべて ${MIN}:1 以上` : `\n${low} 件が ${MIN}:1 未満`);
 process.exit(low === 0 ? 0 : 1);

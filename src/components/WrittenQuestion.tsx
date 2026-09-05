@@ -42,7 +42,9 @@ export default function WrittenQuestion({ problem }: { problem: WrittenProblem }
           onChange={(e) => save(e.target.value)}
           rows={14}
           spellCheck={false}
-          placeholder={'例：\n注文(注文番号, 注文日, 顧客番号)\n注文明細(注文番号, 明細番号, 商品番号, 数量, 販売単価)\n…'}
+          placeholder={
+            '例：\n注文(注文番号, 注文日, 顧客番号)\n注文明細(注文番号, 明細番号, 商品番号, 数量, 販売単価)\n…'
+          }
           className="w-full resize-y bg-sunken p-4 font-mono text-[13px] leading-relaxed text-fg placeholder:text-subtle focus:outline-none"
         />
       </Card>
@@ -108,14 +110,18 @@ export default function WrittenQuestion({ problem }: { problem: WrittenProblem }
             <span className="text-[13px] text-muted">自己採点</span>
             <Button
               onClick={() => rate(problem.id, 'understood')}
-              className={rating === 'understood' ? 'border-success-line bg-success-soft text-success' : ''}
+              className={
+                rating === 'understood' ? 'border-success-line bg-success-soft text-success' : ''
+              }
             >
               <IconCheck size={13} />
               理解できた
             </Button>
             <Button
               onClick={() => rate(problem.id, 'review')}
-              className={rating === 'review' ? 'border-warning-line bg-warning-soft text-warning' : ''}
+              className={
+                rating === 'review' ? 'border-warning-line bg-warning-soft text-warning' : ''
+              }
             >
               要復習
             </Button>

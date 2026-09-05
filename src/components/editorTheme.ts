@@ -9,10 +9,18 @@ import type { Extension } from '@codemirror/state';
  * CodeMirror 内部の既定値（選択範囲の合成など）だけ dark フラグで切り替える。
  */
 const highlightStyle = HighlightStyle.define([
-  { tag: [t.keyword, t.modifier, t.operatorKeyword], color: 'var(--c-syn-keyword)', fontWeight: '600' },
+  {
+    tag: [t.keyword, t.modifier, t.operatorKeyword],
+    color: 'var(--c-syn-keyword)',
+    fontWeight: '600',
+  },
   { tag: [t.string, t.special(t.string)], color: 'var(--c-syn-string)' },
   { tag: [t.number, t.bool, t.null], color: 'var(--c-syn-number)' },
-  { tag: [t.comment, t.lineComment, t.blockComment], color: 'var(--c-syn-comment)', fontStyle: 'italic' },
+  {
+    tag: [t.comment, t.lineComment, t.blockComment],
+    color: 'var(--c-syn-comment)',
+    fontStyle: 'italic',
+  },
   { tag: [t.function(t.variableName), t.function(t.propertyName)], color: 'var(--c-syn-fn)' },
   { tag: [t.typeName, t.standard(t.name)], color: 'var(--c-syn-type)' },
   { tag: [t.operator, t.punctuation, t.separator, t.bracket], color: 'var(--c-syn-punct)' },
@@ -76,9 +84,5 @@ const baseTheme = EditorView.theme({
 });
 
 export function editorTheme(dark: boolean): Extension {
-  return [
-    baseTheme,
-    EditorView.theme({}, { dark }),
-    syntaxHighlighting(highlightStyle),
-  ];
+  return [baseTheme, EditorView.theme({}, { dark }), syntaxHighlighting(highlightStyle)];
 }

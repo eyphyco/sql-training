@@ -7,7 +7,15 @@ import phase5 from './lessons/phase5.json';
 import phase6 from './lessons/phase6.json';
 import phase7 from './lessons/phase7.json';
 
-export const LESSONS: Lesson[] = [phase1, phase2, phase3, phase4, phase5, phase6, phase7] as Lesson[];
+export const LESSONS: Lesson[] = [
+  phase1,
+  phase2,
+  phase3,
+  phase4,
+  phase5,
+  phase6,
+  phase7,
+] as Lesson[];
 
 export const LESSON_BY_PHASE = new Map<PhaseId, Lesson>(LESSONS.map((l) => [l.phase, l]));
 

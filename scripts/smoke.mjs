@@ -104,11 +104,7 @@ try {
   const sinking = await iconY('ライト');
   const rising = await iconY('ダーク');
   await page.waitForTimeout(700);
-  check(
-    '外れた側のアイコンが沈む',
-    sinking > 4,
-    `y=${sinking}`,
-  );
+  check('外れた側のアイコンが沈む', sinking > 4, `y=${sinking}`);
   check(
     '選ばれた側のアイコンが下から昇る',
     rising > 4 && (await iconY('ダーク')) === 0,
@@ -129,7 +125,10 @@ try {
       return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
     };
     const lum = (s) => {
-      const [r, g, b] = s.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number);
+      const [r, g, b] = s
+        .match(/\d+(\.\d+)?/g)
+        .slice(0, 3)
+        .map(Number);
       return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
     };
     document.querySelector('button[aria-label="ライト"]').click();
@@ -241,7 +240,11 @@ try {
   await page.goto(`${base}#/learn`, { waitUntil: 'networkidle' });
   // 進捗バーの区切りも /learn/N へのリンクなので、カードだけを数える
   const chapters = await page.locator('[data-testid="chapter-card"]').count();
-  check('教材の目次に全章が並ぶ', chapters === LESSONS.length, `${chapters} / ${LESSONS.length} 章`);
+  check(
+    '教材の目次に全章が並ぶ',
+    chapters === LESSONS.length,
+    `${chapters} / ${LESSONS.length} 章`,
+  );
 
   const progress = page.locator('[data-testid="curriculum-progress"]');
   check(
@@ -252,10 +255,7 @@ try {
   await page.click('a[href*="#/learn/2"]');
   await page.waitForSelector('text=この章の内容');
   const chapterText = await page.locator('main').innerText();
-  check(
-    '章に節の本文が表示される',
-    chapterText.includes('UNBOUNDED PRECEDING'),
-  );
+  check('章に節の本文が表示される', chapterText.includes('UNBOUNDED PRECEDING'));
   check(
     '節からその問題へ行ける',
     (await page.locator('a[href*="#/problems/phase2-"]').count()) > 0,
@@ -327,7 +327,11 @@ try {
     .locator('section[id]')
     .nth(2)
     .evaluate((el) => el.getBoundingClientRect().top);
-  check('節の見出しがヘッダに隠れない', headTop > 56 && headTop < 120, `上端 ${headTop.toFixed(0)}px`);
+  check(
+    '節の見出しがヘッダに隠れない',
+    headTop > 56 && headTop < 120,
+    `上端 ${headTop.toFixed(0)}px`,
+  );
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.waitForTimeout(300);
 
@@ -347,7 +351,10 @@ try {
   const tailY = () =>
     page.locator(`a[href$="#/problems/${tailId}"]`).evaluate((el) => el.getBoundingClientRect().y);
   const listFrom = await tailY();
-  await page.locator('[data-testid="phase-chip"]').nth(lastPhase - 1).click();
+  await page
+    .locator('[data-testid="phase-chip"]')
+    .nth(lastPhase - 1)
+    .click();
   await page.waitForTimeout(150);
   const listMid = await tailY();
   await page.waitForTimeout(800);
@@ -381,7 +388,8 @@ try {
   // 開閉はアニメーションするので、消えるまで待つ（固定待ちだと閉じ切る前に読んでしまう）
   const collapsed = await page
     .waitForFunction(
-      (needle) => !(document.querySelector('[data-testid="lesson"]')?.innerText ?? '').includes(needle),
+      (needle) =>
+        !(document.querySelector('[data-testid="lesson"]')?.innerText ?? '').includes(needle),
       lessonBody,
       { timeout: 5000 },
     )
@@ -461,7 +469,11 @@ try {
   await page.keyboard.press('Tab');
   await page.waitForTimeout(200);
   const indented = await page.locator('.cm-content').innerText();
-  check('候補が無いとき Tab はインデントのまま', /^\s+SELECT 1/.test(indented), JSON.stringify(indented));
+  check(
+    '候補が無いとき Tab はインデントのまま',
+    /^\s+SELECT 1/.test(indented),
+    JSON.stringify(indented),
+  );
 
   // 8c. F5 で実行できること（ブラウザのリロードは抑止する）
   await page.evaluate(() => {
@@ -496,7 +508,10 @@ try {
   const linesBefore = await page.locator('.cm-line').count();
   await page.keyboard.press('ControlOrMeta+Enter');
   await page.waitForTimeout(900);
-  check('Ctrl+Enter で空行が挿入されない', (await page.locator('.cm-line').count()) === linesBefore);
+  check(
+    'Ctrl+Enter で空行が挿入されない',
+    (await page.locator('.cm-line').count()) === linesBefore,
+  );
   check(
     'Ctrl+Enter でクエリを実行できる',
     (await rightPane.locator('table tbody tr td').nth(1).innerText()) === '8',
@@ -547,7 +562,10 @@ try {
   // 8h. 進捗サイドバーから移動できる / 現在地が滑って動く
   const nav = page.locator('[data-testid="problem-nav"]');
   check('問題ページに進捗サイドバーが出る', (await nav.count()) === 1);
-  check('現在の問題が 1 つだけ強調される', (await page.locator('[data-testid="nav-current"]').count()) === 1);
+  check(
+    '現在の問題が 1 つだけ強調される',
+    (await page.locator('[data-testid="nav-current"]').count()) === 1,
+  );
   const currentY = () =>
     page
       .locator('[data-testid="nav-current"] span')
@@ -574,7 +592,10 @@ try {
   await page.goto(base, { waitUntil: 'networkidle' });
   const stored = await page.evaluate(() => localStorage.getItem('sql-training:progress:v1'));
   const parsed = JSON.parse(stored ?? '{}');
-  check('進捗が localStorage に保存される', parsed?.solvedProblems?.['phase1-lv1-001']?.solved === true);
+  check(
+    '進捗が localStorage に保存される',
+    parsed?.solvedProblems?.['phase1-lv1-001']?.solved === true,
+  );
 
   // ホームの進捗バーは 0 から伸びる。
   // 読み込み後に測ると伸び終わっていることがあるので、描画前に
@@ -618,9 +639,11 @@ try {
 
   // 採点後、正解の選択肢だけが持ち上がる
   await page.waitForTimeout(600);
-  const lifts = await page.locator('[data-testid="choice-option"]').evaluateAll((els) =>
-    els.map((el) => Math.round(new DOMMatrixReadOnly(getComputedStyle(el).transform).m42)),
-  );
+  const lifts = await page
+    .locator('[data-testid="choice-option"]')
+    .evaluateAll((els) =>
+      els.map((el) => Math.round(new DOMMatrixReadOnly(getComputedStyle(el).transform).m42)),
+    );
   const answerIndex = mcId.options.findIndex((o) => o.id === mcId.correct_option_id);
   check(
     '正解の選択肢だけが持ち上がる',
@@ -686,7 +709,11 @@ try {
   );
   await reducedCtx.close();
 
-  check('コンソールエラーが無い', consoleErrors.length === 0, consoleErrors.slice(0, 3).join(' | '));
+  check(
+    'コンソールエラーが無い',
+    consoleErrors.length === 0,
+    consoleErrors.slice(0, 3).join(' | '),
+  );
 } catch (e) {
   check('例外が発生しなかった', false, String(e).split('\n')[0]);
 } finally {

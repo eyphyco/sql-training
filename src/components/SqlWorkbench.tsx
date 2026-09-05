@@ -2,7 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
 import type { SqlQueryProblem } from '../types';
-import { connect, describeTables, explainQuery, resetEnvironment, runQuery } from '../engine/duckdb';
+import {
+  connect,
+  describeTables,
+  explainQuery,
+  resetEnvironment,
+  runQuery,
+} from '../engine/duckdb';
 import type { QueryResult, TableSchema } from '../engine/duckdb';
 import { checkPatterns, explainSqlError, judgeResultSet } from '../engine/judge';
 import type { JudgeResult } from '../engine/judge';
@@ -185,7 +191,10 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
           result = {
             correct: false,
             message: '結果は正しいですが、この問題が求める書き方の条件を満たしていません',
-            details: [...violations, ...(problem.judge.pattern_hint ? [problem.judge.pattern_hint] : [])],
+            details: [
+              ...violations,
+              ...(problem.judge.pattern_hint ? [problem.judge.pattern_hint] : []),
+            ],
           };
         }
       }
@@ -280,9 +289,8 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
           <IconBulb size={14} className="mt-0.5 shrink-0 text-warning" />
           <div className="text-[12.5px] leading-relaxed text-fg">
             <p>
-              このブラウザでは F5
-              によるリロードを抑止できませんでした。DuckDB は作り直されましたが、SQL
-              と直近の実行結果は復元しています。
+              このブラウザでは F5 によるリロードを抑止できませんでした。DuckDB
+              は作り直されましたが、SQL と直近の実行結果は復元しています。
             </p>
             <p className="mt-1 text-muted">
               確実に実行したいときは Ctrl+Enter（macOS は ⌘+Enter）をお使いください。
@@ -305,9 +313,17 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
           className="flex min-h-[520px] flex-col overflow-hidden lg:h-[clamp(460px,calc(100vh-34rem),820px)]"
         >
           <header className="flex h-9 shrink-0 items-center justify-between border-b border-line bg-raised pr-1.5 pl-3">
-            <span className="text-[11.5px] font-medium tracking-tight text-muted">SQL エディタ</span>
+            <span className="text-[11.5px] font-medium tracking-tight text-muted">
+              SQL エディタ
+            </span>
             <div className="flex gap-1.5">
-              <Button size="sm" variant="ghost" onClick={handleExplain} disabled={busy} data-testid="explain">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleExplain}
+                disabled={busy}
+                data-testid="explain"
+              >
                 <IconLayers size={13} />
                 EXPLAIN
               </Button>
@@ -408,7 +424,13 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
 
       {/* 採点 */}
       <div className="flex flex-wrap items-center gap-2.5">
-        <Button size="lg" variant="primary" onClick={handleAnswer} disabled={busy} data-testid="answer">
+        <Button
+          size="lg"
+          variant="primary"
+          onClick={handleAnswer}
+          disabled={busy}
+          data-testid="answer"
+        >
           ANSWER
           <span className="text-[11px] font-normal opacity-75">この実行結果で提出</span>
         </Button>

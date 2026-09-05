@@ -66,10 +66,7 @@ describe('splitStatements — 区切りに見えるが区切りでないもの',
   });
 
   it('ブロックコメントの中のセミコロン', () => {
-    expect(splitStatements('SELECT /* ; */ 1; SELECT 2')).toEqual([
-      'SELECT /* ; */ 1',
-      'SELECT 2',
-    ]);
+    expect(splitStatements('SELECT /* ; */ 1; SELECT 2')).toEqual(['SELECT /* ; */ 1', 'SELECT 2']);
   });
 
   it('複数行のブロックコメント', () => {
