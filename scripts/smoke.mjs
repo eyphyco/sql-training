@@ -285,6 +285,19 @@ try {
   const tocYMid = await tocY();
   await page.waitForTimeout(700); // バネが落ち着くのを待つ
   const readMid = await readingWidth();
+  /*
+    読み進みの線はヘッダー下端に固定している。ナビの選択の印を下線にすると
+    同じ行に同じ色・同じ太さで並び、1 本の途切れた線に見える。重ならないこと。
+  */
+  const onBar = await page.evaluate(() => {
+    const bar = document.querySelector('[data-testid="reading-progress"]').getBoundingClientRect();
+    return [...document.querySelectorAll('header nav a *')].filter((el) => {
+      const r = el.getBoundingClientRect();
+      return r.height > 0 && r.bottom > bar.top && r.top < bar.bottom;
+    }).length;
+  });
+  check('章ページで読み進みの線とナビの印が重ならない', onBar === 0, `重なり ${onBar} 件`);
+
   check(
     '読み進み線がスクロールで伸びる',
     readMid > readTop + 10,
@@ -983,6 +996,28 @@ try {
     narrow.docW <= narrow.layout,
     `文書 ${narrow.docW}px / 画面 ${narrow.layout}px`,
   );
+  // ナビの印は 1 つを使い回して滑る（layoutId）
+  await page.goto(`${base}#/learn`, { waitUntil: 'networkidle' });
+  // ハッシュだけの移動では画面が作り直されないので、目的の項目が現在地になるまで待つ
+  await page.waitForSelector('header nav a[href$="#/learn"][aria-current="page"] span');
+  await page.waitForTimeout(700); // 直前の移動で滑っている最中に測らない
+  const pillX = () =>
+    page
+      .locator('header nav a[aria-current="page"] span')
+      .first()
+      .evaluate((el) => el.getBoundingClientRect().x);
+  const pillFrom = await pillX();
+  await page.click('header nav a[href$="#/problems"]');
+  await page.waitForTimeout(80);
+  const pillMid = await pillX();
+  await page.waitForTimeout(700);
+  const pillTo = await pillX();
+  check(
+    'ナビの選択の印が滑って移動する',
+    pillTo > pillFrom + 20 && pillMid > pillFrom && pillMid < pillTo,
+    `${pillFrom.toFixed(0)} → 途中 ${pillMid.toFixed(0)} → ${pillTo.toFixed(0)}`,
+  );
+
   // 狭い画面でタグを開いたとき、説明が縦に割れない
   await narrowPage.getByTestId('tag-toggle').click();
   await narrowPage.waitForSelector('[data-testid="tag-chip"]');

@@ -42,29 +42,34 @@ function Header() {
           <span className="hidden sm:inline">SQL Training</span>
           <span className="sr-only sm:hidden">SQL Training</span>
         </Link>
-        <nav className="flex h-full items-stretch gap-3 sm:gap-5">
+        {/*
+          選択中の項目は下線ではなく丸い下地で示す。下線にすると、
+          章ページで固定している読み進みの線（ヘッダー下端・同じ色・同じ太さ）と
+          同じ行に並んで、1 本の途切れた線に見えてしまう。
+          下地は 1 つを使い回して滑らせる（layoutId が同じものは繋がって動く）。
+        */}
+        <nav className="flex items-center gap-0.5 sm:gap-1">
           {NAV.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               end={item.end}
               className={({ isActive }) =>
-                `relative flex items-center whitespace-nowrap text-[12px] transition-colors sm:text-[13px] ${
-                  isActive ? 'text-fg' : 'text-muted hover:text-fg'
+                `relative isolate flex h-8 items-center rounded-full px-2 text-[12px] whitespace-nowrap transition-colors sm:px-2.5 sm:text-[13px] ${
+                  isActive ? 'text-accent' : 'text-muted hover:text-fg'
                 }`
               }
             >
               {({ isActive }) => (
                 <>
-                  {item.label}
-                  {/* 下線は 1 つを使い回して滑らせる（layoutId が同じものは繋がって動く） */}
                   {isActive && (
                     <motion.span
-                      layoutId="nav-underline"
+                      layoutId="nav-active"
                       transition={SLIDE}
-                      className="absolute inset-x-0 -bottom-px h-0.5 bg-accent"
+                      className="absolute inset-0 -z-10 rounded-full bg-accent-soft ring-1 ring-accent-line"
                     />
                   )}
+                  {item.label}
                 </>
               )}
             </NavLink>

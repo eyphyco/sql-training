@@ -96,6 +96,7 @@ for (const theme of ['light', 'dark']) {
   await page.goto(`${base}/#/problems/phase2-lv2-004`, { waitUntil: 'networkidle' });
   await page.waitForSelector('[data-testid="problem-nav"]', { timeout: 60000 });
   await page.waitForTimeout(1500);
+  await measure('ナビの現在地 (accent)', 'header nav a[aria-current="page"]');
   await measure('本文 (fg)', '.md p');
   await measure('パンくずリンク (muted)', 'a:has-text("ウィンドウ関数")');
   await measure('実行ボタン (on-accent)', '[data-testid="run"]');
