@@ -835,20 +835,65 @@ try {
     `${activeBefore} → ${activeAfter} 件`,
   );
 
-  // 13e. タグは問題数の多い順。チップの件数が単調に減る
+  // 13e. タグは既定で畳まれていて、開くと問題数の多い順に並ぶ
   await page.goto(`${base}#/problems`, { waitUntil: 'networkidle' });
-  await page.waitForSelector('[data-testid="tag-chip"]');
+  await page.waitForSelector('[data-testid="tag-toggle"]');
+  const panelClosed = await page.getByTestId('filter-panel').boundingBox();
+  check(
+    'タグは畳まれていて、一覧の高さを取らない',
+    (await page.locator('[data-testid="tag-chip"]').count()) === 0 && panelClosed.height < 200,
+    `絞り込みパネル ${panelClosed.height.toFixed(0)}px`,
+  );
+
+  /*
+    ハッシュだけの移動では画面が作り直されないので、開閉と検索語が前の手順から
+    引き継がれる。畳んでから開き直して、いつも同じ状態から始める。
+  */
+  const openTags = async () => {
+    const toggle = page.getByTestId('tag-toggle');
+    if ((await toggle.getAttribute('aria-expanded')) === 'true') {
+      await toggle.click();
+      await waitCount('[data-testid="tag-chip"]', 0);
+    }
+    await toggle.click();
+    return waitCount('[data-testid="tag-chip"]', 72);
+  };
+
+  const openedTags = await openTags();
+  const panelOpen = await page.getByTestId('filter-panel').boundingBox();
   const tagCounts = await page
     .locator('[data-testid="tag-chip"]')
     .evaluateAll((els) => els.map((el) => Number(el.dataset.count)));
   const descending = tagCounts.every((n, i) => i === 0 || tagCounts[i - 1] >= n);
   check(
     'タグが問題数の多い順に並ぶ',
-    tagCounts.length > 0 && tagCounts[0] > 1 && descending,
-    tagCounts.join(' ≥ '),
+    openedTags === 72 && tagCounts[0] > 1 && descending,
+    `${openedTags} 件 ${tagCounts.slice(0, 6).join(' ≥ ')} …`,
+  );
+  // 開いても中で送る。パネルごと伸びると問題一覧が画面から押し出される
+  const box = await page.evaluate(() => {
+    const scroller = document.querySelector('[data-testid="tag-chip"]').parentElement;
+    return { scroll: scroller.scrollHeight, view: scroller.clientHeight };
+  });
+  check(
+    '開いた一覧は中で送る（パネルが伸び切らない）',
+    box.scroll > box.view && panelOpen.height < 420,
+    `一覧 ${box.view}px に ${box.scroll}px ぶん・パネル ${panelOpen.height.toFixed(0)}px`,
   );
 
-  // 13f. チップの件数は他の条件に追随し、0 件になるものは押せなくなる
+  // 13f. タグを検索で絞れる
+  await page.getByLabel('タグを探す').fill('join');
+  await page.waitForTimeout(400);
+  const joinTags = await page
+    .locator('[data-testid="tag-chip"]')
+    .evaluateAll((els) => els.map((el) => el.textContent));
+  check(
+    'タグを検索で絞り込める',
+    joinTags.length > 0 && joinTags.every((t) => t.includes('join')),
+    `72 → ${joinTags.length} 件（${joinTags.join(' ')}）`,
+  );
+
+  // 13g. チップの件数は他の条件に追随し、0 件になるものは押せなくなる
   await page.goto(`${base}#/problems?phase=6`, { waitUntil: 'networkidle' });
   await page.waitForSelector('[data-testid="level-chip"]');
   const levelShown = await page
@@ -857,34 +902,33 @@ try {
   const levelReal = [1, 2, 3].map(
     (l) => ALL_PROBLEMS.filter((p) => p.phase === 6 && p.level === l).length,
   );
-  // 0 件のチップは押せない（この条件だと大半のタグが 0 件になる）
-  const tagState = await page
-    .locator('[data-testid="tag-chip"]')
-    .evaluateAll((els) => els.map((el) => ({ n: Number(el.dataset.count), off: el.disabled })));
   check(
     'チップの件数が他の条件に追随する',
     JSON.stringify(levelShown) === JSON.stringify(levelReal),
     `表示 ${levelShown.join('/')} 実データ ${levelReal.join('/')}`,
   );
-  // 13g. 開いたタグを検索で絞れる
-  await page.goto(`${base}#/problems`, { waitUntil: 'networkidle' });
-  await page.waitForSelector('[data-testid="tag-chip"]');
-  await page.getByRole('button', { name: /ほか \d+ 件/ }).click();
-  const allTags = await waitCount('[data-testid="tag-chip"]', 72);
-  await page.getByLabel('タグを探す').fill('join');
-  const joinTags = await page
+  // 0 件のチップは押せない（この条件だと大半のタグが 0 件になる）
+  await openTags();
+  const tagState = await page
     .locator('[data-testid="tag-chip"]')
-    .evaluateAll((els) => els.map((el) => el.textContent));
-  check(
-    'タグを検索で絞り込める',
-    allTags > 60 && joinTags.length > 0 && joinTags.every((t) => t.includes('join')),
-    `${allTags} → ${joinTags.length} 件（${joinTags.join(' ')}）`,
-  );
-
+    .evaluateAll((els) => els.map((el) => ({ n: Number(el.dataset.count), off: el.disabled })));
   check(
     '0 件になるチップは押せない',
     tagState.some((t) => t.n === 0) && tagState.every((t) => t.off === (t.n === 0)),
     `${tagState.filter((t) => t.off).length} / ${tagState.length} 個が無効`,
+  );
+
+  // 13h. 畳んでも選んだタグは「絞り込み中」に残る
+  await page.locator('[data-testid="tag-chip"]:not([disabled])').first().click();
+  await page.waitForTimeout(400);
+  await page.getByTestId('tag-toggle').click();
+  await waitCount('[data-testid="tag-chip"]', 0);
+  const toggleLabel = await page.getByTestId('tag-toggle').innerText();
+  check(
+    '畳んでも選んだタグを見失わない',
+    toggleLabel.includes('1 件を選択中') &&
+      (await page.locator('[data-testid="active-chip"]').count()) === 2,
+    `つまみ「${toggleLabel.trim()}」`,
   );
 
   // 14. 「視差効果を減らす」設定を尊重する（MotionConfig reducedMotion="user"）
@@ -938,6 +982,19 @@ try {
     '狭い画面で横スクロールが出ない',
     narrow.docW <= narrow.layout,
     `文書 ${narrow.docW}px / 画面 ${narrow.layout}px`,
+  );
+  // 狭い画面でタグを開いたとき、説明が縦に割れない
+  await narrowPage.getByTestId('tag-toggle').click();
+  await narrowPage.waitForSelector('[data-testid="tag-chip"]');
+  await narrowPage.waitForTimeout(400);
+  const hint = await narrowPage
+    .locator('text=問題数の多い順')
+    .evaluate((el) => el.getBoundingClientRect().height);
+  const narrowDoc = await narrowPage.evaluate(() => document.documentElement.scrollWidth);
+  check(
+    '狭い画面でタグを開いても説明が 1 行に収まる',
+    hint < 24 && narrowDoc <= 390,
+    `説明の高さ ${hint.toFixed(0)}px / 文書 ${narrowDoc}px`,
   );
   await narrowCtx.close();
 

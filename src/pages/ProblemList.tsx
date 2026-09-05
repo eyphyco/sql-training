@@ -33,9 +33,6 @@ const STATUSES: { id: Status; label: string }[] = [
   { id: 'solved', label: '正解済み' },
 ];
 
-/** 畳んでいるときに出すタグの数。多い順の上位だけ見せる */
-const TAGS_COLLAPSED = 12;
-
 /**
  * 絞り込みのチップ。押している間だけ少し縮み、選択の下地は
  * 敷かれるときに膨らんで出る（色が唐突に変わるより、押した手応えが出る）。
@@ -138,18 +135,12 @@ export default function ProblemList() {
     return { solved, unsolved: pool.length - solved };
   }, [filter, isSolved]);
 
-  /*
-    畳んでいるときは上位だけ。ただし選んだタグは常に見えるようにする
-    （見えない所で絞り込みが効いていると、件数の理由が分からなくなる）。
-  */
+  /* 開いているときだけ一覧を作る（検索語で絞る） */
   const tagList = useMemo(() => {
+    if (!tagsOpen) return [];
     const q = tagQuery.trim().toLowerCase();
-    if (tagsOpen) {
-      return q === '' ? ALL_TAGS : ALL_TAGS.filter((t) => t.toLowerCase().includes(q));
-    }
-    const head = ALL_TAGS.filter((t) => !filter.tags.includes(t)).slice(0, TAGS_COLLAPSED);
-    return [...filter.tags, ...head].slice(0, Math.max(TAGS_COLLAPSED, filter.tags.length));
-  }, [filter.tags, tagQuery, tagsOpen]);
+    return q === '' ? ALL_TAGS : ALL_TAGS.filter((t) => t.toLowerCase().includes(q));
+  }, [tagQuery, tagsOpen]);
 
   /** 「いま何で絞っているか」を 1 行にまとめる。× で 1 つずつ外せる */
   const active = [
@@ -236,52 +227,13 @@ export default function ProblemList() {
           ))}
         </Row>
 
+        {/*
+          タグは 72 種類ある。既定では畳んで 1 行に収め、開いたときだけ
+          一覧を出す。開いた中身も高さを決めて中で送る（パネル全体が
+          伸びると、下の問題一覧が画面から押し出される）。
+          選んだタグは下の「絞り込み中」に出るので、畳んでも見失わない。
+        */}
         <Row label="タグ">
-          {/*
-            何順か分かるように、並びの規則と件数を必ず出す。
-            開いているときは 70 件以上並ぶので、代わりに検索を置く。
-          */}
-          <motion.span layout className="mr-1 shrink-0 text-[10.5px] text-subtle">
-            問題数の多い順
-          </motion.span>
-          <AnimatePresence initial={false} mode="popLayout">
-            {tagsOpen && (
-              <motion.label
-                key="tag-search"
-                layout
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                transition={SLIDE}
-                className="flex w-40 shrink-0 items-center gap-1.5 rounded-full border border-line bg-sunken px-2.5 py-1"
-              >
-                <IconSearch size={12} className="shrink-0 text-subtle" />
-                <input
-                  type="search"
-                  value={tagQuery}
-                  onChange={(e) => setTagQuery(e.target.value)}
-                  placeholder="タグを探す"
-                  aria-label="タグを探す"
-                  className="w-full bg-transparent text-[11.5px] text-fg placeholder:text-subtle focus:outline-none"
-                />
-              </motion.label>
-            )}
-          </AnimatePresence>
-          <AnimatePresence initial={false} mode="popLayout">
-            {tagList.map((t) => (
-              <Chip
-                key={t}
-                testId="tag-chip"
-                active={filter.tags.includes(t)}
-                count={tagCounts.get(t) ?? 0}
-                disabled={!filter.tags.includes(t) && !tagCounts.get(t)}
-                onClick={() => toggleTag(t)}
-              >
-                #{t}
-                <span className="sr-only">（全 {TAG_COUNTS.get(t) ?? 0} 問）</span>
-              </Chip>
-            ))}
-          </AnimatePresence>
           <motion.button
             type="button"
             layout
@@ -291,9 +243,17 @@ export default function ProblemList() {
               setTagQuery('');
             }}
             aria-expanded={tagsOpen}
-            className="flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11.5px] text-muted hover:text-fg"
+            data-testid="tag-toggle"
+            whileTap={{ scale: 0.94 }}
+            className={`glass-edge relative flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] font-medium transition-colors ${
+              filter.tags.length > 0
+                ? 'border-accent-line bg-accent-soft text-accent'
+                : 'border-line bg-surface text-muted hover:border-line-strong hover:text-fg'
+            }`}
           >
-            {tagsOpen ? '畳む' : `ほか ${Math.max(0, ALL_TAGS.length - tagList.length)} 件`}
+            {filter.tags.length > 0
+              ? `${filter.tags.length} 件を選択中`
+              : `${ALL_TAGS.length} 件から選ぶ`}
             <motion.span
               animate={{ rotate: tagsOpen ? 180 : 0 }}
               transition={SLIDE}
@@ -303,6 +263,62 @@ export default function ProblemList() {
             </motion.span>
           </motion.button>
         </Row>
+
+        <AnimatePresence initial={false}>
+          {tagsOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={COLLAPSE}
+              className="overflow-hidden"
+            >
+              {/* 狭い画面では字下げをやめ、検索と説明を別の行に折り返す */}
+              <div className="rounded-md border border-line bg-sunken/60 p-2 sm:ml-[3.875rem]">
+                <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                  <label className="flex w-full items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-1 sm:w-44 sm:shrink-0">
+                    <IconSearch size={12} className="shrink-0 text-subtle" />
+                    <input
+                      type="search"
+                      value={tagQuery}
+                      onChange={(e) => setTagQuery(e.target.value)}
+                      placeholder="タグを探す"
+                      aria-label="タグを探す"
+                      className="w-full bg-transparent text-[11.5px] text-fg placeholder:text-subtle focus:outline-none"
+                    />
+                  </label>
+                  {/* 何順か分かるように、並びの規則を必ず出す */}
+                  <span className="text-[10.5px] text-subtle">問題数の多い順</span>
+                  <span className="tnum ml-auto text-[10.5px] text-subtle">
+                    {tagList.length} 件
+                  </span>
+                </div>
+                <div className="flex max-h-[9.5rem] flex-wrap gap-1.5 overflow-y-auto">
+                  <AnimatePresence initial={false} mode="popLayout">
+                    {tagList.map((t) => (
+                      <Chip
+                        key={t}
+                        testId="tag-chip"
+                        active={filter.tags.includes(t)}
+                        count={tagCounts.get(t) ?? 0}
+                        disabled={!filter.tags.includes(t) && !tagCounts.get(t)}
+                        onClick={() => toggleTag(t)}
+                      >
+                        #{t}
+                        <span className="sr-only">（全 {TAG_COUNTS.get(t) ?? 0} 問）</span>
+                      </Chip>
+                    ))}
+                  </AnimatePresence>
+                  {tagList.length === 0 && (
+                    <p className="px-1 py-2 text-[11.5px] text-subtle">
+                      「{tagQuery}」に当たるタグはありません。
+                    </p>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <AnimatePresence initial={false}>
           {!isEmptyFilter(filter) && (
