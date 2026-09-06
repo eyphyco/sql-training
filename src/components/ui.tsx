@@ -19,7 +19,7 @@ const VARIANT: Record<Variant, string> = {
 
 const SIZE: Record<Size, string> = {
   sm: 'h-7 px-3 text-xs gap-1.5',
-  md: 'h-8 px-3.5 text-[13px] gap-1.5',
+  md: 'h-8 px-3.5 text-body gap-1.5',
   lg: 'h-10 px-5 text-sm gap-2',
 };
 
@@ -80,7 +80,7 @@ export function Card({
 export function SectionTitle({ children, right }: { children: ReactNode; right?: ReactNode }) {
   return (
     <div className="mb-3 flex items-baseline justify-between gap-4">
-      <h2 className="text-[13px] font-semibold tracking-tight text-muted">{children}</h2>
+      <h2 className="text-body font-semibold tracking-tight text-muted">{children}</h2>
       {right}
     </div>
   );
@@ -138,7 +138,7 @@ export function Tag({
   } as const;
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] leading-4 font-medium ${tones[tone]} ${className}`}
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-tiny leading-4 font-medium ${tones[tone]} ${className}`}
     >
       {children}
     </span>
@@ -167,4 +167,19 @@ export function AnimatedNumber({ value, className = '' }: { value: number; class
   }, [raw, reduced, value]);
 
   return <motion.span className={`tnum ${className}`}>{text}</motion.span>;
+}
+
+/**
+ * 画面には出さないが、変わったことを読み上げてもらうための領域。
+ *
+ * 採点の結果やエラーは、見ている人には色と位置で伝わるが、
+ * 読み上げでは「何かが起きた」ことすら分からない。領域は常に置いておき、
+ * 中身だけ差し替える（後から現れた要素は読み上げられないことがある）。
+ */
+export function LiveMessage({ children }: { children: ReactNode }) {
+  return (
+    <div role="status" aria-live="polite" className="sr-only">
+      {children}
+    </div>
+  );
 }

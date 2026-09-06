@@ -20,8 +20,8 @@
     ],
     "explanation_md": "## 考え方\n\n```sql\nSELECT class, AVG(score) AS avg_score\nFROM students\nGROUP BY class\nHAVING AVG(score) >= 70;\n```\n\n## WHERE と HAVING の決定的な違い\n\nSQL の評価順序はおおよそ次のとおりです。\n\n```\nFROM → WHERE → GROUP BY → HAVING → SELECT → ORDER BY\n```\n\n- **WHERE** は `GROUP BY` の**前**に働くので、まだグループが存在しない。したがって集約関数（`AVG` / `SUM` / `COUNT` …）を書けない。\n- **HAVING** は `GROUP BY` の**後**に働くので、グループごとの集計値で絞り込める。\n\n`WHERE AVG(score) >= 70` と書くとエラーになるのはこのためです。\n\n## よくある誤り\n\n`WHERE score >= 70` と書いてしまうケース。これは「**70点以上の生徒だけ**を集めて平均を取る」という別の意味になり、A組は 80・72・90 の平均 80.67 になってしまいます。「どの行を対象にするか（WHERE）」と「どのグループを残すか（HAVING）」を明確に分けて考えてください。",
     "tags": [
-      "group by",
-      "having",
+      "GROUP BY",
+      "HAVING",
       "集約関数"
     ]
   },
@@ -46,9 +46,9 @@
     ],
     "explanation_md": "## 考え方\n\n```sql\nSELECT dept, COUNT(*) AS headcount, AVG(salary) AS avg_salary\nFROM employees\nGROUP BY dept\nORDER BY AVG(salary) DESC;\n```\n\n## ポイント\n\n- `GROUP BY dept` によって、結果は「部署 1 行」になります。`SELECT` に書けるのは **GROUP BY に指定した列** か **集約関数** だけです。\n- `ORDER BY` は `SELECT` より後に評価されるため、`ORDER BY avg_salary DESC` のように**別名**でも並べ替えられます（`WHERE` では別名を使えないのと対照的）。\n- `COUNT(*)` は行数、`COUNT(salary)` は「salary が NULL でない行数」です。この問題では NULL がないので同じ結果になりますが、意味は違います（→ 問題 phase1-lv2-004）。\n\n## 実務での注意\n\n金額の平均を `AVG` で出すと浮動小数点の丸め誤差が問題になることがあります。実務では `ROUND(AVG(salary), 0)` としたり、金額を `DECIMAL` 型で保持したりします。",
     "tags": [
-      "group by",
+      "GROUP BY",
       "集約関数",
-      "order by"
+      "ORDER BY"
     ]
   },
   {
@@ -72,9 +72,9 @@
     ],
     "explanation_md": "## 考え方\n\n```sql\nSELECT store, SUM(qty * unit_price) AS total_amount\nFROM sales\nWHERE sale_date >= DATE '2024-01-01'\n  AND sale_date <  DATE '2025-01-01'\nGROUP BY store\nHAVING SUM(qty * unit_price) >= 100000;\n```\n\n## この問題の罠\n\nこのデータには、**2023 年を含めれば 100,000 円を超えるが、2024 年だけなら超えない**店舗（渋谷: 2024年は 95,000 円、2023年を足すと 155,000 円）と、**2023 年にしか売上がない**店舗（上野）が入っています。\n\n`WHERE` を書き忘れると渋谷と上野が混ざり込みます。「対象行の絞り込み（WHERE）」を先に済ませてから集計する、という順序を意識してください。\n\n## 日付範囲の書き方\n\n`EXTRACT(YEAR FROM sale_date) = 2024` は読みやすい一方、**列に関数を適用しているためインデックスが効かなくなる**（sargable でなくなる）という欠点があります。実務では\n\n```sql\nWHERE sale_date >= DATE '2024-01-01' AND sale_date < DATE '2025-01-01'\n```\n\nのように**範囲で書く**のが定石です。`BETWEEN '2024-01-01' AND '2024-12-31'` は、列が `TIMESTAMP` 型のときに 12/31 の 00:00:00 より後を取りこぼすため避けたほうが安全です。この話はフェーズ 4 でもう一度扱います。",
     "tags": [
-      "group by",
-      "having",
-      "where",
+      "GROUP BY",
+      "HAVING",
+      "WHERE",
       "集約関数"
     ]
   },
@@ -99,7 +99,7 @@
     ],
     "explanation_md": "## 考え方\n\n```sql\nSELECT channel,\n       COUNT(*)      AS response_count,\n       COUNT(rating) AS rated_count,\n       AVG(rating)   AS avg_rating\nFROM survey_responses\nGROUP BY channel;\n```\n\n## 集約関数と NULL\n\n| 書き方 | 意味 |\n|---|---|\n| `COUNT(*)` | グループ内の**行数**。NULL も数える |\n| `COUNT(col)` | `col` が **NULL でない行数** |\n| `COUNT(DISTINCT col)` | `col` の**異なる値の個数**（NULL は数えない） |\n| `SUM` / `AVG` / `MAX` / `MIN` | NULL を**無視**して計算する |\n\n`app` チャネルは 2 件とも `rating` が NULL なので、`COUNT(*)` は 2、`COUNT(rating)` は 0、`AVG(rating)` は **NULL**（0 ではない）になります。\n\n## 平均を 0 として扱いたいとき\n\n```sql\nCOALESCE(AVG(rating), 0)\n```\n\nただし「評価が 0 点」と「評価が無い」は意味が違います。安易に 0 で埋めるとレポートの平均値が歪むので、**分母を明示する**（`AVG` ではなく `SUM(rating) / COUNT(rating)` と書き下す）ほうが意図が伝わることもあります。\n\n## 試験でのポイント\n\n`COUNT(*)` と `COUNT(列)` の差は、基本情報・応用情報でも頻出です。「NULL は値ではなく『不明』を表すマーカー」であり、`NULL = NULL` すら真にならない（`UNKNOWN` になる）点をあわせて押さえておいてください。",
     "tags": [
-      "group by",
+      "GROUP BY",
       "集約関数",
       "NULL"
     ]
@@ -125,7 +125,7 @@
     ],
     "explanation_md": "## 考え方\n\n```sql\nSELECT store,\n       strftime(sale_date, '%Y-%m') AS ym,\n       SUM(qty * unit_price) AS total_amount\nFROM sales\nWHERE sale_date >= DATE '2024-01-01' AND sale_date < DATE '2025-01-01'\nGROUP BY store, strftime(sale_date, '%Y-%m')\nORDER BY store, ym;\n```\n\n## 複数キーの GROUP BY\n\n`GROUP BY a, b` は「a と b の**組み合わせ**ごとに 1 行」を作ります。店舗が 3 つ・月が 5 種類あっても、実際にデータが存在する組み合わせの数だけ行が出ます（データが無い月は行が出ない、という点は注意。「売上ゼロの月も表示したい」場合はカレンダー表と外部結合します → フェーズ 3）。\n\n## 式によるグループ化\n\n`GROUP BY` にはカラムだけでなく**式**も書けます。DuckDB / PostgreSQL では\n\n```sql\nGROUP BY store, ym        -- SELECT の別名を参照（PostgreSQL は不可、DuckDB は可）\nGROUP BY 1, 2             -- 出力列の序数を参照\nGROUP BY ALL              -- DuckDB 独自。集約でない列すべてでグループ化\n```\n\nも使えますが、**移植性が高いのは式をそのまま書き下す形**です。試験でも「SELECT の別名は GROUP BY / WHERE では使えない」を前提にした出題があります。\n\n## 月次集計の別解\n\n```sql\ndate_trunc('month', sale_date)   -- 2024-01-01 のような DATE が返る\n```\n\nこちらは文字列でなく日付型のまま扱えるので、期間比較や並べ替えに強いという利点があります。",
     "tags": [
-      "group by",
+      "GROUP BY",
       "日付関数",
       "集約関数"
     ]
@@ -151,9 +151,9 @@
     ],
     "explanation_md": "## 考え方\n\nいわゆる **条件付き集計（conditional aggregation）** です。\n\n```sql\nSUM(CASE WHEN salary >= 450000 THEN 1 ELSE 0 END)\n```\n\n`CASE` 式は行ごとに評価され、条件に合えば 1、合わなければ 0 を返します。それを `SUM` すれば「条件に合う行数」になります。\n\n`COUNT(CASE WHEN salary >= 450000 THEN 1 END)` でも同じ結果です（`ELSE` を書かないと NULL になり、`COUNT` は NULL を数えないため）。\n\n## なぜ WHERE ではダメなのか\n\n`WHERE salary >= 450000` としてしまうと、**分母（在籍人数）まで絞られてしまい**、比率が常に 1.0 になります。「全体を数えつつ、一部だけ別に数える」ときは WHERE ではなく条件付き集計、と覚えてください。1 回のスキャンで複数の条件を同時に数えられるので、性能面でも有利です。\n\n## 整数同士の割り算\n\n多くの DBMS（PostgreSQL、Oracle、SQL Server など）では `1 / 3` は **0**（整数除算）になります。`* 1.0` を掛けるか `CAST(x AS DECIMAL)` で明示的に型を上げてください。DuckDB や MySQL は `/` が実数除算ですが、移植性を考えると明示するのが安全です。\n\n## 横持ち集計（クロス集計）への応用\n\n```sql\nSELECT dept,\n       SUM(CASE WHEN salary >= 500000 THEN 1 ELSE 0 END) AS \"50万以上\",\n       SUM(CASE WHEN salary BETWEEN 400000 AND 499999 THEN 1 ELSE 0 END) AS \"40万台\",\n       SUM(CASE WHEN salary <  400000 THEN 1 ELSE 0 END) AS \"40万未満\"\nFROM employees GROUP BY dept;\n```\n\nこのように、CASE を並べるだけで**行持ちのデータを列持ち（クロス集計表）に変換**できます。実務のレポート作成で頻出のテクニックです。",
     "tags": [
-      "group by",
+      "GROUP BY",
       "条件付き集計",
-      "case"
+      "CASE"
     ],
     "alternative_md": "**別解（FILTER 句 / SQL:2003 標準）**\n\n```sql\nSELECT dept,\n       COUNT(*) AS headcount,\n       COUNT(*) FILTER (WHERE salary >= 450000) AS high_paid,\n       ROUND(COUNT(*) FILTER (WHERE salary >= 450000) * 1.0 / COUNT(*), 2) AS ratio\nFROM employees\nGROUP BY dept;\n```"
   },
@@ -178,9 +178,9 @@
     ],
     "explanation_md": "## 考え方\n\n```sql\nSELECT dept, AVG(salary) AS avg_salary\nFROM employees\nGROUP BY dept\nHAVING AVG(salary) > (SELECT AVG(salary) FROM employees)\nORDER BY AVG(salary) DESC;\n```\n\n全社平均は 446,000 円。部署平均は 開発 465,000 / 人事 455,000 / 営業 430,000 / 総務 400,000 なので、**開発と人事**が該当します。\n\n## スカラサブクエリ\n\n「1 行 1 列」を返すサブクエリは**値と同じように**扱えます。ここでは相関がない（外側の行に依存しない）ので、DBMS は**一度だけ評価して使い回します**。実行計画上も定数として畳み込まれるため、性能上の心配はほとんどありません。\n\n一方、外側の行を参照する**相関サブクエリ**は行ごとに評価される可能性があり、性能問題の主犯になりがちです。これはフェーズ 5 で本格的に扱います。\n\n## よくある誤り\n\n```sql\n-- NG: WHERE では集約結果を比較できない\nWHERE salary > (SELECT AVG(salary) FROM employees)\n```\n\nこれは「**個人の給与**が全社平均を超える社員」の抽出であり、問われている「**部署の平均**が全社平均を超える部署」とは別物です。粒度（行が何を表すか）を常に意識してください。\n\n## 別解: CTE で意図を明示する\n\n```sql\nWITH dept_avg AS (\n  SELECT dept, AVG(salary) AS avg_salary FROM employees GROUP BY dept\n)\nSELECT dept, avg_salary\nFROM dept_avg\nWHERE avg_salary > (SELECT AVG(salary) FROM employees)\nORDER BY avg_salary DESC;\n```\n\n`WITH`（共通表式 / CTE）でいったん部署平均という中間結果に名前を付けると、外側は素直な `WHERE` で書けます。読みやすさを優先するならこちらです。",
     "tags": [
-      "having",
+      "HAVING",
       "サブクエリ",
-      "group by"
+      "GROUP BY"
     ]
   },
   {
@@ -204,8 +204,8 @@
     ],
     "explanation_md": "## 考え方\n\n```sql\nSELECT store, product, SUM(qty * unit_price) AS total_amount\nFROM sales\nWHERE sale_date >= DATE '2024-01-01' AND sale_date < DATE '2025-01-01'\nGROUP BY ROLLUP(store, product);\n```\n\n## ROLLUP / CUBE / GROUPING SETS\n\nSQL:1999 で追加された集計拡張です。\n\n| 構文 | 生成されるグループ |\n|---|---|\n| `ROLLUP(a, b)` | `(a,b)`, `(a)`, `()` — **階層的な小計**（左から順に畳んでいく） |\n| `CUBE(a, b)` | `(a,b)`, `(a)`, `(b)`, `()` — **全組み合わせ** |\n| `GROUPING SETS((a,b),(b))` | 指定した組み合わせだけ |\n\n`ROLLUP` は「店舗 → 商品」のような**階層のある集計軸**に対して、小計・総合計を一度のスキャンで出すのに使います。UNION ALL で 3 本のクエリをつなぐより高速で、意図も明確です。\n\n## NULL の見分け方\n\n小計行の NULL と、**元データに入っていた NULL** は見た目では区別できません。区別するには `GROUPING()` 関数を使います。\n\n```sql\nSELECT CASE WHEN GROUPING(store) = 1 THEN '【総合計】' ELSE store END AS store,\n       CASE WHEN GROUPING(product) = 1 AND GROUPING(store) = 0 THEN '【店舗計】'\n            WHEN GROUPING(product) = 1 THEN ''\n            ELSE product END AS product,\n       SUM(qty * unit_price) AS total_amount\nFROM sales\nWHERE sale_date >= DATE '2024-01-01' AND sale_date < DATE '2025-01-01'\nGROUP BY ROLLUP(store, product);\n```\n\n`GROUPING(col)` は「その行が col について集約された（小計行である）」とき 1 を返します。データベーススペシャリスト試験でも、この集計拡張は SQL 問題の題材になります。",
     "tags": [
-      "group by",
-      "rollup",
+      "GROUP BY",
+      "ROLLUP",
       "集約関数"
     ]
   }

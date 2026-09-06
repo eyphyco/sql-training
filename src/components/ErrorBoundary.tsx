@@ -55,15 +55,15 @@ export default class ErrorBoundary extends Component<Props, State> {
     const stale = STALE.test(error.message);
     return (
       <Card className="max-w-prose-wide p-6" testId="error-boundary">
-        <h1 className="text-[15px] font-semibold tracking-tight text-fg">
+        <h1 className="text-lead font-semibold tracking-tight text-fg">
           {stale ? '新しい版が公開されています' : '画面を表示できませんでした'}
         </h1>
-        <p className="mt-2 text-[13px] leading-relaxed text-muted">
+        <p className="mt-2 text-body leading-relaxed text-muted">
           {stale
             ? 'このタブは古い版のまま開かれています。再読み込みすると最新の版になります。進捗はブラウザに保存されているので消えません。'
             : '進捗はブラウザに保存されているので消えていません。再読み込みで直らない場合は、進捗データを書き出してから読み込み直してください。'}
         </p>
-        <pre className="mt-3 overflow-x-auto rounded-md bg-sunken p-3 font-mono text-[11.5px] text-subtle">
+        <pre className="mt-3 overflow-x-auto rounded-md bg-sunken p-3 font-mono text-tiny text-subtle">
           {error.message}
         </pre>
         <div className="mt-4 flex flex-wrap gap-2">

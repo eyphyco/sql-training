@@ -32,17 +32,17 @@ export default function LessonPanel({ problemId }: { problemId: string }) {
     >
       <header className="flex items-center gap-2 border-b border-line bg-raised px-4 py-2">
         <IconBook size={14} className="shrink-0 text-accent" />
-        <h2 className="text-[12px] font-semibold tracking-tight text-fg">教材</h2>
+        <h2 className="text-small font-semibold tracking-tight text-fg">教材</h2>
         {/* たたんでいるときだけ、何が隠れているかを見出しに出す */}
         {!open && (
-          <span className="truncate text-[11.5px] text-subtle">
+          <span className="truncate text-tiny text-subtle">
             {sections.map((s) => s.title).join(' / ')}
           </span>
         )}
         {phase && (
           <Link
             to={`/learn/${phase}`}
-            className="ml-auto shrink-0 text-[11.5px] text-muted hover:text-accent"
+            className="ml-auto shrink-0 text-tiny text-muted hover:text-accent"
           >
             章を通して読む →
           </Link>
@@ -51,7 +51,7 @@ export default function LessonPanel({ problemId }: { problemId: string }) {
           onClick={toggle}
           aria-expanded={open}
           data-testid="lesson-toggle"
-          className={`${phase ? '' : 'ml-auto'} flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] text-muted hover:bg-surface hover:text-fg`}
+          className={`${phase ? '' : 'ml-auto'} flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-tiny text-muted hover:bg-surface hover:text-fg`}
         >
           {open ? 'たたむ' : '読む'}
           <motion.span animate={{ rotate: open ? 0 : -90 }} transition={SLIDE} className="flex">
@@ -74,7 +74,7 @@ export default function LessonPanel({ problemId }: { problemId: string }) {
             <div className="divide-y divide-line">
               {sections.map((s) => (
                 <article key={s.id} className="p-5">
-                  <h3 className="mb-2 text-[14px] font-semibold tracking-tight text-fg">
+                  <h3 className="mb-2 text-lead font-semibold tracking-tight text-fg">
                     {s.title}
                   </h3>
                   <Markdown>{s.body_md}</Markdown>

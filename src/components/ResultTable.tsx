@@ -45,20 +45,20 @@ export default function ResultTable({
   );
 
   if (columns.length === 0) {
-    return <p className="p-4 text-[13px] text-muted">結果セットを返さない文が実行されました。</p>;
+    return <p className="p-4 text-body text-muted">結果セットを返さない文が実行されました。</p>;
   }
   return (
     <div className="overflow-auto">
-      <table className="tnum w-full border-collapse text-left text-[12.5px]">
+      <table className="tnum w-full border-collapse text-left text-small">
         <thead className="glass-sticky sticky top-0 z-10">
           <tr>
-            <th className="w-10 border-b border-line-strong px-2 py-1.5 text-right font-mono text-[10.5px] font-normal text-subtle">
+            <th className="w-10 border-b border-line-strong px-2 py-1.5 text-right font-mono text-micro font-normal text-subtle">
               #
             </th>
             {columns.map((c, i) => (
               <th
                 key={`${c}-${i}`}
-                className={`border-b border-line-strong px-3 py-1.5 font-mono text-[11.5px] font-semibold whitespace-nowrap text-fg ${
+                className={`border-b border-line-strong px-3 py-1.5 font-mono text-tiny font-semibold whitespace-nowrap text-fg ${
                   numeric[i] ? 'text-right' : 'text-left'
                 }`}
               >
@@ -75,13 +75,13 @@ export default function ResultTable({
               key={r}
               className="border-b border-line/60 transition-colors last:border-0 odd:bg-raised/40 hover:bg-accent-soft/60"
             >
-              <td className="px-2 py-1.5 text-right font-mono text-[10.5px] text-subtle">
+              <td className="px-2 py-1.5 text-right font-mono text-micro text-subtle">
                 {r + 1}
               </td>
               {row.map((cell, c) => (
                 <td
                   key={c}
-                  className={`px-3 py-1.5 font-mono text-[12px] whitespace-nowrap ${
+                  className={`px-3 py-1.5 font-mono text-small whitespace-nowrap ${
                     numeric[c] ? 'text-right' : 'text-left'
                   } ${cell === null ? 'text-subtle italic' : 'text-fg'}`}
                 >
@@ -93,7 +93,7 @@ export default function ResultTable({
           ))}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={columns.length + 2} className="px-3 py-5 text-[13px] text-muted">
+              <td colSpan={columns.length + 2} className="px-3 py-5 text-body text-muted">
                 {emptyMessage}
               </td>
             </tr>
@@ -101,7 +101,7 @@ export default function ResultTable({
         </tbody>
       </table>
       {rows.length > maxRows && (
-        <p className="border-t border-line px-3 py-2 text-[11.5px] text-subtle">
+        <p className="border-t border-line px-3 py-2 text-tiny text-subtle">
           先頭 {maxRows} 行のみ表示（全 {rows.length} 行）
         </p>
       )}

@@ -24,7 +24,7 @@
       "総合",
       "自己結合",
       "日付関数",
-      "group by"
+      "GROUP BY"
     ]
   },
   {
@@ -52,7 +52,7 @@
       "総合",
       "結合",
       "ウィンドウ関数",
-      "group by"
+      "GROUP BY"
     ]
   },
   {
@@ -78,8 +78,8 @@
     "explanation_md": "## 考え方\n\n```sql\nSELECT c.name,\n       COUNT(DISTINCT o.order_id) AS order_count,\n       SUM(oi.qty * oi.unit_price) AS total_amount,\n       MAX(o.order_date) AS last_order_date\nFROM customers c\nJOIN orders o       ON o.customer_id = c.customer_id AND o.status = '完了'\nJOIN order_items oi ON oi.order_id = o.order_id\nGROUP BY c.customer_id, c.name\nHAVING COUNT(DISTINCT o.order_id) >= 2\n   AND SUM(oi.qty * oi.unit_price) >= 200000\nORDER BY SUM(oi.qty * oi.unit_price) DESC;\n```\n\n## COUNT(DISTINCT) が必要な理由\n\n`orders` と `order_items` を結合した時点で、**1 注文が明細の数だけ行に増えます**（フェーズ 3 のファンアウト）。\n`COUNT(*)` では明細数を数えてしまうため、`COUNT(DISTINCT o.order_id)` で「異なる注文の数」を数えます。\n\n一方 `SUM(oi.qty * oi.unit_price)` は**明細ごとに正しい値**なので、増えた行のまま合計して問題ありません。\n**同じクエリの中で、列によって正しい数え方が違う**——ここが集計クエリの難所です。「この列は何の粒度の値か」を 1 つずつ確認してください。\n\n## status の条件を ON に書くか WHERE に書くか\n\nここでは `JOIN ... ON o.customer_id = c.customer_id AND o.status = '完了'` としています。内部結合なので `WHERE o.status = '完了'` と書いても結果は同じです。\n\nただし「**注文が 0 件の顧客も 0 件として出したい**」という要件に変わったら、`LEFT JOIN` にしたうえで status 条件を **`ON` に置く**必要があります（`WHERE` に書くと外部結合が内部結合に化ける → フェーズ 3）。\n将来の変更に強い書き方として、**結合対象の条件は `ON` に寄せておく**のは悪くない習慣です。\n\n## HAVING に複数条件\n\n`HAVING` には集約結果に対する条件を `AND` / `OR` で自由に並べられます。\nなお `HAVING` の中で `SELECT` の別名（`total_amount`）を参照できるかは DBMS 次第です。DuckDB や MySQL は可、PostgreSQL や Oracle は不可なので、**移植性を考えるなら式を書き下す**のが安全です。\n\n## 実務での発展: RFM 分析\n\nこの問題は RFM 分析の簡易版です。\n\n| 指標 | 意味 | このクエリでの対応 |\n|---|---|---|\n| **Recency** | 最終購入からの経過 | `MAX(o.order_date)` |\n| **Frequency** | 購入回数 | `COUNT(DISTINCT o.order_id)` |\n| **Monetary** | 購入金額 | `SUM(qty * unit_price)` |\n\n実務では各指標を `NTILE(5) OVER (ORDER BY ...)` で 5 段階にスコア化し、`555` のような組み合わせで顧客をセグメント分けします。ウィンドウ関数の実践的な使い所です。",
     "tags": [
       "総合",
-      "having",
-      "left join",
+      "HAVING",
+      "LEFT JOIN",
       "集約"
     ],
     "alternative_md": "**別解（事前集計してファンアウトを避ける）**\n\n```sql\nWITH order_amount AS (\n  SELECT o.order_id, o.customer_id, o.order_date,\n         SUM(oi.qty * oi.unit_price) AS amount\n  FROM orders o\n  JOIN order_items oi ON oi.order_id = o.order_id\n  WHERE o.status = '完了'\n  GROUP BY o.order_id, o.customer_id, o.order_date\n)\nSELECT c.name,\n       COUNT(*)          AS order_count,\n       SUM(a.amount)     AS total_amount,\n       MAX(a.order_date) AS last_order_date\nFROM customers c\nJOIN order_amount a ON a.customer_id = c.customer_id\nGROUP BY c.customer_id, c.name\nHAVING COUNT(*) >= 2 AND SUM(a.amount) >= 200000\nORDER BY SUM(a.amount) DESC;\n```\n\n注文単位まで集計してから顧客単位に集計する**二段構え**。粒度が明確で、`DISTINCT` に頼らないぶん意図が伝わりやすく、大規模データでも安定します。"
@@ -112,7 +112,7 @@
     "tags": [
       "総合",
       "ウィンドウ関数",
-      "rank",
+      "RANK",
       "構成比"
     ]
   },

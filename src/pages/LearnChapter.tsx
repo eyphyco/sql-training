@@ -20,8 +20,8 @@ export default function LearnChapter() {
   if (!lesson) {
     return (
       <Card className="max-w-prose-wide p-6">
-        <p className="text-[13.5px] text-fg">教材 {phaseId} が見つかりません。</p>
-        <Link to="/learn" className="mt-3 inline-block text-[13px] text-accent underline">
+        <p className="text-body text-fg">教材 {phaseId} が見つかりません。</p>
+        <Link to="/learn" className="mt-3 inline-block text-body text-accent underline">
           教材の目次へ戻る
         </Link>
       </Card>
@@ -48,17 +48,17 @@ export default function LearnChapter() {
 
       <div className="min-w-0 space-y-5 lg:col-start-2 lg:row-start-1">
         <div>
-          <div className="flex items-center gap-2 text-[12px]">
+          <div className="flex items-center gap-2 text-small">
             <Link to="/learn" className="text-muted hover:text-fg">
               教材
             </Link>
             <span className="text-subtle">/</span>
-            <span className="tnum font-mono text-[10.5px] text-subtle">第 {lesson.phase} 章</span>
+            <span className="tnum font-mono text-micro text-subtle">第 {lesson.phase} 章</span>
           </div>
-          <h1 className="mt-2 text-[19px] leading-snug font-semibold tracking-tight text-fg">
+          <h1 className="mt-2 text-display leading-snug font-semibold tracking-tight text-fg">
             {lesson.title}
           </h1>
-          <p className="mt-1.5 text-[13px] leading-relaxed text-muted">{lesson.lead}</p>
+          <p className="mt-1.5 text-body leading-relaxed text-muted">{lesson.lead}</p>
         </div>
 
         {/* この章が全体のどこにあたるかを、進捗と一緒に示す */}
@@ -67,12 +67,12 @@ export default function LearnChapter() {
         {lesson.sections.map((s) => (
           <Card key={s.id} id={s.id} as="section" className="scroll-mt-20 overflow-hidden">
             <div className="p-5">
-              <h2 className="mb-3 text-[16px] font-semibold tracking-tight text-fg">{s.title}</h2>
+              <h2 className="mb-3 text-title font-semibold tracking-tight text-fg">{s.title}</h2>
               <Markdown>{s.body_md}</Markdown>
             </div>
 
             <div className="border-t border-line bg-raised px-5 py-3">
-              <p className="mb-2 text-[11.5px] font-medium text-muted">この節で解く問題</p>
+              <p className="mb-2 text-tiny font-medium text-muted">この節で解く問題</p>
               <ul className="space-y-1">
                 {s.problems.map((id) => {
                   const p = META_BY_ID.get(id);
@@ -81,7 +81,7 @@ export default function LearnChapter() {
                     <li key={id}>
                       <Link
                         to={`/problems/${id}`}
-                        className="group flex items-center gap-2 text-[13px]"
+                        className="group flex items-center gap-2 text-body"
                       >
                         <span className={isSolved(id) ? 'text-success' : 'text-subtle/50'}>
                           <IconCheck size={12} />
@@ -105,7 +105,7 @@ export default function LearnChapter() {
           {prev ? (
             <Link
               to={`/learn/${prev.phase}`}
-              className="flex items-center gap-1 text-[12.5px] text-muted hover:text-fg"
+              className="flex items-center gap-1 text-small text-muted hover:text-fg"
             >
               <IconChevronLeft size={14} />
               {prev.title}
@@ -116,7 +116,7 @@ export default function LearnChapter() {
           {next ? (
             <Link
               to={`/learn/${next.phase}`}
-              className="flex items-center gap-1 text-[12.5px] text-muted hover:text-fg"
+              className="flex items-center gap-1 text-small text-muted hover:text-fg"
             >
               {next.title}
               <IconChevronRight size={14} />

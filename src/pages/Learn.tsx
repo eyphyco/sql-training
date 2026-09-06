@@ -16,7 +16,7 @@ export default function Learn() {
     <div className="space-y-5">
       <div className="max-w-prose-wide">
         <h1 className="text-lg font-semibold tracking-tight text-fg">教材</h1>
-        <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
+        <p className="mt-1.5 text-body leading-relaxed text-muted">
           各章を読んでから、その章の問題を解く形で進められる。問題ページの先頭にも、その問題に対応する節が出る。
         </p>
       </div>
@@ -48,10 +48,10 @@ export default function Learn() {
               >
                 <Card className="flex h-full flex-col p-4 transition-colors group-hover:border-line-strong group-hover:bg-raised">
                   <div className="flex items-center gap-2">
-                    <span className="tnum font-mono text-[11px] text-subtle">
+                    <span className="tnum font-mono text-tiny text-subtle">
                       {String(lesson.phase).padStart(2, '0')}
                     </span>
-                    <h2 className="text-[13.5px] font-semibold tracking-tight text-fg">
+                    <h2 className="text-body font-semibold tracking-tight text-fg">
                       {lesson.title}
                     </h2>
                     <IconChevronRight
@@ -59,12 +59,12 @@ export default function Learn() {
                       className="ml-auto text-subtle transition-colors group-hover:text-accent"
                     />
                   </div>
-                  <p className="mt-1.5 mb-3 text-[12px] leading-relaxed text-muted">
+                  <p className="mt-1.5 mb-3 text-small leading-relaxed text-muted">
                     {lesson.lead}
                   </p>
                   <ul className="mb-4 space-y-0.5">
                     {lesson.sections.map((s) => (
-                      <li key={s.id} className="flex items-start gap-1.5 text-[11.5px] text-subtle">
+                      <li key={s.id} className="flex items-start gap-1.5 text-tiny text-subtle">
                         <IconBook size={11} className="mt-0.5 shrink-0" />
                         {s.title}
                       </li>
@@ -72,7 +72,7 @@ export default function Learn() {
                   </ul>
                   <div className="mt-auto flex items-center gap-3">
                     <Meter value={stat.solved} total={stat.total} />
-                    <span className="tnum shrink-0 text-[11.5px] text-subtle">
+                    <span className="tnum shrink-0 text-tiny text-subtle">
                       {stat.solved}/{stat.total}
                     </span>
                   </div>

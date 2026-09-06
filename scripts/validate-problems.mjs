@@ -13,6 +13,16 @@ import { DuckDBInstance } from '@duckdb/node-api';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dir = join(root, 'src/data/problems');
 
+/*
+  タグの語彙は src/data/tags.ts が持ち主。TS をビルドせずに読み出す。
+  ここに無いタグを付けたら落とす（何となく増やすと分類の基準が消えるため）。
+*/
+const VOCABULARY = new Set(
+  [...readFileSync(join(root, 'src/data/tags.ts'), 'utf8').matchAll(/^ {2}'([^']+)',$/gm)].map(
+    (m) => m[1],
+  ),
+);
+
 const errors = [];
 const warnings = [];
 const fail = (id, msg) => errors.push(`[${id}] ${msg}`);
@@ -49,6 +59,11 @@ for (const p of problems) {
   if (![1, 2, 3, 4, 5, 6, 7].includes(p.phase)) fail(id, `phase が不正: ${p.phase}`);
   if (![1, 2, 3].includes(p.level)) fail(id, `level が不正: ${p.level}`);
   if (!Array.isArray(p.tags) || p.tags.length === 0) fail(id, 'tags は 1 つ以上必要です');
+  for (const tag of Array.isArray(p.tags) ? p.tags : []) {
+    if (!VOCABULARY.has(tag)) {
+      fail(id, `タグ「${tag}」は語彙にありません（src/data/tags.ts に足すか表記を合わせる）`);
+    }
+  }
   const expectedPhase = Number(String(p.id).match(/^phase(\d)/)?.[1]);
   if (expectedPhase && expectedPhase !== p.phase)
     fail(id, `id の接頭辞と phase が食い違っています`);

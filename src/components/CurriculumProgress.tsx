@@ -46,14 +46,14 @@ export default function CurriculumProgress({ activePhase }: { activePhase?: Phas
       className="glass rounded-lg border border-line bg-surface p-4"
     >
       <div className="mb-2.5 flex items-baseline gap-2">
-        <h2 className="text-[11.5px] font-medium tracking-tight text-muted">カリキュラムの進捗</h2>
-        <span className="tnum ml-auto text-[13px] text-fg">
+        <h2 className="text-tiny font-medium tracking-tight text-muted">カリキュラムの進捗</h2>
+        <span className="tnum ml-auto text-body text-fg">
           <span className="font-semibold" data-testid="progress-solved">
             <CountUp value={solved} />
           </span>
           <span className="text-subtle"> / {total} 問</span>
         </span>
-        <span className="tnum text-[11.5px] text-subtle">({pct}%)</span>
+        <span className="tnum text-tiny text-subtle">({pct}%)</span>
       </div>
 
       {/* 幅は問題数に比例。バーの長さがそのままフェーズの重さになる */}
@@ -88,11 +88,11 @@ export default function CurriculumProgress({ activePhase }: { activePhase?: Phas
               </div>
               <div className="mt-1 flex items-baseline gap-1">
                 <span
-                  className={`tnum font-mono text-[10px] ${active ? 'text-accent' : 'text-subtle'}`}
+                  className={`tnum font-mono text-micro ${active ? 'text-accent' : 'text-subtle'}`}
                 >
                   {String(phase.id).padStart(2, '0')}
                 </span>
-                <span className="tnum truncate text-[10px] text-subtle">
+                <span className="tnum truncate text-micro text-subtle">
                   {stat.solved}/{stat.total}
                 </span>
               </div>

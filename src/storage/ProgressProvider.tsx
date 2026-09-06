@@ -3,6 +3,7 @@ import type { ProgressData } from '../types';
 import {
   deserializeProgress,
   loadProgress,
+  STORAGE_KEY,
   recordAttempt,
   recordSelfRating,
   resetProgress,
@@ -19,6 +20,20 @@ export function ProgressProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     saveProgress(progress);
   }, [progress]);
+
+  /*
+    別のタブで解いた分を取り込む。storage イベントは「他のタブでの変化」
+    だけに飛ぶので、書いた自分には返ってこない（保存と往復しない）。
+    見ていない間に進めた進捗が、こちらの保存で消えるのを防ぐ。
+  */
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== null && e.key !== STORAGE_KEY) return;
+      setProgress(loadProgress());
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
   const attempt = useCallback((problemId: string, correct: boolean) => {
     setProgress((prev) => recordAttempt(prev, problemId, correct));

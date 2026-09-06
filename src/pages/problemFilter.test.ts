@@ -152,6 +152,50 @@ describe('applyFilter', () => {
   });
 });
 
+describe('言葉での検索', () => {
+  it('題名の一部で引ける', () => {
+    expect(ids(applyFilter(metas, make({ query: 'C' }), stateOf))).toEqual(['c']);
+  });
+
+  it('大文字小文字を区別しない', () => {
+    expect(ids(applyFilter(metas, make({ query: 'c' }), stateOf))).toEqual(['c']);
+  });
+
+  it('題名・ID・タグのどれかに含まれれば残す', () => {
+    // 'b' は b の題名だけでなく a のタグ（group by）にも含まれる
+    expect(ids(applyFilter(metas, make({ query: 'b' }), stateOf))).toEqual(['a', 'b']);
+  });
+
+  it('ID とタグでも引ける', () => {
+    expect(ids(applyFilter(metas, make({ query: 'group by' }), stateOf))).toEqual(['a', 'b']);
+    expect(ids(applyFilter(metas, make({ query: 'NULL' }), stateOf))).toEqual(['b', 'c']);
+  });
+
+  it('分類と組み合わさる（AND）', () => {
+    expect(ids(applyFilter(metas, make({ query: 'group by', levels: [3] }), stateOf))).toEqual([
+      'b',
+    ]);
+  });
+
+  it('件数を数えるときも効く（外せない条件なので）', () => {
+    const f = make({ query: 'group by', levels: [1] });
+    expect(ids(applyFilter(metas, f, stateOf, 'levels'))).toEqual(['a', 'b']);
+  });
+
+  it('URL と往復できる', () => {
+    const f = make({ query: 'NULL', levels: [2] });
+    expect(parseFilter(writeFilter(f))).toEqual(f);
+  });
+
+  it('空の検索語はキーごと落とす', () => {
+    expect(writeFilter(make({ query: '' })).has('q')).toBe(false);
+  });
+
+  it('検索語だけでも「絞り込み中」とみなす', () => {
+    expect(isEmptyFilter(make({ query: 'x' }))).toBe(false);
+  });
+});
+
 describe('件数の集計', () => {
   it('フェーズ・レベル・タグごとに数える', () => {
     expect(countByPhase(metas).get(1)).toBe(2);

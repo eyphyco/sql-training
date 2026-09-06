@@ -20,7 +20,7 @@
     ],
     "explanation_md": "## 考え方\n\n```sql\nSELECT o.order_id, c.name, o.order_date, o.amount\nFROM orders o\nINNER JOIN customers c ON c.customer_id = o.customer_id\nORDER BY o.order_id;\n```\n\n## INNER JOIN の意味\n\n`INNER JOIN`（内部結合）は「**両方のテーブルに対応する行がある組み合わせだけ**」を返します。\n顧客 4（えびす商会）は注文が 1 件もないため、この結果には現れません。「注文のない顧客も出したい」ときは外部結合が必要です（次の問題）。\n\n## 古い書き方との比較\n\n```sql\n-- 昔ながらの書き方（SQL-89 形式）\nSELECT o.order_id, c.name, o.order_date, o.amount\nFROM orders o, customers c\nWHERE c.customer_id = o.customer_id;\n```\n\n結果は同じですが、現在は `JOIN ... ON` を使う **SQL-92 形式**が推奨です。理由は次の 3 点。\n\n1. **結合条件と絞り込み条件が分離される**（`ON` は結合、`WHERE` は絞り込み）ので読みやすい\n2. `ON` を書き忘れると構文エラーになり、**うっかりクロス結合を作る事故を防げる**（カンマ区切りだと WHERE を忘れても動いてしまい、行数が爆発する）\n3. 外部結合（`LEFT JOIN` など）が同じ構文で書ける\n\n## 結合の実装（先取り）\n\nDBMS は結合を実現するとき、内部的には次のいずれかのアルゴリズムを選びます。\n\n- **ネステッドループ結合**: 外側の各行に対して内側を探す。小さい表向き\n- **ハッシュ結合**: 片方をハッシュ表にしてもう片方を突き合わせる。等値結合＋大きい表向き\n- **ソートマージ結合**: 双方をソートして突き合わせる。ソート済みや範囲結合向き\n\nどれが選ばれたかは `EXPLAIN` で確認できます。フェーズ 4 で詳しく扱います。",
     "tags": [
-      "inner join",
+      "INNER JOIN",
       "結合"
     ]
   },
@@ -45,7 +45,7 @@
     ],
     "explanation_md": "## 考え方\n\n```sql\nSELECT c.customer_id, c.name\nFROM customers c\nLEFT JOIN orders o ON o.customer_id = c.customer_id\nWHERE o.order_id IS NULL;\n```\n\nこの書き方は **anti join（反結合）** と呼ばれ、「A にあって B に無いもの」を求める定番パターンです。\n\n## 動作イメージ\n\n1. `LEFT JOIN` で顧客 5 行すべてを残す。注文がある顧客は注文の数だけ行が増える\n2. 注文が無い顧客（えびす商会）は、右側の列がすべて NULL の行が 1 本だけ作られる\n3. `WHERE o.order_id IS NULL` でその行だけを拾う\n\n## IS NULL を書く列に注意\n\n`WHERE o.order_id IS NULL` の代わりに **NULL を許容する列**（例えば `o.amount`）を使うと、「注文はあるが金額が NULL」の行まで拾ってしまいます。\n判定に使う列は、**結合キーか主キーなど NULL になり得ない列**を選んでください。\n\n## 3 つの書き方の性能\n\n| 書き方 | 特徴 |\n|---|---|\n| `LEFT JOIN ... IS NULL` | 古くから使える。オプティマイザが anti join に変換することが多い |\n| `NOT EXISTS` | 意図が明確。**NULL に強い**。最近の DBMS では最速になることが多い |\n| `NOT IN` | **NULL で壊れる**。サブクエリ側に NOT NULL 制約がある場合のみ |\n\n現代の DBMS ではこの 3 つはほぼ同じ実行計画に最適化されますが、`NOT IN` だけは意味が違う（NULL の扱い）ので、書き換えるときは要注意です。",
     "tags": [
-      "left join",
+      "LEFT JOIN",
       "外部結合",
       "NULL"
     ],
@@ -73,9 +73,9 @@
     ],
     "explanation_md": "## 考え方\n\n```sql\nSELECT c.name, COALESCE(SUM(o.amount), 0) AS total_2024\nFROM customers c\nLEFT JOIN orders o\n  ON o.customer_id = c.customer_id\n AND o.order_date >= DATE '2024-01-01'\n AND o.order_date <  DATE '2025-01-01'\nGROUP BY c.customer_id, c.name;\n```\n\n## なぜ WHERE ではダメなのか\n\n処理の順番はこうです。\n\n```\n1. LEFT JOIN が実行される  → 対応が無い顧客には NULL の行が作られる\n2. WHERE が実行される      → NULL の行は条件を満たさないので消える\n3. 結果として、内部結合と同じになる\n```\n\n`o.order_date >= DATE '2024-01-01'` という条件は、`o.order_date` が NULL のとき **UNKNOWN** になり、`WHERE` は UNKNOWN の行を通しません。\nつまり **「LEFT JOIN の右側テーブルの列を WHERE に書くと、外部結合が内部結合に化ける」**。これは実務で最も多い外部結合のバグです。\n\n## 覚え方\n\n| 書く場所 | 意味 | 外部結合への影響 |\n|---|---|---|\n| `ON` | どの行同士を結び付けるか | 条件に合わなければ**右側が NULL になるだけ**。左の行は残る |\n| `WHERE` | 結合結果から何を残すか | 条件に合わない行は**消える** |\n\n「**外部結合の右側テーブルに対する絞り込みは ON に書く**」と覚えてください。\n逆に「右側が NULL でないもの」に絞りたい（＝実質内部結合にしたい）なら、WHERE に書くのが正解です。\n\n## 内部結合なら違いはない\n\n`INNER JOIN` の場合は `ON` に書いても `WHERE` に書いても結果は同じで、オプティマイザも同じ計画を選びます。差が出るのは**外部結合のときだけ**です。\n\n## COALESCE を忘れない\n\n`SUM` は対象行が無いと NULL を返します（0 ではありません）。集計値をそのまま画面や帳票に出す場合は `COALESCE(SUM(x), 0)` で 0 に潰しておくのが定石です。",
     "tags": [
-      "left join",
+      "LEFT JOIN",
       "外部結合",
-      "on句"
+      "ON"
     ]
   },
   {
@@ -100,7 +100,7 @@
     "explanation_md": "## 考え方\n\n```sql\nSELECT e.emp_id, e.name, m.name AS manager_name\nFROM employees e\nLEFT JOIN employees m ON m.emp_id = e.manager_id\nORDER BY e.emp_id;\n```\n\n## 自己結合（self join）\n\n同じテーブルを 2 つの役割で使う結合です。**別名（エイリアス）が必須**で、これが無いとどちらの列を指しているか区別できません。\n\nここでは 1 つの `employees` を\n- `e` … 社員としての役割\n- `m` … 上司としての役割\n\nという 2 つの「論理的なテーブル」として扱っています。\n\n## 典型的な用途\n\n- **階層構造**（社員 → 上司、部品 → 親部品、カテゴリ → 親カテゴリ）\n- **前後の行の比較**（同じテーブルの「1 つ前の日付の行」と結合する）\n- **組み合わせの列挙**（`a.id < b.id` で結合すると重複しないペアが作れる）\n\n## 階層を何段もたどるには\n\n自己結合は「1 段上」しかたどれません。「部長までの全階層」のような可変段数の探索には**再帰共通表式（RECURSIVE CTE）**を使います。\n\n```sql\nWITH RECURSIVE org AS (\n  SELECT emp_id, name, manager_id, 1 AS lv\n  FROM employees WHERE manager_id IS NULL\n  UNION ALL\n  SELECT e.emp_id, e.name, e.manager_id, org.lv + 1\n  FROM employees e JOIN org ON org.emp_id = e.manager_id\n)\nSELECT * FROM org ORDER BY lv, emp_id;\n```\n\n再帰 CTE は SQL:1999 で標準化され、データベーススペシャリスト試験でも出題対象です。\n\n## 前後行の比較なら窓関数を優先\n\n「1 つ前の行と比較する」目的の自己結合は、フェーズ 2 で学んだ `LAG` / `LEAD` のほうが速くて安全です（欠測に強い）。自己結合は「階層」や「任意の条件によるペアリング」に使い、単純な前後比較には窓関数、と使い分けてください。",
     "tags": [
       "自己結合",
-      "left join",
+      "LEFT JOIN",
       "結合"
     ]
   },
@@ -125,9 +125,9 @@
     ],
     "explanation_md": "## 考え方\n\n```sql\nSELECT p.category,\n       SUM(oi.qty) AS total_qty,\n       SUM(p.price * oi.qty) AS total_amount\nFROM order_items oi\nINNER JOIN products p ON p.product_id = oi.product_id\nGROUP BY p.category\nORDER BY SUM(p.price * oi.qty) DESC;\n```\n\n## 「必要なテーブルだけ結合する」\n\n問題文に `orders` や `customers` が出てこないなら、結合してはいけません。**不要な結合は行数を増やし、実行計画を悪化させるだけ**です。\n「どのテーブルの、どの列が答えに必要か」を先に洗い出してから FROM 句を組み立てる癖をつけてください。\n\n## SUM(a * b) と SUM(a) * SUM(b)\n\n```\nSUM(price * qty)   … 行ごとに掛けてから合計 → 正しい売上\nSUM(price) * SUM(qty) … 全然違う値になる\n```\n\n集計の粒度を間違える典型例です。**「1 行が何を表すか」を確認してから集約関数を書く**、というのが鉄則です。ここでは 1 行が「ある注文のある明細」なので、行ごとに金額を出してから足します。\n\n## 単価は明細に持つべきか\n\nこのスキーマでは金額を `products.price`（現在の単価）から計算していますが、**実務ではこれはバグの温床**です。商品の値段が変われば過去の売上まで変わってしまいます。\n\n現実の設計では、注文明細に**その時点の単価をコピーして保持**します（`order_items.unit_price`）。「時点の値を残すべき属性」を見抜くのは DB 設計の重要な論点で、フェーズ 6 で改めて扱います。",
     "tags": [
-      "inner join",
+      "INNER JOIN",
       "多段結合",
-      "group by"
+      "GROUP BY"
     ]
   },
   {
@@ -155,7 +155,7 @@
       "結合",
       "重複",
       "事前集計",
-      "left join"
+      "LEFT JOIN"
     ],
     "alternative_md": "**別解（相関サブクエリで列ごとに集計する）**\n\n```sql\nSELECT c.name,\n       COALESCE((SELECT SUM(o.amount) FROM orders o WHERE o.customer_id = c.customer_id), 0) AS total_amount,\n       COALESCE((SELECT SUM(oi.qty) FROM orders o JOIN order_items oi ON oi.order_id = o.order_id\n                  WHERE o.customer_id = c.customer_id), 0) AS total_qty\nFROM customers c;\n```\n\n意味は明確ですが、顧客 1 行ごとにサブクエリが評価されるため件数が増えると重くなります（フェーズ 5 のテーマ）。"
   },
@@ -181,9 +181,9 @@
     ],
     "explanation_md": "## 考え方\n\n```sql\nSELECT COALESCE(s.product_code, p.product_code) AS product_code,\n       COALESCE(s.qty, 0) AS system_qty,\n       COALESCE(p.qty, 0) AS physical_qty,\n       COALESCE(s.qty, 0) - COALESCE(p.qty, 0) AS diff\nFROM system_stock s\nFULL OUTER JOIN physical_count p ON p.product_code = s.product_code\nWHERE COALESCE(s.qty, 0) <> COALESCE(p.qty, 0);\n```\n\n結果は 3 行になります。\n\n| 商品 | システム | 実地 | 状況 |\n|---|---|---|---|\n| A-002 | 50 | 48 | 数量差異 |\n| A-004 | 10 | 0 | 実地に無い（紛失の疑い） |\n| A-005 | 0 | 7 | システムに無い（未登録の疑い） |\n\nA-001 と A-003 は一致しているので除外されます。\n\n## 外部結合の 3 種類\n\n| 種類 | 残るもの |\n|---|---|\n| `LEFT OUTER JOIN` | 左の全行 |\n| `RIGHT OUTER JOIN` | 右の全行 |\n| `FULL OUTER JOIN` | 両方の全行 |\n\n`OUTER` は省略可能（`LEFT JOIN` = `LEFT OUTER JOIN`）です。\n`RIGHT JOIN` は「左右を入れ替えた LEFT JOIN」と等価なので、可読性のため **LEFT に統一する**チームが多いです。一方 `FULL OUTER` は代替が効かない（UNION で書くと冗長になる）ため、突合・差分抽出の場面で重宝します。\n\nなお MySQL は `FULL OUTER JOIN` を**サポートしていません**。その場合は\n\n```sql\nSELECT ... FROM a LEFT JOIN b ON ...\nUNION\nSELECT ... FROM a RIGHT JOIN b ON ...\n```\n\nで代替します。DBMS 間の方言として押さえておくとよいポイントです。\n\n## NULL 同士は等しくない\n\n`WHERE s.qty <> p.qty` と書くと、片側が NULL の行は **UNKNOWN** になって除外されてしまい、「片方にしか無い商品」を取りこぼします。\nNULL を含む比較では、必ず `COALESCE` で既定値に寄せるか、`IS DISTINCT FROM` を使ってください。\n\n```sql\nWHERE s.qty IS DISTINCT FROM p.qty   -- NULL を「値の一種」として比較する標準構文\n```\n\n`IS DISTINCT FROM` は「NULL 同士は等しい、NULL と値は異なる」と判定してくれる便利な演算子です（PostgreSQL / DuckDB で利用可）。",
     "tags": [
-      "full outer join",
+      "FULL OUTER JOIN",
       "外部結合",
-      "coalesce"
+      "COALESCE"
     ]
   },
   {
@@ -208,8 +208,8 @@
     "explanation_md": "## 考え方\n\n```sql\nSELECT b.band_name, COUNT(p.product_id) AS product_count\nFROM price_bands b\nLEFT JOIN products p\n  ON p.price >= b.min_price AND p.price <= b.max_price\nGROUP BY b.band_name, b.min_price\nORDER BY b.min_price;\n```\n\n結果は 低価格 2 / 中価格 1 / 高価格 2 / **超高価格 0** となります。\n\n## COUNT(*) との違い（この問題の肝）\n\n`LEFT JOIN` で対応が無かった価格帯には「右側がすべて NULL の行」が 1 本作られます。そこで\n\n- `COUNT(*)` … その NULL 行も**1 行として数えてしまい、0 ではなく 1 になる**\n- `COUNT(p.product_id)` … NULL は数えないので**正しく 0 になる**\n\n**外部結合したあとの件数は必ず `COUNT(右側の非NULL列)` で数える**、と覚えてください。実務のレポートで「該当 0 件のはずが 1 件と出る」バグの大半はこれです。\n\n## 非等値結合（theta join）\n\n`ON` に書けるのは等号だけではありません。範囲・不等号・関数でも結合できます。\n\n```sql\nON p.price BETWEEN b.min_price AND b.max_price   -- 価格帯マスタ\nON t.event_at >= s.start_at AND t.event_at < s.end_at  -- 有効期間マスタ（履歴テーブル）\nON a.id < b.id                                    -- 重複しないペアの列挙\n```\n\n**注意点は性能**です。等値結合ならハッシュ結合が使えますが、非等値結合はハッシュが使えず、ネステッドループやマージ結合になります。実際、この問題のクエリを `EXPLAIN` してみると `HASH_JOIN` ではなく別の演算子が選ばれるはずです（フェーズ 4 で確認します）。\n\n大量データで範囲結合を行うと、最悪の場合ほぼ直積に近い計算量になります。マスタ側が小さいことを確認したうえで使うか、価格帯を事前に商品側へ持たせる（非正規化）などの設計判断が必要です。\n\n## 境界の設計\n\n`max_price` を 9999 / 49999 のように「1 円手前」で切る設計は、**小数を含む金額が来た瞬間に穴が空きます**（9999.5 円はどの帯にも入らない）。\n`min_price <= price AND price < next_min` という **「以上・未満」** の設計にしておくと、境界の穴も重なりも生じません。区間の設計は DB 設計の頻出論点です。",
     "tags": [
       "非等値結合",
-      "left join",
-      "count"
+      "LEFT JOIN",
+      "COUNT"
     ]
   }
 ]

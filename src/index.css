@@ -143,6 +143,19 @@
   --shadow-card: var(--shadow-card);
   --shadow-pop: var(--shadow-pop);
 
+  /*
+    文字の大きさ。7 段だけ。直値（text-[11.5px] など）が 13 種類まで増え、
+    どれを使うべきか判断できなくなっていたので、段を決めて名前で呼ぶ。
+    小さい側が多いのは、画面のほとんどが一覧と補助表示のため。
+  */
+  --text-micro: 10.5px;
+  --text-tiny: 11.5px;
+  --text-small: 12.5px;
+  --text-body: 13.5px;
+  --text-lead: 15px;
+  --text-title: 17px;
+  --text-display: 19px;
+
   --font-sans:
     system-ui, -apple-system, 'Segoe UI', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI',
     'Noto Sans JP', sans-serif;

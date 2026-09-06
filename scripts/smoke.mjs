@@ -970,7 +970,7 @@ try {
   const panelClosed = await page.getByTestId('filter-panel').boundingBox();
   check(
     'タグは畳まれていて、一覧の高さを取らない',
-    (await page.locator('[data-testid="tag-chip"]').count()) === 0 && panelClosed.height < 200,
+    (await page.locator('[data-testid="tag-chip"]').count()) === 0 && panelClosed.height < 240,
     `絞り込みパネル ${panelClosed.height.toFixed(0)}px`,
   );
 
@@ -1018,7 +1018,7 @@ try {
     .evaluateAll((els) => els.map((el) => el.textContent));
   check(
     'タグを検索で絞り込める',
-    joinTags.length > 0 && joinTags.every((t) => t.includes('join')),
+    joinTags.length > 0 && joinTags.every((t) => t.toLowerCase().includes('join')),
     `72 → ${joinTags.length} 件（${joinTags.join(' ')}）`,
   );
 

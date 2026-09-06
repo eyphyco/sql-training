@@ -40,12 +40,12 @@ export default function Home() {
           <div className="flex flex-wrap items-end justify-between gap-6 p-5">
             <div className="min-w-[14rem] flex-1">
               {/* このページの見出し。他ページと同じく h1 を 1 つ置く */}
-              <h1 className="text-[11.5px] font-medium tracking-tight text-muted">学習の進捗</h1>
+              <h1 className="text-tiny font-medium tracking-tight text-muted">学習の進捗</h1>
               <div className="mt-2 mb-3 flex items-baseline gap-1.5">
                 <span className="tnum text-[2.5rem] leading-none font-semibold tracking-tight text-fg">
                   {totalSolved}
                 </span>
-                <span className="tnum text-[15px] text-subtle">/ {total} 問</span>
+                <span className="tnum text-lead text-subtle">/ {total} 問</span>
               </div>
               <Meter value={totalSolved} total={total} />
             </div>
@@ -68,10 +68,10 @@ export default function Home() {
               const s = byType[type] ?? { solved: 0, total: 0 };
               return (
                 <div key={type} className="px-5 py-3">
-                  <p className="text-[11px] text-muted">{TYPE_LABEL[type]}</p>
-                  <p className="tnum mt-0.5 text-[15px] font-medium text-fg">
+                  <p className="text-tiny text-muted">{TYPE_LABEL[type]}</p>
+                  <p className="tnum mt-0.5 text-lead font-medium text-fg">
                     {s.solved}
-                    <span className="text-[12px] text-subtle"> / {s.total}</span>
+                    <span className="text-small text-subtle"> / {s.total}</span>
                   </p>
                 </div>
               );
@@ -83,7 +83,7 @@ export default function Home() {
         <section>
           <SectionTitle
             right={
-              <Link to="/problems" className="text-[12px] text-muted hover:text-fg">
+              <Link to="/problems" className="text-small text-muted hover:text-fg">
                 すべての問題 →
               </Link>
             }
@@ -105,10 +105,10 @@ export default function Home() {
                 >
                   <Card className="flex h-full flex-col p-4 transition-colors group-hover:border-line-strong group-hover:bg-raised">
                     <div className="flex items-center gap-2">
-                      <span className="tnum font-mono text-[11px] text-subtle">
+                      <span className="tnum font-mono text-tiny text-subtle">
                         {String(phase.id).padStart(2, '0')}
                       </span>
-                      <h3 className="text-[13.5px] font-semibold tracking-tight text-fg">
+                      <h3 className="text-body font-semibold tracking-tight text-fg">
                         {phase.name}
                       </h3>
                       {done && <IconCheck size={13} className="text-success" />}
@@ -129,13 +129,13 @@ export default function Home() {
                         )
                       )}
                     </div>
-                    <p className="mt-1.5 mb-4 line-clamp-2 text-[12px] leading-relaxed text-muted">
+                    <p className="mt-1.5 mb-4 line-clamp-2 text-small leading-relaxed text-muted">
                       {phase.summary}
                     </p>
                     <div className="mt-auto flex items-center gap-3">
                       {/* 上から順に伸ばして、7 本を一度に見比べられるようにする */}
                       <Meter value={stat.solved} total={stat.total} delay={0.05 + 0.04 * i} />
-                      <span className="tnum shrink-0 text-[11.5px] text-subtle">
+                      <span className="tnum shrink-0 text-tiny text-subtle">
                         {stat.solved}/{stat.total}
                       </span>
                     </div>
@@ -151,7 +151,7 @@ export default function Home() {
       <aside>
         <SectionTitle>学習の記録</SectionTitle>
         {recent.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-line px-4 py-6 text-center text-[12px] leading-relaxed text-subtle">
+          <p className="rounded-lg border border-dashed border-line px-4 py-6 text-center text-small leading-relaxed text-subtle">
             まだ記録がありません。
             <br />
             上のボタンから始めましょう。
@@ -172,10 +172,10 @@ export default function Home() {
                       {h.correct ? <IconCheck size={12} /> : <IconX size={12} />}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[12px] text-fg">
+                      <span className="block truncate text-small text-fg">
                         {p?.title ?? h.problemId}
                       </span>
-                      <span className="tnum text-[10.5px] text-subtle">
+                      <span className="tnum text-micro text-subtle">
                         {new Date(h.at).toLocaleString('ja-JP', {
                           month: 'numeric',
                           day: 'numeric',

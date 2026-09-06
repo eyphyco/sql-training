@@ -12,6 +12,7 @@ import {
   problemsOfPhase,
 } from './problems';
 import { PHASES } from './phases';
+import { ALL_TAG_VOCABULARY, isSyntaxTag } from './tags';
 import type { PhaseId } from '../types';
 
 // 本文は必要になったときに読む作りなので、検査の前に一度だけ読み込む
@@ -156,5 +157,26 @@ describe('フェーズ別', () => {
     for (const p of ALL_PROBLEMS) {
       expect(p.id.startsWith(`phase${p.phase}-`)).toBe(true);
     }
+  });
+});
+
+describe('タグの語彙', () => {
+  it('使っているタグはすべて語彙にある', () => {
+    const vocabulary = new Set(ALL_TAG_VOCABULARY);
+    for (const tag of ALL_TAGS) expect(vocabulary.has(tag)).toBe(true);
+  });
+
+  it('語彙に使われていないものを残さない', () => {
+    const used = new Set(ALL_TAGS);
+    expect(ALL_TAG_VOCABULARY.filter((t) => !used.has(t))).toEqual([]);
+  });
+
+  it('構文タグは SQL に書くとおりの大文字', () => {
+    for (const tag of ALL_TAGS.filter(isSyntaxTag)) expect(tag).toBe(tag.toUpperCase());
+  });
+
+  it('概念タグに小文字だけの英語を混ぜない（sargable のような術語は除く）', () => {
+    const lowerOnly = ALL_TAGS.filter((t) => /^[a-z][a-z _-]*$/.test(t) && !isSyntaxTag(t));
+    expect(lowerOnly).toEqual(['sargable']);
   });
 });

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { ALL_TAGS, PROBLEM_METAS, TAG_COUNTS } from '../data/problems';
+import { isSyntaxTag } from '../data/tags';
 import { LEVEL_FULL_LABEL, LEVEL_LABEL, LEVEL_TONE, PHASES, PHASE_BY_ID } from '../data/phases';
 import { useProgress } from '../storage/progressContext';
 import { AnimatedNumber, Tag } from '../components/ui';
@@ -67,7 +68,7 @@ function Chip({
       layout
       transition={SLIDE}
       whileTap={disabled ? undefined : { scale: 0.94 }}
-      className={`glass-edge relative isolate flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[11.5px] font-medium transition-colors disabled:pointer-events-none disabled:opacity-35 ${
+      className={`glass-edge relative isolate flex shrink-0 items-center rounded-full border px-2.5 py-1 text-tiny font-medium transition-colors disabled:pointer-events-none disabled:opacity-35 ${
         active
           ? 'border-accent-line text-accent'
           : 'border-line bg-surface text-muted hover:border-line-strong hover:text-fg'
@@ -85,7 +86,7 @@ function Chip({
         )}
       </AnimatePresence>
       {children}
-      {count !== undefined && <span className="tnum ml-1.5 text-[10px] opacity-55">{count}</span>}
+      {count !== undefined && <span className="tnum ml-1.5 text-micro opacity-55">{count}</span>}
     </motion.button>
   );
 }
@@ -94,7 +95,7 @@ function Chip({
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      <span className="w-14 shrink-0 text-[11px] text-subtle">{label}</span>
+      <span className="w-14 shrink-0 text-tiny text-subtle">{label}</span>
       {children}
     </div>
   );
@@ -155,6 +156,15 @@ export default function ProblemList() {
 
   /** 「いま何で絞っているか」を 1 行にまとめる。× で 1 つずつ外せる */
   const active = [
+    ...(filter.query === ''
+      ? []
+      : [
+          {
+            key: 'query',
+            label: `「${filter.query}」`,
+            remove: () => commit({ ...filter, query: '' }),
+          },
+        ]),
     ...filter.phases.map((id) => ({
       key: `phase-${id}`,
       label: PHASE_BY_ID.get(id as PhaseId)?.name ?? `フェーズ ${id}`,
@@ -181,7 +191,7 @@ export default function ProblemList() {
     <div className="space-y-5">
       <div className="flex items-baseline justify-between gap-4">
         <h1 className="text-lg font-semibold tracking-tight text-fg">問題</h1>
-        <span className="tnum text-[12px] text-subtle">
+        <span className="tnum text-small text-subtle">
           <AnimatedNumber value={shown.length} className="text-fg" /> / {PROBLEM_METAS.length} 問
         </span>
       </div>
@@ -194,6 +204,22 @@ export default function ProblemList() {
         data-testid="filter-panel"
         className="glass space-y-2.5 rounded-lg border border-line bg-surface p-4"
       >
+        {/* 分類だけでは「あの問題」に辿り着けない。題名・ID・タグを言葉で引く */}
+        <Row label="さがす">
+          <label className="glass-edge flex min-w-0 flex-1 items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1 sm:max-w-80">
+            <IconSearch size={12} className="shrink-0 text-subtle" />
+            <input
+              type="search"
+              value={filter.query}
+              onChange={(e) => commit({ ...filter, query: e.target.value })}
+              placeholder="題名・ID・タグ"
+              aria-label="問題をさがす"
+              data-testid="problem-search"
+              className="w-full bg-transparent text-tiny text-fg placeholder:text-subtle focus:outline-none"
+            />
+          </label>
+        </Row>
+
         <Row label="フェーズ">
           {PHASES.map((p) => (
             <Chip
@@ -224,7 +250,7 @@ export default function ProblemList() {
             </Chip>
           ))}
           <span className="mx-2 h-4 w-px shrink-0 bg-line" />
-          <span className="shrink-0 text-[11px] text-subtle">状態</span>
+          <span className="shrink-0 text-tiny text-subtle">状態</span>
           {STATUSES.map((s) => (
             <Chip
               key={s.id}
@@ -257,7 +283,7 @@ export default function ProblemList() {
             aria-expanded={tagsOpen}
             data-testid="tag-toggle"
             whileTap={{ scale: 0.94 }}
-            className={`glass-edge relative flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] font-medium transition-colors ${
+            className={`glass-edge relative flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-tiny font-medium transition-colors ${
               filter.tags.length > 0
                 ? 'border-accent-line bg-accent-soft text-accent'
                 : 'border-line bg-surface text-muted hover:border-line-strong hover:text-fg'
@@ -296,14 +322,12 @@ export default function ProblemList() {
                       onChange={(e) => setTagQuery(e.target.value)}
                       placeholder="タグを探す"
                       aria-label="タグを探す"
-                      className="w-full bg-transparent text-[11.5px] text-fg placeholder:text-subtle focus:outline-none"
+                      className="w-full bg-transparent text-tiny text-fg placeholder:text-subtle focus:outline-none"
                     />
                   </label>
                   {/* 何順か分かるように、並びの規則を必ず出す */}
-                  <span className="text-[10.5px] text-subtle">問題数の多い順</span>
-                  <span className="tnum ml-auto text-[10.5px] text-subtle">
-                    {tagList.length} 件
-                  </span>
+                  <span className="text-micro text-subtle">問題数の多い順</span>
+                  <span className="tnum ml-auto text-micro text-subtle">{tagList.length} 件</span>
                 </div>
                 <div className="flex max-h-[9.5rem] flex-wrap gap-1.5 overflow-y-auto">
                   <AnimatePresence initial={false} mode="popLayout">
@@ -316,13 +340,14 @@ export default function ProblemList() {
                         disabled={!filter.tags.includes(t) && !tagCounts.get(t)}
                         onClick={() => toggleTag(t)}
                       >
-                        #{t}
+                        {/* SQL に書くキーワードは等幅で。概念タグと見た目で分ける */}
+                        <span className={isSyntaxTag(t) ? 'font-mono' : undefined}>#{t}</span>
                         <span className="sr-only">（全 {TAG_COUNTS.get(t) ?? 0} 問）</span>
                       </Chip>
                     ))}
                   </AnimatePresence>
                   {tagList.length === 0 && (
-                    <p className="px-1 py-2 text-[11.5px] text-subtle">
+                    <p className="px-1 py-2 text-tiny text-subtle">
                       「{tagQuery}」に当たるタグはありません。
                     </p>
                   )}
@@ -342,7 +367,7 @@ export default function ProblemList() {
               className="overflow-hidden"
             >
               <div className="flex flex-wrap items-center gap-1.5 border-t border-line pt-2.5">
-                <span className="w-14 shrink-0 text-[11px] text-subtle">絞り込み中</span>
+                <span className="w-14 shrink-0 text-tiny text-subtle">絞り込み中</span>
                 <AnimatePresence initial={false} mode="popLayout">
                   {active.map((a) => (
                     <motion.button
@@ -355,7 +380,7 @@ export default function ProblemList() {
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.8 }}
                       transition={SLIDE}
-                      className="flex shrink-0 items-center gap-1 rounded-full border border-accent-line bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent"
+                      className="flex shrink-0 items-center gap-1 rounded-full border border-accent-line bg-accent-soft px-2 py-0.5 text-tiny font-medium text-accent"
                     >
                       {a.label}
                       <IconX size={10} />
@@ -365,7 +390,7 @@ export default function ProblemList() {
                 </AnimatePresence>
                 <button
                   onClick={() => setParams(new URLSearchParams(), { replace: true })}
-                  className="ml-auto shrink-0 text-[11.5px] text-muted underline underline-offset-2 hover:text-fg"
+                  className="ml-auto shrink-0 text-tiny text-muted underline underline-offset-2 hover:text-fg"
                 >
                   すべて解除
                 </button>
@@ -400,21 +425,25 @@ export default function ProblemList() {
                   <span className={`shrink-0 ${solved ? 'text-success' : 'text-subtle/50'}`}>
                     {solved ? <IconCheck size={14} /> : <IconDash size={14} />}
                   </span>
-                  <span className="hidden shrink-0 font-mono text-[10.5px] text-subtle sm:inline">
+                  <span className="hidden shrink-0 font-mono text-micro text-subtle sm:inline">
                     {p.id}
                   </span>
                   {/* 題名とタグをひとまとまりで伸ばす。広い画面で題名と右の情報が
                       離れて間延びするのを、タグで埋める */}
                   <span className="flex min-w-0 flex-1 items-baseline gap-3">
-                    <span className="min-w-0 truncate text-[13.5px] text-fg">{p.title}</span>
-                    <span className="hidden min-w-0 truncate text-[11px] text-subtle xl:inline">
-                      {p.tags.map((t) => `#${t}`).join('  ')}
+                    <span className="min-w-0 truncate text-body text-fg">{p.title}</span>
+                    <span className="hidden min-w-0 truncate text-tiny text-subtle xl:inline">
+                      {p.tags.map((t) => (
+                        <span key={t} className={isSyntaxTag(t) ? 'mr-2 font-mono' : 'mr-2'}>
+                          #{t}
+                        </span>
+                      ))}
                     </span>
                   </span>
-                  <span className="hidden shrink-0 text-[11px] text-subtle md:inline">
+                  <span className="hidden shrink-0 text-tiny text-subtle md:inline">
                     {PHASE_BY_ID.get(p.phase as PhaseId)?.name}
                   </span>
-                  <span className="hidden w-6 shrink-0 text-center text-[11px] text-subtle sm:inline">
+                  <span className="hidden w-6 shrink-0 text-center text-tiny text-subtle sm:inline">
                     {TYPE_LABEL[p.type]}
                   </span>
                   <Tag tone={LEVEL_TONE[p.level]}>{LEVEL_LABEL[p.level]}</Tag>
@@ -428,7 +457,7 @@ export default function ProblemList() {
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.22, ease: EASE_OUT }}
-            className="px-4 py-8 text-center text-[13px] text-subtle"
+            className="px-4 py-8 text-center text-body text-subtle"
           >
             条件に一致する問題がありません。
           </motion.li>

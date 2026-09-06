@@ -17,9 +17,6 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      # 疎通確認用の Playwright はデプロイに不要。ブラウザの自動DL（約150MB）を止める
-      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -35,6 +32,22 @@ jobs:
       - run: npm run validate
       # build は tsc -b を含むので、型の誤りもここで落ちる
       - run: npm run build
+
+      # ここから画面の検査。手元でしか動かないと、UI の後退がそのまま公開される
+      - run: npx playwright install --with-deps chromium
+      - name: preview を起動する
+        run: |
+          npx vite preview --port 4173 &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:4173/ > /dev/null && exit 0
+            sleep 1
+          done
+          echo 'preview が起動しませんでした' >&2
+          exit 1
+      # 通し操作（100 件以上）と、配色のコントラスト比
+      - run: npm run smoke -- http://localhost:4173/
+      - run: npm run contrast -- http://localhost:4173/
+
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v4
         with:

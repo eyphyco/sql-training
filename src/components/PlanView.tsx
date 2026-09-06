@@ -48,7 +48,7 @@ function Row({ node }: { node: PlanNode }) {
     <motion.li variants={RISE}>
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 py-[3px]">
         <span
-          className={`shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10.5px] font-medium ${TONE[kind]}`}
+          className={`shrink-0 rounded border px-1.5 py-0.5 font-mono text-micro font-medium ${TONE[kind]}`}
         >
           {node.name}
         </span>
@@ -56,13 +56,13 @@ function Row({ node }: { node: PlanNode }) {
           <span
             key={label}
             title={`${label}: ${value}`}
-            className="min-w-0 text-[11.5px] text-muted"
+            className="min-w-0 text-tiny text-muted"
           >
             <span className="text-subtle">{label}: </span>
             <span className="font-mono">{value}</span>
           </span>
         ))}
-        <span className="tnum ml-auto shrink-0 text-[11px] whitespace-nowrap text-subtle">
+        <span className="tnum ml-auto shrink-0 text-tiny whitespace-nowrap text-subtle">
           {estimate !== null && <span title="見積り行数">~{nf.format(estimate)}</span>}
           {actual !== null && (
             <span className={off ? 'ml-1.5 font-semibold text-warning' : 'ml-1.5 text-fg'}>
@@ -90,7 +90,7 @@ export default function PlanView({ plan }: { plan: QueryPlan }) {
   return (
     <div className="p-3">
       {plan.analyzed && (
-        <p className="mb-2 flex flex-wrap items-baseline gap-x-3 text-[11.5px] text-subtle">
+        <p className="mb-2 flex flex-wrap items-baseline gap-x-3 text-tiny text-subtle">
           <span>
             全体 <span className="tnum font-medium text-fg">{plan.totalMs?.toFixed(1)} ms</span>
           </span>

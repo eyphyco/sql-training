@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion } from 'motion/react';
 import type { MultipleChoiceProblem } from '../types';
 import Markdown from './Markdown';
-import { Button, Card } from './ui';
+import { Button, Card, LiveMessage } from './ui';
 import { IconBook, IconBulb, IconCheck, IconX } from './icons';
 import { useProgress } from '../storage/progressContext';
 import { RISE, SLIDE } from './motion';
@@ -18,6 +18,11 @@ export default function ChoiceQuestion({ problem }: { problem: MultipleChoicePro
 
   return (
     <div className="space-y-4">
+      <LiveMessage>
+        {judged
+          ? `${correct ? '正解' : '不正解'}。正解は ${problem.correct_option_id.toUpperCase()}`
+          : ''}
+      </LiveMessage>
       <div className="space-y-2">
         {problem.options.map((opt) => {
           const isPicked = selected === opt.id;
@@ -53,7 +58,7 @@ export default function ChoiceQuestion({ problem }: { problem: MultipleChoicePro
               <motion.span
                 animate={{ scale: judged && isAnswer ? [1, 1.25, 1] : 1 }}
                 transition={{ duration: 0.32, ease: 'easeOut' }}
-                className={`mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full border font-mono text-[10.5px] ${markTone}`}
+                className={`mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full border font-mono text-micro ${markTone}`}
               >
                 {judged && isAnswer ? (
                   <IconCheck size={11} />
@@ -63,7 +68,7 @@ export default function ChoiceQuestion({ problem }: { problem: MultipleChoicePro
                   opt.id.toUpperCase()
                 )}
               </motion.span>
-              <span className="text-[13.5px] leading-relaxed text-fg">{opt.text}</span>
+              <span className="text-body leading-relaxed text-fg">{opt.text}</span>
             </motion.button>
           );
         })}
@@ -97,19 +102,19 @@ export default function ChoiceQuestion({ problem }: { problem: MultipleChoicePro
           <Button size="lg" onClick={() => setHintLevel((n) => n + 1)}>
             <IconBulb size={14} className="text-warning" />
             ヒント
-            <span className="tnum text-[11px] text-subtle">
+            <span className="tnum text-tiny text-subtle">
               {hintLevel} / {hints.length}
             </span>
           </Button>
         )}
-        <span className="tnum ml-auto text-[11.5px] text-subtle">挑戦 {attempts} 回</span>
+        <span className="tnum ml-auto text-tiny text-subtle">挑戦 {attempts} 回</span>
       </div>
 
       {hintLevel > 0 && !judged && (
         <div className="space-y-2">
           {hints.slice(0, hintLevel).map((h, i) => (
             <Card key={i} className="border-warning-line bg-warning-soft p-4">
-              <p className="mb-1 flex items-center gap-1.5 text-[11.5px] font-semibold text-warning">
+              <p className="mb-1 flex items-center gap-1.5 text-tiny font-semibold text-warning">
                 <IconBulb size={13} />
                 ヒント {i + 1}
               </p>
@@ -125,7 +130,7 @@ export default function ChoiceQuestion({ problem }: { problem: MultipleChoicePro
             variants={RISE}
             initial="hidden"
             animate="shown"
-            className={`flex items-center gap-2 rounded-lg border p-4 text-[13.5px] font-semibold ${
+            className={`flex items-center gap-2 rounded-lg border p-4 text-body font-semibold ${
               correct
                 ? 'border-success-line bg-success-soft text-success'
                 : 'border-danger-line bg-danger-soft text-danger'
@@ -135,7 +140,7 @@ export default function ChoiceQuestion({ problem }: { problem: MultipleChoicePro
             {correct ? '正解' : `不正解。正解は ${problem.correct_option_id.toUpperCase()} です。`}
           </motion.div>
           <Card className="overflow-hidden">
-            <p className="flex items-center gap-1.5 border-b border-line bg-raised px-4 py-2 text-[11.5px] font-medium text-muted">
+            <p className="flex items-center gap-1.5 border-b border-line bg-raised px-4 py-2 text-tiny font-medium text-muted">
               <IconBook size={13} />
               解説
             </p>

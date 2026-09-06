@@ -24,7 +24,7 @@
     ],
     "explanation_md": "## 考え方\n\n```sql\nSELECT c.customer_id, c.name\nFROM customers c\nWHERE EXISTS (\n  SELECT 1 FROM orders o\n  WHERE o.customer_id = c.customer_id\n    AND o.order_date >= DATE '2024-01-01'\n    AND o.order_date <  DATE '2025-01-01'\n);\n```\n\n## EXISTS の意味\n\n`EXISTS` は**行が存在するかどうか**だけを判定する述語です。\n\n- サブクエリが何を SELECT しているかは**一切関係ありません**（`SELECT 1` でも `SELECT *` でも同じ）\n- 1 行見つかった時点で判定が確定するので、DBMS は残りを探しません（**semi join** に最適化される）\n\n## IN との使い分け\n\n```sql\n-- IN 版\nWHERE c.customer_id IN (SELECT o.customer_id FROM orders o WHERE ...)\n```\n\n現代の DBMS では `IN` と `EXISTS` はほぼ同じ実行計画（semi join）に最適化されるため、**性能差はほとんどありません**。使い分けの基準は次のとおりです。\n\n| 場面 | 推奨 |\n|---|---|\n| 複数列で照合したい | `EXISTS`（`IN` は行値式が必要で読みにくい） |\n| サブクエリ側に NULL があり得る否定形 | **必ず `NOT EXISTS`**（`NOT IN` は壊れる → 次の問題） |\n| 値のリストが定数 | `IN ('A','B','C')` |\n\n## 相関サブクエリ\n\nサブクエリの中から**外側のクエリの列**（`c.customer_id`）を参照しているものを**相関サブクエリ**と呼びます。\n概念上は「外側の 1 行ごとにサブクエリを実行する」ですが、現代のオプティマイザは**脱相関（decorrelation）**を行い、内部的には結合に書き換えて一括処理します。\n\nただしこの最適化が効くかは DBMS と書き方次第です。フェーズ 5 の残りの問題では、「オプティマイザ任せにせず、最初から結合やウィンドウ関数で書く」パターンを学びます。",
     "tags": [
-      "exists",
+      "EXISTS",
       "サブクエリ",
       "相関サブクエリ"
     ],
@@ -56,7 +56,7 @@
     ],
     "explanation_md": "## なぜ 0 件になるのか\n\n`NOT IN` は内部的に **`<>` の AND 連結**に展開されます。\n\n```\ncustomer_id NOT IN (1, 1, 2, 3, 5, 2, NULL)\n ≡ customer_id <> 1 AND customer_id <> 2 AND ... AND customer_id <> NULL\n                                                    ~~~~~~~~~~~~~~~~~~~~\n                                                    これは常に UNKNOWN\n```\n\nSQL の比較は **3 値論理（TRUE / FALSE / UNKNOWN）**です。NULL との比較は「等しい」でも「等しくない」でもなく **UNKNOWN**。\n\n```\nTRUE  AND UNKNOWN → UNKNOWN\nFALSE AND UNKNOWN → FALSE\n```\n\n`WHERE` が行を通すのは結果が **TRUE のときだけ**（UNKNOWN は通さない）ので、どの顧客も条件を満たせず**結果は常に空**になります。\n\n## 恐ろしいのは「エラーにならない」こと\n\n構文エラーも実行時エラーも出ません。**静かに 0 件を返すだけ**です。\nそのため「該当データが無いんだな」と誤解され、本番稼働してから発覚することが少なくありません。**`NOT IN` はサブクエリと組み合わせて使わない**、を原則にしてください。\n\n## IN の場合はどうか\n\n`IN` のほうは NULL があっても「TRUE になる行はきちんと TRUE」なので、実害が出にくいです（ただし「該当なし」が FALSE ではなく UNKNOWN になるという違いは残ります）。**壊れるのは否定形（NOT IN）**、と覚えてください。\n\n## まとめ: 3 つの書き方\n\n| 書き方 | NULL 耐性 | 備考 |\n|---|---|---|\n| `NOT EXISTS` | ○ | **第一候補**。意図も明確 |\n| `LEFT JOIN ... IS NULL` | ○ | 古典的な anti join。判定列に NOT NULL 列を選ぶこと |\n| `NOT IN` | **×** | サブクエリ側に NOT NULL 制約がある場合のみ |\n\n## 試験でのポイント\n\n3 値論理と NULL の扱いは、基本情報・応用情報・データベーススペシャリストのいずれでも頻出です。\n`NULL = NULL` は TRUE ではなく UNKNOWN、`NULL <> NULL` も UNKNOWN、`WHERE` は TRUE のみ通す——この 3 点を押さえておけば、たいていの出題に対応できます。",
     "tags": [
-      "not exists",
+      "NOT EXISTS",
       "NULL",
       "サブクエリ",
       "3値論理"
@@ -122,8 +122,8 @@
     "explanation_md": "## 考え方\n\n```sql\nSELECT c.name,\n       COUNT(o.order_id) AS order_count,\n       COALESCE(SUM(o.amount), 0) AS total_amount\nFROM customers c\nLEFT JOIN orders o ON o.customer_id = c.customer_id\nGROUP BY c.customer_id, c.name;\n```\n\n## スカラサブクエリを並べる書き方の問題\n\n```sql\nSELECT c.name,\n       (SELECT COUNT(*)   FROM orders o WHERE o.customer_id = c.customer_id),\n       (SELECT SUM(amount) FROM orders o WHERE o.customer_id = c.customer_id)\nFROM customers c;\n```\n\n- **同じテーブルを、同じ条件で、2 回読んでいる**\n- 列を 1 つ増やすたびに走査が 1 回増える（レポート系のクエリでサブクエリが 10 個並ぶ、といった事態になりがち）\n- 顧客が 10 万行なら、最悪 20 万回のサブクエリ実行\n\n結合版なら `customers` と `orders` を**それぞれ 1 回ずつ**読むだけです。\n\n## GROUP BY に主キーを入れる理由\n\n```sql\nGROUP BY c.customer_id, c.name\n```\n\n`c.name` だけでグループ化すると、**同名の顧客が 2 社あったときに合算されてしまいます**。主キーを含めておけば安全です。\n（PostgreSQL や DuckDB では、主キーで `GROUP BY` していれば同じ表の他の列を SELECT に書ける「関数従属性の認識」という機能もあります。）\n\n## 読みやすさとのバランス\n\nスカラサブクエリが常に悪いわけではありません。\n\n- **1 つだけ**、しかも**行数が少ない**なら、意図が明確で読みやすい\n- 集計元が異なる複数のテーブルから 1 値ずつ取る場合、結合よりも素直\n\n「同じテーブルへのスカラサブクエリが 2 つ以上並んだら、結合 + GROUP BY を検討する」——これを判断の目安にしてください。\n\n## さらに大規模なら事前集計\n\n顧客が多く注文が莫大な場合は、**先に注文側だけを集計してから結合**するほうが速いことがあります。\n\n```sql\nWITH agg AS (\n  SELECT customer_id, COUNT(*) AS cnt, SUM(amount) AS total\n  FROM orders GROUP BY customer_id\n)\nSELECT c.name, COALESCE(a.cnt, 0), COALESCE(a.total, 0)\nFROM customers c LEFT JOIN agg a ON a.customer_id = c.customer_id;\n```\n\n結合前に行数を減らせるうえ、フェーズ 3 で学んだファンアウトの心配もありません。",
     "tags": [
       "スカラサブクエリ",
-      "left join",
-      "group by",
+      "LEFT JOIN",
+      "GROUP BY",
       "最適化"
     ],
     "starter_sql": "-- 顧客ごとの「注文件数」と「注文金額合計」を出すクエリです。\n-- SELECT 句にスカラサブクエリが 2 つ並んでおり、\n-- 顧客 1 行ごとに orders を 2 回走査します。\n-- 結合 + GROUP BY に書き換えてください。\nSELECT c.name,\n       (SELECT COUNT(*)            FROM orders o WHERE o.customer_id = c.customer_id) AS order_count,\n       (SELECT COALESCE(SUM(amount), 0) FROM orders o WHERE o.customer_id = c.customer_id) AS total_amount\nFROM customers c;"
@@ -155,7 +155,7 @@
     "tags": [
       "ウィンドウ関数",
       "相関サブクエリ",
-      "top-n"
+      "上位N件"
     ],
     "alternative_md": "**別解（LATERAL / DuckDB・PostgreSQL）**\n\n```sql\nSELECT c.name, o.order_id, o.order_date, o.amount\nFROM customers c\nJOIN LATERAL (\n  SELECT * FROM orders o\n  WHERE o.customer_id = c.customer_id\n  ORDER BY o.order_date DESC, o.order_id DESC\n  LIMIT 1\n) o ON TRUE;\n```\n\n`LATERAL`（横結合）は「外側の行ごとにサブクエリを評価してよい」という宣言で、**顧客ごとに索引で 1 件だけ取る**計画を選びやすくなります。顧客が少なく注文が莫大なケースでは、ウィンドウ関数版（全注文をソートする）より速くなることがあります。"
   },
@@ -185,7 +185,7 @@
     "explanation_md": "## 考え方: 二重否定への言い換え\n\nSQL には「すべての〜について成り立つ」を直接書く全称限量子（∀）がありません。\nそこで**述語論理の同値変形**を使います。\n\n```\n∀x P(x)  ≡  ¬∃x ¬P(x)\n「すべての x について P」＝「P でない x が存在しない」\n```\n\nこれを日本語に落とすと:\n\n> **すべての** PC 製品を買った顧客\n> ＝ 「その顧客が**買っていない** PC 製品」が**存在しない**顧客\n\nこれがそのまま SQL になります。\n\n```sql\nSELECT c.customer_id, c.name\nFROM customers c\nWHERE NOT EXISTS (                    -- 存在しない\n  SELECT 1 FROM products p\n  WHERE p.category = 'PC'             -- PC 製品のうち\n    AND NOT EXISTS (                  -- その顧客が買っていないもの\n      SELECT 1 FROM orders o\n      JOIN order_items oi ON oi.order_id = o.order_id\n      WHERE o.customer_id = c.customer_id\n        AND oi.product_id = p.product_id\n    )\n);\n```\n\n## 関係除算（division）\n\n関係代数の演算のひとつで、「R ÷ S」は「S のすべての要素と対応づく R の要素」を返します。\n\n- 「すべての科目を履修した学生」\n- 「全部品を供給できる仕入先」\n- 「全店舗で販売実績のある商品」\n\nといった要件がこれにあたります。**データベーススペシャリスト試験では頻出**で、関係代数の記号問題としても、SQL の記述問題としても出題されます。\n\n## 注文が無い顧客の扱い\n\n「えびす商会」は注文が 1 件もありません。この顧客では、内側の `NOT EXISTS` が両方の PC 製品について真になる（どちらも買っていない）ため、外側の `NOT EXISTS` は偽となり、**正しく除外されます**。\n\n## 数学的な注意: 空集合の除算\n\nもし PC カテゴリの商品が 1 件も無かったら、二重否定版は「買っていない PC 製品が存在しない」が全顧客について真になるので、**全顧客が該当**します。これは関係除算の定義どおりの正しい振る舞い（空集合に対する全称命題は真）です。\n直感に反しますが、論理としては一貫しています。`COUNT` 版はこのケースで 0 件を返すため、厳密には除算と一致しません。",
     "tags": [
       "関係除算",
-      "not exists",
+      "NOT EXISTS",
       "サブクエリ"
     ],
     "alternative_md": "**別解（COUNT で数え上げる）**\n\n```sql\nSELECT c.customer_id, c.name\nFROM customers c\nJOIN orders o      ON o.customer_id = c.customer_id\nJOIN order_items oi ON oi.order_id = o.order_id\nJOIN products p     ON p.product_id = oi.product_id AND p.category = 'PC'\nGROUP BY c.customer_id, c.name\nHAVING COUNT(DISTINCT p.product_id) = (SELECT COUNT(*) FROM products WHERE category = 'PC');\n```\n\n実務ではこちらのほうが読みやすく、性能も安定しがちです。ただし\n- `COUNT(DISTINCT ...)` を忘れると、同じ商品を 2 回買った顧客を誤って含めてしまう\n- 「PC 製品が 0 件」のとき、除算の定義では**全顧客が該当**するはずが、この書き方では 0 件になる\n\nという違いがあります。**厳密な関係除算の意味に忠実なのは `NOT EXISTS` 版**です。"

@@ -5,8 +5,9 @@ import { PHASES } from '../data/phases';
 import { META_BY_ID, problemsOfPhase } from '../data/problems';
 import { useProgress } from '../storage/progressContext';
 import { Card } from './ui';
-import { IconBook, IconCheck, IconChevronDown, IconDash } from './icons';
-import { COLLAPSE, EASE_OUT, SLIDE } from './motion';
+import { IconBook, IconCheck, IconDash } from './icons';
+import { COLLAPSE, SLIDE } from './motion';
+import { NAV_ROW_CLASS, NavChapterRow, NavHeader } from './NavPanel';
 import type { PhaseId } from '../types';
 
 /**
@@ -41,60 +42,27 @@ export default function ProblemNav({ currentId }: { currentId: string }) {
 
   return (
     <Card className="overflow-hidden" testId="problem-nav">
-      <div className="border-b border-line bg-raised px-3 py-2.5">
-        <div className="mb-1.5 flex items-baseline gap-2">
-          <span className="text-[11.5px] font-medium tracking-tight text-muted">進捗</span>
-          <span className="tnum ml-auto text-[11.5px] text-fg">
-            <span className="font-semibold">{solved}</span>
-            <span className="text-subtle"> / {total}</span>
-          </span>
-        </div>
-        <div className="h-1.5 overflow-hidden rounded-full bg-sunken">
-          <motion.div
-            className="h-full origin-left bg-accent"
-            initial={{ scaleX: 0 }}
-            animate={{ scaleX: total === 0 ? 0 : solved / total }}
-            transition={{ duration: 0.5, ease: EASE_OUT }}
-          />
-        </div>
-      </div>
+      <NavHeader label="進捗" solved={solved} total={total} />
 
       <nav className="max-h-[calc(100vh-13rem)] overflow-y-auto p-1.5">
         {PHASES.map((phase, i) => {
           const open = openPhase === phase.id;
           const stat = totals[i];
-          const done = stat.total > 0 && stat.solved === stat.total;
           return (
             <div key={phase.id}>
               <button
                 onClick={() => setOpenPhase(open ? null : phase.id)}
                 aria-expanded={open}
-                className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-raised"
+                className={`${NAV_ROW_CLASS} transition-colors hover:bg-raised`}
               >
-                <motion.span
-                  animate={{ rotate: open ? 0 : -90 }}
-                  transition={SLIDE}
-                  className="flex shrink-0 text-subtle"
-                >
-                  <IconChevronDown size={12} />
-                </motion.span>
-                <span className="tnum shrink-0 font-mono text-[10px] text-subtle">
-                  {String(phase.id).padStart(2, '0')}
-                </span>
-                <span
-                  className={`min-w-0 truncate text-[12px] ${
-                    phase.id === currentPhase ? 'font-semibold text-fg' : 'text-muted'
-                  }`}
-                >
-                  {phase.name}
-                </span>
-                <span
-                  className={`tnum ml-auto shrink-0 text-[10.5px] ${
-                    done ? 'text-success' : 'text-subtle'
-                  }`}
-                >
-                  {stat.solved}/{stat.total}
-                </span>
+                <NavChapterRow
+                  number={phase.id}
+                  title={phase.name}
+                  solved={stat.solved}
+                  total={stat.total}
+                  open={open}
+                  current={phase.id === currentPhase}
+                />
               </button>
 
               <AnimatePresence initial={false}>
@@ -135,7 +103,7 @@ export default function ProblemNav({ currentId }: { currentId: string }) {
                                 {isSolved(p.id) ? <IconCheck size={11} /> : <IconDash size={11} />}
                               </span>
                               <span
-                                className={`relative min-w-0 truncate text-[11.5px] ${
+                                className={`relative min-w-0 truncate text-tiny ${
                                   active ? 'font-medium text-accent' : 'text-muted hover:text-fg'
                                 }`}
                               >
@@ -148,7 +116,7 @@ export default function ProblemNav({ currentId }: { currentId: string }) {
                     </ul>
                     <Link
                       to={`/learn/${phase.id}`}
-                      className="mb-1.5 ml-[13px] flex items-center gap-1.5 pl-1.5 text-[11px] text-subtle hover:text-accent"
+                      className="mb-1.5 ml-[13px] flex items-center gap-1.5 pl-1.5 text-tiny text-subtle hover:text-accent"
                     >
                       <IconBook size={11} />
                       この章の教材を読む

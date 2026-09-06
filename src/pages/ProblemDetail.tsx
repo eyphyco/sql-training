@@ -3,9 +3,10 @@ import { Link, useParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { loadProblem, META_BY_ID, nextProblemId, prevProblemId } from '../data/problems';
 import { LEVEL_FULL_LABEL, LEVEL_TONE, PHASE_BY_ID } from '../data/phases';
+import { isSyntaxTag } from '../data/tags';
 import Markdown from '../components/Markdown';
 import { Card, Tag } from '../components/ui';
-import { IconCheck, IconChevronLeft, IconChevronRight } from '../components/icons';
+import { IconCheck, IconChevronDown, IconChevronLeft, IconChevronRight } from '../components/icons';
 import SqlWorkbench from '../components/SqlWorkbench';
 import LessonPanel from '../components/LessonPanel';
 import ProblemNav from '../components/ProblemNav';
@@ -46,6 +47,8 @@ export default function ProblemDetail() {
   const { id = '' } = useParams();
   const { problem, loading } = useProblem(id);
   const { isSolved, attemptsOf, stateOf } = useProgress();
+  // 狭い画面では目次を畳んでおく（広い画面では常に出ている）
+  const [navOpen, setNavOpen] = useState(false);
 
   /*
     見出し・タグ・サイドバーはメタだけで描ける。本文を待って画面ごと
@@ -57,8 +60,8 @@ export default function ProblemDetail() {
   if (!meta) {
     return (
       <Card className="p-6">
-        <p className="text-[13.5px] text-fg">問題 {id} が見つかりません。</p>
-        <Link to="/problems" className="mt-3 inline-block text-[13px] text-accent underline">
+        <p className="text-body text-fg">問題 {id} が見つかりません。</p>
+        <Link to="/problems" className="mt-3 inline-block text-body text-accent underline">
           問題一覧へ戻る
         </Link>
       </Card>
@@ -78,12 +81,37 @@ export default function ProblemDetail() {
       */}
       <div className="grid gap-6 lg:grid-cols-[minmax(15rem,19rem)_minmax(0,62rem)]">
         {/*
-          本文を DOM の先に置き、サイドバーはグリッド配置で左へ回す。
-          読み上げやタブ移動が目次 52 件から始まらないようにするため。
+          狭い画面では畳んだボタン 1 つだけを先に置く。
+          読み上げやタブ移動が目次 52 件から始まらず、それでいて
+          問題のあいだを移れる（前は狭い画面で目次ごと消していた）。
         */}
+        <aside className="lg:col-start-1 lg:row-start-1">
+          <button
+            type="button"
+            onClick={() => setNavOpen((v) => !v)}
+            aria-expanded={navOpen}
+            data-testid="nav-toggle"
+            className="glass-edge flex w-full items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-tiny font-medium text-muted lg:hidden"
+          >
+            <motion.span
+              animate={{ rotate: navOpen ? 0 : -90 }}
+              transition={SLIDE}
+              className="flex"
+            >
+              <IconChevronDown size={12} />
+            </motion.span>
+            ほかの問題へ
+          </button>
+          <div
+            className={`${navOpen ? 'mt-2 block' : 'hidden'} lg:mt-0 lg:block lg:sticky lg:top-20`}
+          >
+            <ProblemNav currentId={meta.id} />
+          </div>
+        </aside>
+
         <div className="min-w-0 space-y-5 lg:col-start-2 lg:row-start-1">
           <div>
-            <div className="flex flex-wrap items-center gap-2 text-[12px]">
+            <div className="flex flex-wrap items-center gap-2 text-small">
               <Link to="/problems" className="text-muted hover:text-fg">
                 問題
               </Link>
@@ -91,11 +119,11 @@ export default function ProblemDetail() {
               <Link to={`/problems?phase=${meta.phase}`} className="text-muted hover:text-fg">
                 {phase?.name}
               </Link>
-              <span className="ml-auto font-mono text-[10.5px] text-subtle">{meta.id}</span>
+              <span className="ml-auto font-mono text-micro text-subtle">{meta.id}</span>
             </div>
 
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <h1 className="text-[19px] leading-snug font-semibold tracking-tight text-fg">
+              <h1 className="text-display leading-snug font-semibold tracking-tight text-fg">
                 {meta.title}
               </h1>
               <Tag tone={LEVEL_TONE[meta.level]}>{LEVEL_FULL_LABEL[meta.level]}</Tag>
@@ -119,7 +147,9 @@ export default function ProblemDetail() {
                 <Link
                   key={t}
                   to={`/problems?tag=${encodeURIComponent(t)}`}
-                  className="text-[11.5px] text-subtle hover:text-accent"
+                  className={`text-tiny text-subtle hover:text-accent ${
+                    isSyntaxTag(t) ? 'font-mono' : ''
+                  }`}
                 >
                   #{t}
                 </Link>
@@ -147,12 +177,6 @@ export default function ProblemDetail() {
           )}
           {problem?.type === 'written' && <WrittenQuestion key={problem.id} problem={problem} />}
         </div>
-
-        <aside className="hidden lg:col-start-1 lg:row-start-1 lg:block">
-          <div className="sticky top-20">
-            <ProblemNav currentId={meta.id} />
-          </div>
-        </aside>
       </div>
 
       {problem?.type === 'sql_query' && <SqlWorkbench key={problem.id} problem={problem} />}
@@ -165,7 +189,7 @@ export default function ProblemDetail() {
           <motion.div initial={false} whileHover="hover" transition={SLIDE}>
             <Link
               to={`/problems/${prev}`}
-              className="flex items-center gap-1 text-[12.5px] text-muted hover:text-fg"
+              className="flex items-center gap-1 text-small text-muted hover:text-fg"
             >
               <motion.span variants={{ hover: { x: -2 } }} transition={SLIDE} className="flex">
                 <IconChevronLeft size={14} />
@@ -180,7 +204,7 @@ export default function ProblemDetail() {
           <motion.div initial={false} whileHover="hover" transition={SLIDE}>
             <Link
               to={`/problems/${next}`}
-              className="flex items-center gap-1 text-[12.5px] text-muted hover:text-fg"
+              className="flex items-center gap-1 text-small text-muted hover:text-fg"
             >
               次の問題
               <motion.span variants={{ hover: { x: 2 } }} transition={SLIDE} className="flex">

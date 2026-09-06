@@ -1,20 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import type { AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
 import type { SqlQueryProblem } from '../types';
 import {
-  connect,
   describeTables,
   explainPlan,
   explainQuery,
   resetEnvironment,
   runQuery,
 } from '../engine/duckdb';
-import type { QueryResult, TableSchema } from '../engine/duckdb';
+import type { QueryResult } from '../engine/duckdb';
 import type { QueryPlan } from '../engine/plan';
 import { checkPatterns, errorLineOf, explainSqlError, judgeResultSet } from '../engine/judge';
 import type { JudgeResult } from '../engine/judge';
+import { LiveMessage } from './ui';
 import QueryEditor from './QueryEditor';
+import { useDuckDb, useRunShortcuts } from './useWorkbench';
 import ResultTable from './ResultTable';
 import SchemaPanel from './SchemaPanel';
 import PlanView from './PlanView';
@@ -23,12 +23,7 @@ import { Button, Card } from './ui';
 import { RISE, SLIDE } from './motion';
 import { IconBook, IconBulb, IconCheck, IconLayers, IconPlay, IconX } from './icons';
 import { useProgress } from '../storage/progressContext';
-import {
-  detectUnpreventedReload,
-  loadSession,
-  markF5Handled,
-  saveSession,
-} from '../storage/workbenchSession';
+import { detectUnpreventedReload, loadSession, saveSession } from '../storage/workbenchSession';
 import type { RightTab } from '../storage/workbenchSession';
 
 interface LastRun {
@@ -44,7 +39,14 @@ const TABS: [RightTab, string][] = [
 
 export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) {
   const { attempt, progress } = useProgress();
-  const connRef = useRef<AsyncDuckDBConnection | null>(null);
+  // DuckDB の用意・キーの横取りは useWorkbench に出してある
+  const {
+    connRef,
+    status,
+    error: bootError,
+    schema,
+    setSchema,
+  } = useDuckDb(problem.schema_sql, problem.seed_data_sql, problem.id);
   // 実行中フラグ。busy（表示用の state）は反映が非同期なので、
   // F5 の連打で二重に走らせないためのガードはこちらで持つ。
   const runningRef = useRef(false);
@@ -52,9 +54,6 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
   // リロードされても書きかけの SQL と直近の結果を失わないよう、タブ内に保存している
   const restored = useMemo(() => loadSession(problem.id), [problem.id]);
 
-  const [status, setStatus] = useState<'booting' | 'ready' | 'error'>('booting');
-  const [bootError, setBootError] = useState('');
-  const [schema, setSchema] = useState<TableSchema[]>([]);
   const [sqlText, setSqlText] = useState(restored?.sql ?? problem.starter_sql ?? '');
   const [lastRun, setLastRun] = useState<LastRun | null>(restored?.lastRun ?? null);
   const [runError, setRunError] = useState<string | null>(null);
@@ -73,38 +72,6 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
   const [revealed, setRevealed] = useState(false);
 
   const attempts = progress.solvedProblems[problem.id]?.attempts ?? 0;
-
-  // 問題ごとに DuckDB の環境を作り直す
-  useEffect(() => {
-    let disposed = false;
-    let conn: AsyncDuckDBConnection | null = null;
-    (async () => {
-      try {
-        conn = await connect();
-        if (disposed) {
-          await conn.close();
-          return;
-        }
-        connRef.current = conn;
-        await resetEnvironment(conn, problem.schema_sql, problem.seed_data_sql);
-        const tables = await describeTables(conn);
-        if (disposed) return;
-        setSchema(tables);
-        setStatus('ready');
-      } catch (e) {
-        if (!disposed) {
-          setBootError(e instanceof Error ? e.message : String(e));
-          setStatus('error');
-        }
-      }
-    })();
-    return () => {
-      disposed = true;
-      const c = connRef.current;
-      connRef.current = null;
-      if (c) void c.close();
-    };
-  }, [problem.id, problem.schema_sql, problem.seed_data_sql]);
 
   const handleRun = useCallback(async () => {
     const conn = connRef.current;
@@ -127,7 +94,7 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
       runningRef.current = false;
       setBusy(false);
     }
-  }, [sqlText]);
+  }, [connRef, setSchema, sqlText]);
 
   const handleExplain = useCallback(
     async (withAnalyze = analyze) => {
@@ -150,7 +117,7 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
         setBusy(false);
       }
     },
-    [analyze, sqlText],
+    [analyze, connRef, sqlText],
   );
 
   // ANSWER: 直近の「実行」結果を使って採点する（設計書 6-1）
@@ -231,39 +198,9 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
       runningRef.current = false;
       setBusy(false);
     }
-  }, [lastRun, sqlText, problem, attempt]);
+  }, [attempt, connRef, lastRun, problem, setSchema, sqlText]);
 
-  // handleRun は入力のたびに作り直されるので、リスナーの再登録を避けて ref 経由で呼ぶ
-  const handleRunRef = useRef(handleRun);
-  useEffect(() => {
-    handleRunRef.current = handleRun;
-  }, [handleRun]);
-
-  // 実行のショートカット。SQL 問題を開いている間だけ有効にする。
-  // F5 は SSMS / DBeaver などと同じ「実行」に割り当て、ブラウザのリロードは抑止する。
-  // リロードしたいときのために Ctrl+R / ⌘R は横取りしない。
-  //
-  // capture フェーズで拾って stopPropagation する理由:
-  //   - Ctrl+Enter は CodeMirror の既定キーマップで insertBlankLine に割り当てられており、
-  //     bubble で受けると「空行が入る + 実行される」の二重動作になる。
-  //   - 途中の誰かが stopPropagation してもリロードの抑止だけは確実に効かせたい。
-  // key ではなく code も見るのは、IME が有効なときに key が 'Process' になる環境があるため。
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      const noMods = !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey;
-      const isF5 = (e.code === 'F5' || e.key === 'F5') && noMods;
-      const isModEnter = (e.code === 'Enter' || e.key === 'Enter') && (e.ctrlKey || e.metaKey);
-      if (!isF5 && !isModEnter) return;
-      e.preventDefault();
-      e.stopPropagation();
-      if (isF5) markF5Handled();
-      // 押しっぱなしのオートリピートでは実行しない（抑止だけは毎回する）
-      if (e.repeat) return;
-      void handleRunRef.current();
-    };
-    window.addEventListener('keydown', onKeyDown, { capture: true });
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
-  }, []);
+  useRunShortcuts(() => void handleRun());
 
   // 書きかけの SQL と直近の結果をタブ内に保存する（リロード対策）
   useEffect(() => {
@@ -283,7 +220,7 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
   if (status === 'booting') {
     return (
       <Card className="flex h-72 items-center justify-center">
-        <div className="flex items-center gap-3 text-[13px] text-muted">
+        <div className="flex items-center gap-3 text-body text-muted">
           <span className="h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-line-strong border-t-accent" />
           DuckDB を初期化しています…
         </div>
@@ -292,20 +229,31 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
   }
   if (status === 'error') {
     return (
-      <div className="rounded-lg border border-danger-line bg-danger-soft p-4 text-[13px] text-danger">
+      <div className="rounded-lg border border-danger-line bg-danger-soft p-4 text-body text-danger">
         <p className="font-semibold">DuckDB の初期化に失敗しました</p>
-        <pre className="mt-2 font-mono text-[12px] whitespace-pre-wrap">{bootError}</pre>
+        <pre className="mt-2 font-mono text-small whitespace-pre-wrap">{bootError}</pre>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
+      {/* 採点と実行の結果を読み上げに載せる（色と位置だけでは伝わらない） */}
+      <LiveMessage>
+        {judgement
+          ? `${judgement.correct ? '正解' : '不正解'}。${judgement.message}`
+          : runError
+            ? `実行に失敗しました。${runError.split('\n')[0]}`
+            : lastRun
+              ? `実行しました。${lastRun.result.rows.length} 行`
+              : ''}
+      </LiveMessage>
+
       {/* F5 を横取りしたのにリロードされてしまうブラウザ向けの説明 */}
       {reloadNotice && (
         <div className="flex items-start gap-2.5 rounded-lg border border-warning-line bg-warning-soft p-3">
           <IconBulb size={14} className="mt-0.5 shrink-0 text-warning" />
-          <div className="text-[12.5px] leading-relaxed text-fg">
+          <div className="text-small leading-relaxed text-fg">
             <p>
               このブラウザでは F5 によるリロードを抑止できませんでした。DuckDB
               は作り直されましたが、SQL と直近の実行結果は復元しています。
@@ -316,7 +264,7 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
           </div>
           <button
             onClick={() => setReloadNotice(false)}
-            className="ml-auto shrink-0 text-[11.5px] text-subtle hover:text-fg"
+            className="ml-auto shrink-0 text-tiny text-subtle hover:text-fg"
           >
             閉じる
           </button>
@@ -331,9 +279,7 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
           className="flex min-h-[520px] flex-col overflow-hidden lg:h-[clamp(460px,calc(100vh-34rem),820px)]"
         >
           <header className="flex h-9 shrink-0 items-center justify-between border-b border-line bg-raised pr-1.5 pl-3">
-            <span className="text-[11.5px] font-medium tracking-tight text-muted">
-              SQL エディタ
-            </span>
+            <span className="text-tiny font-medium tracking-tight text-muted">SQL エディタ</span>
             <div className="flex gap-1.5">
               <Button
                 size="sm"
@@ -355,7 +301,7 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
               >
                 <IconPlay size={12} />
                 実行
-                <kbd className="ml-0.5 hidden font-mono text-[10px] opacity-70 sm:inline">F5</kbd>
+                <kbd className="ml-0.5 hidden font-mono text-micro opacity-70 sm:inline">F5</kbd>
               </Button>
             </div>
           </header>
@@ -379,7 +325,7 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
               <button
                 key={key}
                 onClick={() => setTab(key)}
-                className={`relative text-[11.5px] font-medium transition-colors ${
+                className={`relative text-tiny font-medium transition-colors ${
                   tab === key ? 'text-fg' : 'text-subtle hover:text-muted'
                 }`}
               >
@@ -394,7 +340,7 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
               </button>
             ))}
             {lastRun && tab === 'result' && !runError && (
-              <span className="tnum ml-auto self-center text-[11px] text-subtle">
+              <span className="tnum ml-auto self-center text-tiny text-subtle">
                 {lastRun.result.rows.length} 行 · {lastRun.result.elapsedMs.toFixed(1)} ms
               </span>
             )}
@@ -417,7 +363,7 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
                         disabled={busy}
                         aria-pressed={analyze === mode.on}
                         data-testid={mode.on ? 'plan-analyze' : 'plan-estimate'}
-                        className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors disabled:opacity-45 ${
+                        className={`rounded-full border px-2.5 py-0.5 text-tiny font-medium transition-colors disabled:opacity-45 ${
                           analyze === mode.on
                             ? 'border-accent-line bg-accent-soft text-accent'
                             : 'border-line bg-surface text-muted hover:text-fg'
@@ -430,7 +376,7 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
                   <PlanView plan={plan} />
                 </>
               ) : (
-                <p className="p-4 text-[13px] leading-relaxed text-muted">
+                <p className="p-4 text-body leading-relaxed text-muted">
                   「EXPLAIN」を押すと、いまエディタにある SQL の実行計画を表示します。
                 </p>
               ))}
@@ -438,16 +384,16 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
               <>
                 {runError && (
                   <div className="m-3 overflow-hidden rounded-md border border-danger-line">
-                    <pre className="bg-danger-soft p-3 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap text-danger">
+                    <pre className="bg-danger-soft p-3 font-mono text-tiny leading-relaxed whitespace-pre-wrap text-danger">
                       {runError}
                     </pre>
                     {errorHint && (
                       <div className="border-t border-danger-line bg-surface p-3">
-                        <p className="flex items-center gap-1.5 text-[12px] font-semibold text-warning">
+                        <p className="flex items-center gap-1.5 text-small font-semibold text-warning">
                           <IconBulb size={13} />
                           よくあるミス: {errorHint.title}
                         </p>
-                        <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
+                        <p className="mt-1.5 text-small leading-relaxed text-muted">
                           {errorHint.advice}
                         </p>
                       </div>
@@ -455,7 +401,7 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
                   </div>
                 )}
                 {!runError && !lastRun && (
-                  <p className="p-4 text-[13px] leading-relaxed text-muted">
+                  <p className="p-4 text-body leading-relaxed text-muted">
                     左のエディタで SQL を書いて「実行」を押すと、ここに結果が表示されます。
                   </p>
                 )}
@@ -478,13 +424,13 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
           data-testid="answer"
         >
           ANSWER
-          <span className="text-[11px] font-normal opacity-75">この実行結果で提出</span>
+          <span className="text-tiny font-normal opacity-75">この実行結果で提出</span>
         </Button>
         {hints.length > 0 && hintLevel < hints.length && (
           <Button size="lg" onClick={() => setHintLevel((n) => n + 1)}>
             <IconBulb size={14} className="text-warning" />
             ヒント
-            <span className="tnum text-[11px] text-subtle">
+            <span className="tnum text-tiny text-subtle">
               {hintLevel} / {hints.length}
             </span>
           </Button>
@@ -495,7 +441,7 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
             解答・解説を見る
           </Button>
         )}
-        <span className="tnum ml-auto text-[11.5px] text-subtle">挑戦 {attempts} 回</span>
+        <span className="tnum ml-auto text-tiny text-subtle">挑戦 {attempts} 回</span>
       </div>
 
       {judgement && (
@@ -511,7 +457,7 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
           }`}
         >
           <p
-            className={`flex items-center gap-2 text-[13.5px] font-semibold ${
+            className={`flex items-center gap-2 text-body font-semibold ${
               judgement.correct ? 'text-success' : 'text-danger'
             }`}
           >
@@ -519,7 +465,7 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
             {judgement.message}
           </p>
           {judgement.details.length > 0 && (
-            <ul className="mt-2 space-y-1 text-[13px] leading-relaxed text-fg">
+            <ul className="mt-2 space-y-1 text-body leading-relaxed text-fg">
               {judgement.details.map((d, i) => (
                 <li key={i} className="flex gap-2">
                   <span className="text-subtle">·</span>
@@ -532,7 +478,7 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
             <div className="mt-3 grid gap-3 md:grid-cols-2">
               {judgement.missingRows && judgement.missingRows.length > 0 && (
                 <div className="overflow-hidden rounded-md border border-line bg-surface">
-                  <p className="border-b border-line bg-raised px-3 py-1.5 text-[11.5px] font-medium text-muted">
+                  <p className="border-b border-line bg-raised px-3 py-1.5 text-tiny font-medium text-muted">
                     足りない行（期待にあるが結果に無い）
                   </p>
                   <ResultTable
@@ -544,7 +490,7 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
               )}
               {judgement.extraRows && judgement.extraRows.length > 0 && (
                 <div className="overflow-hidden rounded-md border border-line bg-surface">
-                  <p className="border-b border-line bg-raised px-3 py-1.5 text-[11.5px] font-medium text-muted">
+                  <p className="border-b border-line bg-raised px-3 py-1.5 text-tiny font-medium text-muted">
                     余分な行（結果にあるが期待に無い）
                   </p>
                   <ResultTable
@@ -565,7 +511,7 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
             {hints.slice(0, hintLevel).map((h, i) => (
               <motion.div key={i} variants={RISE} initial="hidden" animate="shown" exit="gone">
                 <Card className="border-warning-line bg-warning-soft p-4">
-                  <p className="mb-1 flex items-center gap-1.5 text-[11.5px] font-semibold text-warning">
+                  <p className="mb-1 flex items-center gap-1.5 text-tiny font-semibold text-warning">
                     <IconBulb size={13} />
                     ヒント {i + 1}
                   </p>
@@ -585,10 +531,10 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
           className="max-w-prose-wide space-y-3"
         >
           <Card className="overflow-hidden">
-            <p className="border-b border-line bg-raised px-4 py-2 text-[11.5px] font-medium text-muted">
+            <p className="border-b border-line bg-raised px-4 py-2 text-tiny font-medium text-muted">
               模範解答
             </p>
-            <pre className="overflow-x-auto bg-sunken p-4 font-mono text-[12.5px] leading-relaxed text-fg">
+            <pre className="overflow-x-auto bg-sunken p-4 font-mono text-small leading-relaxed text-fg">
               {problem.expected_query.trim()}
             </pre>
             {problem.alternative_md && (
@@ -598,7 +544,7 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
             )}
           </Card>
           <Card className="overflow-hidden">
-            <p className="flex items-center gap-1.5 border-b border-line bg-raised px-4 py-2 text-[11.5px] font-medium text-muted">
+            <p className="flex items-center gap-1.5 border-b border-line bg-raised px-4 py-2 text-tiny font-medium text-muted">
               <IconBook size={13} />
               解説
             </p>

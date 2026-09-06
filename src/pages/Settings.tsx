@@ -50,8 +50,8 @@ export default function Settings() {
         <Card className="divide-y divide-line">
           <div className="flex flex-wrap items-center justify-between gap-4 p-4">
             <div>
-              <p className="text-[13.5px] text-fg">配色テーマ</p>
-              <p className="mt-0.5 text-[12px] text-muted">
+              <p className="text-body text-fg">配色テーマ</p>
+              <p className="mt-0.5 text-small text-muted">
                 現在は{THEME_LABEL[choice]}
                 {choice === 'system' && `（${resolved === 'dark' ? 'ダーク' : 'ライト'}で表示中）`}
               </p>
@@ -82,15 +82,15 @@ export default function Settings() {
               ['全問', PROBLEM_METAS.length],
             ].map(([label, value]) => (
               <div key={label} className="px-4 py-3">
-                <p className="text-[11px] text-muted">{label}</p>
-                <p className="mt-0.5 text-[17px] font-medium text-fg">
+                <p className="text-tiny text-muted">{label}</p>
+                <p className="mt-0.5 text-title font-medium text-fg">
                   <AnimatedNumber value={Number(value)} />
                 </p>
               </div>
             ))}
           </div>
           <div className="p-4">
-            <p className="text-[12.5px] leading-relaxed text-muted">
+            <p className="text-small leading-relaxed text-muted">
               進捗はこのブラウザにのみ保存されます（サーバーには送信されません）。
               ブラウザのデータを消すと失われるため、定期的にエクスポートしておくと安全です。
               端末をまたいで引き継ぐときもこのファイルを使います。
@@ -131,7 +131,7 @@ export default function Settings() {
             </div>
             {message && (
               <p
-                className={`mt-3 text-[12.5px] ${message.tone === 'ok' ? 'text-success' : 'text-danger'}`}
+                className={`mt-3 text-small ${message.tone === 'ok' ? 'text-success' : 'text-danger'}`}
               >
                 {message.text}
               </p>

@@ -4,8 +4,9 @@ import { AnimatePresence, animate, motion, useReducedMotion } from 'motion/react
 import { LESSONS } from '../data/lessons';
 import { useProgress } from '../storage/progressContext';
 import { Card } from './ui';
-import { IconBook, IconChevronDown } from './icons';
+import { IconBook } from './icons';
 import { COLLAPSE, EASE_OUT, RISE, SLIDE, STAGGER } from './motion';
+import { NAV_ROW_CLASS, NavChapterRow, NavHeader } from './NavPanel';
 import { HEADER_OFFSET, pickActiveSection, scrollDuration } from './reading';
 import type { LessonSection, PhaseId } from '../types';
 
@@ -129,32 +130,21 @@ export default function ChapterNav({
 
   return (
     <Card className="overflow-hidden" testId="chapter-nav">
-      {/* 見出しは目次を送っても残す（いま全体のどこかを見失わないため） */}
-      <div className="glass-sticky sticky top-0 z-20 border-b border-line px-3 py-2.5">
-        <div className="mb-1.5 flex items-baseline gap-2">
-          <span className="text-[11.5px] font-medium tracking-tight text-muted">教材の目次</span>
-          <span className="tnum ml-auto text-[11.5px] text-fg">
-            <span className="font-semibold">{solved}</span>
-            <span className="text-subtle"> / {total}</span>
-          </span>
-        </div>
-        <div className="h-1.5 overflow-hidden rounded-full bg-sunken">
-          <motion.div
-            className="h-full origin-left bg-accent"
-            initial={{ scaleX: 0 }}
-            animate={{ scaleX: total === 0 ? 0 : solved / total }}
-            transition={{ duration: 0.5, ease: EASE_OUT }}
-          />
-        </div>
-      </div>
+      <NavHeader label="教材の目次" solved={solved} total={total} />
 
       <nav className="max-h-[calc(100vh-11rem)] overflow-y-auto p-1.5">
         {LESSONS.map((lesson, i) => {
           const current = lesson.phase === phase;
           const stat = totals[i];
-          const done = stat.total > 0 && stat.solved === stat.total;
           const row = (
-            <>
+            <NavChapterRow
+              number={lesson.phase}
+              title={lesson.title}
+              solved={stat.solved}
+              total={stat.total}
+              open={current}
+              current={current}
+            >
               {/* 現在の章の下地は 1 つを使い回して滑らせる（章を移ると滑って移動する） */}
               {current && (
                 <motion.span
@@ -163,39 +153,8 @@ export default function ChapterNav({
                   className="glass-edge absolute inset-0 rounded-md bg-accent-soft ring-1 ring-accent-line"
                 />
               )}
-              <motion.span
-                animate={{ rotate: current ? 0 : -90 }}
-                transition={SLIDE}
-                className={`relative flex shrink-0 ${current ? 'text-accent' : 'text-subtle'}`}
-              >
-                <IconChevronDown size={12} />
-              </motion.span>
-              <span
-                className={`tnum relative shrink-0 font-mono text-[10px] ${
-                  current ? 'text-accent' : 'text-subtle'
-                }`}
-              >
-                {String(lesson.phase).padStart(2, '0')}
-              </span>
-              <span
-                className={`relative min-w-0 truncate text-[12px] ${
-                  current ? 'font-semibold text-accent' : 'text-muted'
-                }`}
-              >
-                {lesson.title}
-              </span>
-              <span
-                className={`tnum relative ml-auto shrink-0 text-[10.5px] ${
-                  done ? 'text-success' : 'text-subtle'
-                }`}
-              >
-                {stat.solved}/{stat.total}
-              </span>
-            </>
+            </NavChapterRow>
           );
-          const rowClass =
-            'relative flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left';
-
           return (
             <div key={lesson.phase}>
               {current ? (
@@ -206,7 +165,7 @@ export default function ChapterNav({
                   data-testid="chapter-row-current"
                   aria-current="page"
                   whileTap={{ scale: 0.985 }}
-                  className={rowClass}
+                  className={NAV_ROW_CLASS}
                 >
                   {row}
                 </motion.button>
@@ -215,7 +174,7 @@ export default function ChapterNav({
                   <Link
                     to={`/learn/${lesson.phase}`}
                     data-testid="chapter-row"
-                    className={rowClass}
+                    className={NAV_ROW_CLASS}
                   >
                     {row}
                   </Link>
@@ -267,11 +226,11 @@ export default function ChapterNav({
                                   className="absolute inset-0 rounded-md bg-accent-soft"
                                 />
                               )}
-                              <span className="tnum relative font-mono text-[10px] text-subtle">
+                              <span className="tnum relative font-mono text-micro text-subtle">
                                 {n + 1}.
                               </span>
                               <span
-                                className={`relative text-[12px] leading-snug ${
+                                className={`relative text-small leading-snug ${
                                   on ? 'font-medium text-accent' : 'text-muted hover:text-fg'
                                 }`}
                               >
@@ -284,7 +243,7 @@ export default function ChapterNav({
                       <motion.li variants={RISE}>
                         <Link
                           to={`/problems?phase=${lesson.phase}`}
-                          className="flex items-center gap-1.5 px-1.5 py-1 text-[11px] text-subtle hover:text-accent"
+                          className="flex items-center gap-1.5 px-1.5 py-1 text-tiny text-subtle hover:text-accent"
                         >
                           <IconBook size={11} />
                           この章の問題を解く

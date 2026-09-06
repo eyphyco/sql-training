@@ -36,8 +36,8 @@ export default function WrittenQuestion({ problem }: { problem: WrittenProblem }
     <div className="space-y-4">
       <Card className="overflow-hidden">
         <header className="flex h-9 items-center justify-between border-b border-line bg-raised px-3">
-          <span className="text-[11.5px] font-medium text-muted">あなたの解答</span>
-          <span className="text-[11px] text-subtle">入力内容はこのブラウザに自動保存されます</span>
+          <span className="text-tiny font-medium text-muted">あなたの解答</span>
+          <span className="text-tiny text-subtle">入力内容はこのブラウザに自動保存されます</span>
         </header>
         <textarea
           aria-label="あなたの解答"
@@ -48,20 +48,20 @@ export default function WrittenQuestion({ problem }: { problem: WrittenProblem }
           placeholder={
             '例：\n注文(注文番号, 注文日, 顧客番号)\n注文明細(注文番号, 明細番号, 商品番号, 数量, 販売単価)\n…'
           }
-          className="w-full resize-y bg-sunken p-4 font-mono text-[13px] leading-relaxed text-fg placeholder:text-subtle focus:outline-none"
+          className="w-full resize-y bg-sunken p-4 font-mono text-body leading-relaxed text-fg placeholder:text-subtle focus:outline-none"
         />
       </Card>
 
       <div className="flex flex-wrap items-center gap-2.5">
         <Button size="lg" variant="primary" onClick={() => setSubmitted(true)} disabled={submitted}>
           ANSWER
-          <span className="text-[11px] font-normal opacity-75">模範解答と採点観点を表示</span>
+          <span className="text-tiny font-normal opacity-75">模範解答と採点観点を表示</span>
         </Button>
         {hints.length > 0 && hintLevel < hints.length && !submitted && (
           <Button size="lg" onClick={() => setHintLevel((n) => n + 1)}>
             <IconBulb size={14} className="text-warning" />
             ヒント
-            <span className="tnum text-[11px] text-subtle">
+            <span className="tnum text-tiny text-subtle">
               {hintLevel} / {hints.length}
             </span>
           </Button>
@@ -74,7 +74,7 @@ export default function WrittenQuestion({ problem }: { problem: WrittenProblem }
             {hints.slice(0, hintLevel).map((h, i) => (
               <motion.div key={i} variants={RISE} initial="hidden" animate="shown" exit="gone">
                 <Card className="border-warning-line bg-warning-soft p-4">
-                  <p className="mb-1 flex items-center gap-1.5 text-[11.5px] font-semibold text-warning">
+                  <p className="mb-1 flex items-center gap-1.5 text-tiny font-semibold text-warning">
                     <IconBulb size={13} />
                     ヒント {i + 1}
                   </p>
@@ -91,7 +91,7 @@ export default function WrittenQuestion({ problem }: { problem: WrittenProblem }
         <motion.div variants={STAGGER} initial="hidden" animate="shown" className="space-y-3">
           <motion.div variants={RISE}>
             <Card className="overflow-hidden">
-              <p className="border-b border-line bg-raised px-4 py-2 text-[11.5px] font-medium text-muted">
+              <p className="border-b border-line bg-raised px-4 py-2 text-tiny font-medium text-muted">
                 模範解答
               </p>
               <div className="p-5">
@@ -101,7 +101,7 @@ export default function WrittenQuestion({ problem }: { problem: WrittenProblem }
           </motion.div>
           <motion.div variants={RISE}>
             <Card className="overflow-hidden border-warning-line">
-              <p className="border-b border-warning-line bg-warning-soft px-4 py-2 text-[11.5px] font-medium text-warning">
+              <p className="border-b border-warning-line bg-warning-soft px-4 py-2 text-tiny font-medium text-warning">
                 自己採点の観点
               </p>
               <div className="p-5">
@@ -111,7 +111,7 @@ export default function WrittenQuestion({ problem }: { problem: WrittenProblem }
           </motion.div>
           <motion.div variants={RISE}>
             <Card className="overflow-hidden">
-              <p className="flex items-center gap-1.5 border-b border-line bg-raised px-4 py-2 text-[11.5px] font-medium text-muted">
+              <p className="flex items-center gap-1.5 border-b border-line bg-raised px-4 py-2 text-tiny font-medium text-muted">
                 <IconBook size={13} />
                 解説
               </p>
@@ -122,7 +122,7 @@ export default function WrittenQuestion({ problem }: { problem: WrittenProblem }
           </motion.div>
           <motion.div variants={RISE}>
             <Card className="flex flex-wrap items-center gap-3 p-4">
-              <span className="text-[13px] text-muted">自己採点</span>
+              <span className="text-body text-muted">自己採点</span>
               <Button
                 onClick={() => rate(problem.id, 'understood')}
                 className={
@@ -141,7 +141,7 @@ export default function WrittenQuestion({ problem }: { problem: WrittenProblem }
                 要復習
               </Button>
               {rating && (
-                <span className="text-[11.5px] text-subtle">
+                <span className="text-tiny text-subtle">
                   {rating === 'understood' ? '正解として記録しました' : '要復習として記録しました'}
                 </span>
               )}

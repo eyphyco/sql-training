@@ -1,6 +1,7 @@
 import type { HistoryEntry, ProgressData, SolvedRecord } from '../types';
 
-const STORAGE_KEY = 'sql-training:progress:v1';
+/** 進捗の保存先。別のタブでの変化を拾うために外へ出す */
+export const STORAGE_KEY = 'sql-training:progress:v1';
 const HISTORY_LIMIT = 100;
 
 const emptyProgress = (): ProgressData => ({ version: 1, solvedProblems: {}, history: [] });

@@ -30,6 +30,8 @@ export interface Filter {
   levels: number[];
   tags: string[];
   status: Status[];
+  /** 題名・ID・タグに対する言葉での検索 */
+  query: string;
 }
 
 /** URL のキー名。表に出る名前は単数形のまま残す */
@@ -40,7 +42,16 @@ export const PARAM: Record<Facet, string> = {
   status: 'status',
 };
 
-export const EMPTY_FILTER: Filter = { phases: [], levels: [], tags: [], status: [] };
+/** 検索語の URL キー。分類の絞り込みとは別扱い（チップではないため） */
+export const QUERY_PARAM = 'q';
+
+export const EMPTY_FILTER: Filter = {
+  phases: [],
+  levels: [],
+  tags: [],
+  status: [],
+  query: '',
+};
 
 /** "1,3" → ["1", "3"]。空白と重複と空文字は落とす */
 export function parseList(raw: string | null): string[] {
@@ -68,6 +79,7 @@ export function parseFilter(params: URLSearchParams): Filter {
     status: parseList(params.get(PARAM.status)).filter((s): s is Status =>
       ['solved', 'unsolved', 'missed', 'review'].includes(s),
     ),
+    query: (params.get(QUERY_PARAM) ?? '').trim(),
   };
 }
 
@@ -78,6 +90,7 @@ export function writeFilter(filter: Filter): URLSearchParams {
     const values = filter[facet];
     if (values.length > 0) params.set(PARAM[facet], values.join(','));
   }
+  if (filter.query !== '') params.set(QUERY_PARAM, filter.query);
   return params;
 }
 
@@ -87,11 +100,9 @@ export function toggleValue<T>(list: readonly T[], value: T): T[] {
 }
 
 export function isEmptyFilter(filter: Filter): boolean {
-  return (Object.keys(PARAM) as Facet[]).every((f) => filter[f].length === 0);
-}
-
-export function countSelected(filter: Filter): number {
-  return (Object.keys(PARAM) as Facet[]).reduce((n, f) => n + filter[f].length, 0);
+  return (
+    filter.query === '' && (Object.keys(PARAM) as Facet[]).every((f) => filter[f].length === 0)
+  );
 }
 
 /**
@@ -106,7 +117,16 @@ export function applyFilter(
   except?: Facet,
 ): ProblemMeta[] {
   const on = (facet: Facet) => facet !== except && filter[facet].length > 0;
+  const q = filter.query.toLowerCase();
   return metas.filter((p) => {
+    /*
+      検索語は分類と違って「絞り込みの外し方」が無いので、件数を数えるときも
+      必ず効かせる（except で外さない）。題名・ID・タグのどれかに含まれれば残す。
+    */
+    if (q !== '') {
+      const haystack = `${p.title} ${p.id} ${p.tags.join(' ')}`.toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
     if (on('phases') && !filter.phases.includes(p.phase)) return false;
     if (on('levels') && !filter.levels.includes(p.level)) return false;
     if (on('tags') && !filter.tags.some((t) => p.tags.includes(t))) return false;

@@ -15,7 +15,7 @@ import { RISE, STAGGER } from './motion';
  */
 export default function SchemaPanel({ schema }: { schema: TableSchema[] }) {
   if (schema.length === 0) {
-    return <p className="p-4 text-[13px] text-muted">テーブルがありません。</p>;
+    return <p className="p-4 text-body text-muted">テーブルがありません。</p>;
   }
   /* DuckDB の初期化が終わってから届くので、出るときは順に浮かせる */
   return (
@@ -26,11 +26,11 @@ export default function SchemaPanel({ schema }: { schema: TableSchema[] }) {
             <IconTable size={13} className="shrink-0 text-accent" />
             <span
               data-testid="schema-table"
-              className="font-mono text-[12.5px] font-semibold tracking-tight text-fg"
+              className="font-mono text-small font-semibold tracking-tight text-fg"
             >
               {t.name}
             </span>
-            <span className="tnum ml-auto shrink-0 text-[10.5px] text-subtle">
+            <span className="tnum ml-auto shrink-0 text-micro text-subtle">
               {t.columns.length} 列 · {t.rowCount} 行
             </span>
           </header>
@@ -43,13 +43,13 @@ export default function SchemaPanel({ schema }: { schema: TableSchema[] }) {
               >
                 <span
                   data-testid="schema-column"
-                  className="min-w-0 truncate font-mono text-[12px] text-muted"
+                  className="min-w-0 truncate font-mono text-small text-muted"
                 >
                   {c.name}
                 </span>
                 <span
                   data-testid="schema-type"
-                  className="ml-auto shrink-0 rounded bg-sunken px-1.5 py-0.5 font-mono text-[10px] tracking-wide text-subtle"
+                  className="ml-auto shrink-0 rounded bg-sunken px-1.5 py-0.5 font-mono text-micro tracking-wide text-subtle"
                 >
                   {c.type}
                 </span>

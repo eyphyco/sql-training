@@ -37,7 +37,7 @@ function Header() {
       <div className="mx-auto flex h-14 w-full max-w-page items-center gap-2 px-3 sm:gap-6 sm:px-5 lg:px-8">
         <Link
           to="/"
-          className="flex shrink-0 items-center gap-2 text-[13.5px] font-semibold tracking-tight text-fg"
+          className="flex shrink-0 items-center gap-2 text-body font-semibold tracking-tight text-fg"
         >
           <IconDatabase size={17} className="text-accent" />
           <span className="hidden sm:inline">SQL Training</span>
@@ -56,7 +56,7 @@ function Header() {
               to={item.to}
               end={item.end}
               className={({ isActive }) =>
-                `relative isolate flex h-8 items-center rounded-full px-2 text-[12px] whitespace-nowrap transition-colors sm:px-2.5 sm:text-[13px] ${
+                `relative isolate flex h-8 items-center rounded-full px-2 text-small whitespace-nowrap transition-colors sm:px-2.5 sm:text-body ${
                   isActive ? 'text-accent' : 'text-muted hover:text-fg'
                 }`
               }
