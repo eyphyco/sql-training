@@ -122,6 +122,13 @@ for (const theme of ['light', 'dark']) {
   await page.waitForTimeout(400);
   await measure('SQL キーワード (syntax)', '.cm-line');
 
+  // 教材の目次（今いる章と、読んでいる節）
+  await page.goto(`${base}/#/learn/2`, { waitUntil: 'networkidle' });
+  await page.waitForSelector('[data-testid="chapter-row-current"]');
+  await page.waitForTimeout(900);
+  await measure('目次の今いる章 (accent)', '[data-testid="chapter-row-current"]');
+  await measure('目次の読んでいる節 (accent)', '[data-testid="chapter-nav-current"]');
+
   await ctx.close();
 }
 await browser.close();

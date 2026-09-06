@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { animate, motion, useReducedMotion } from 'motion/react';
+import { Link } from 'react-router-dom';
+import { AnimatePresence, animate, motion, useReducedMotion } from 'motion/react';
+import { LESSONS } from '../data/lessons';
+import { useProgress } from '../storage/progressContext';
 import { Card } from './ui';
-import { EASE_OUT, SLIDE } from './motion';
+import { IconBook, IconChevronDown } from './icons';
+import { COLLAPSE, EASE_OUT, RISE, SLIDE, STAGGER } from './motion';
 import { HEADER_OFFSET, pickActiveSection, scrollDuration } from './reading';
-import type { LessonSection } from '../types';
+import type { LessonSection, PhaseId } from '../types';
 
 /** いま画面で読んでいる節を返す。判定そのものは reading.ts に置いてある */
 function useActiveSection(ids: string[]): string {
@@ -36,35 +40,45 @@ function useActiveSection(ids: string[]): string {
   return active;
 }
 
-/** 章の目次。読んでいる節に帯が滑って追従し、押すとその節まで送る */
-export default function ChapterNav({ sections }: { sections: LessonSection[] }) {
+/**
+ * 教材ぜんぶの目次。7 章を並べ、いま読んでいる章だけ節まで開く。
+ *
+ * 開いているのが 1 つだけなので「いまどこにいるか」が形で分かる。
+ * 他の章は押すとその章へ移る（章のあいだの移動が、前後送りだけでなく
+ * ここからもできる）。今いる章の見出しを押すと先頭へ戻る。
+ */
+export default function ChapterNav({
+  sections,
+  phase,
+}: {
+  sections: LessonSection[];
+  phase: PhaseId;
+}) {
   const ids = useMemo(() => sections.map((s) => s.id), [sections]);
   const active = useActiveSection(ids);
+  // 節の罫を「読んだところまで」塗る。目次そのものが読み進みの目盛りになる
+  const readRatio = (ids.indexOf(active) + 1) / Math.max(1, ids.length);
+  const { phaseStats } = useProgress();
   const reduced = useReducedMotion();
   const running = useRef<{ stop: () => void } | null>(null);
 
   useEffect(() => () => running.current?.stop(), []);
+
+  const totals = LESSONS.map((l) => phaseStats[l.phase] ?? { solved: 0, total: 0 });
+  const total = totals.reduce((n, s) => n + s.total, 0);
+  const solved = totals.reduce((n, s) => n + s.solved, 0);
 
   /*
     HashRouter なので href="#節id" は使えない。URL のハッシュはルート
     そのもの（#/learn/1）で、書き換えると別ページへ飛んでしまう。
     そのため位置合わせは JS で行う。
   */
-  const goTo = (id: string) => {
-    const el = document.getElementById(id);
-    if (!el) return;
+  const scrollTo = (to: number, land?: () => void) => {
     running.current?.stop();
-
-    const to = Math.max(0, el.getBoundingClientRect().top + window.scrollY - HEADER_OFFSET);
-    // 着いたあと、キーボード操作の続きがその節から始まるようにする
-    const land = () => {
-      el.setAttribute('tabindex', '-1');
-      el.focus({ preventScroll: true });
-    };
 
     if (reduced) {
       window.scrollTo(0, to);
-      land();
+      land?.();
       return;
     }
 
@@ -98,47 +112,192 @@ export default function ChapterNav({ sections }: { sections: LessonSection[] }) 
       onComplete: () => {
         running.current = null;
         detach();
-        if (!cancelled) land();
+        if (!cancelled) land?.();
       },
     });
   };
 
+  const goTo = (id: string) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    scrollTo(Math.max(0, el.getBoundingClientRect().top + window.scrollY - HEADER_OFFSET), () => {
+      // 着いたあと、キーボード操作の続きがその節から始まるようにする
+      el.setAttribute('tabindex', '-1');
+      el.focus({ preventScroll: true });
+    });
+  };
+
   return (
-    <Card className="p-3" testId="chapter-nav">
-      <p className="mb-1.5 px-1.5 text-[11.5px] font-medium text-muted">この章の内容</p>
-      <ol>
-        {sections.map((s, i) => {
-          const on = s.id === active;
-          return (
-            <li key={s.id}>
-              <button
-                type="button"
-                onClick={() => goTo(s.id)}
-                aria-current={on ? 'true' : undefined}
-                data-testid={on ? 'chapter-nav-current' : undefined}
-                className="relative flex w-full items-baseline gap-2 rounded-md px-1.5 py-1.5 text-left"
+    <Card className="overflow-hidden" testId="chapter-nav">
+      {/* 見出しは目次を送っても残す（いま全体のどこかを見失わないため） */}
+      <div className="glass-sticky sticky top-0 z-20 border-b border-line px-3 py-2.5">
+        <div className="mb-1.5 flex items-baseline gap-2">
+          <span className="text-[11.5px] font-medium tracking-tight text-muted">教材の目次</span>
+          <span className="tnum ml-auto text-[11.5px] text-fg">
+            <span className="font-semibold">{solved}</span>
+            <span className="text-subtle"> / {total}</span>
+          </span>
+        </div>
+        <div className="h-1.5 overflow-hidden rounded-full bg-sunken">
+          <motion.div
+            className="h-full origin-left bg-accent"
+            initial={{ scaleX: 0 }}
+            animate={{ scaleX: total === 0 ? 0 : solved / total }}
+            transition={{ duration: 0.5, ease: EASE_OUT }}
+          />
+        </div>
+      </div>
+
+      <nav className="max-h-[calc(100vh-11rem)] overflow-y-auto p-1.5">
+        {LESSONS.map((lesson, i) => {
+          const current = lesson.phase === phase;
+          const stat = totals[i];
+          const done = stat.total > 0 && stat.solved === stat.total;
+          const row = (
+            <>
+              {/* 現在の章の下地は 1 つを使い回して滑らせる（章を移ると滑って移動する） */}
+              {current && (
+                <motion.span
+                  layoutId="chapter-nav-chapter"
+                  transition={SLIDE}
+                  className="glass-edge absolute inset-0 rounded-md bg-accent-soft ring-1 ring-accent-line"
+                />
+              )}
+              <motion.span
+                animate={{ rotate: current ? 0 : -90 }}
+                transition={SLIDE}
+                className={`relative flex shrink-0 ${current ? 'text-accent' : 'text-subtle'}`}
               >
-                {/* 現在地は 1 つの帯を使い回して滑らせる */}
-                {on && (
-                  <motion.span
-                    layoutId="chapter-nav-current"
-                    transition={SLIDE}
-                    className="absolute inset-0 rounded-md bg-accent-soft ring-1 ring-accent-line"
-                  />
-                )}
-                <span className="tnum relative font-mono text-[10.5px] text-subtle">{i + 1}.</span>
-                <span
-                  className={`relative text-[12.5px] leading-snug ${
-                    on ? 'font-medium text-accent' : 'text-muted hover:text-fg'
-                  }`}
+                <IconChevronDown size={12} />
+              </motion.span>
+              <span
+                className={`tnum relative shrink-0 font-mono text-[10px] ${
+                  current ? 'text-accent' : 'text-subtle'
+                }`}
+              >
+                {String(lesson.phase).padStart(2, '0')}
+              </span>
+              <span
+                className={`relative min-w-0 truncate text-[12px] ${
+                  current ? 'font-semibold text-accent' : 'text-muted'
+                }`}
+              >
+                {lesson.title}
+              </span>
+              <span
+                className={`tnum relative ml-auto shrink-0 text-[10.5px] ${
+                  done ? 'text-success' : 'text-subtle'
+                }`}
+              >
+                {stat.solved}/{stat.total}
+              </span>
+            </>
+          );
+          const rowClass =
+            'relative flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left';
+
+          return (
+            <div key={lesson.phase}>
+              {current ? (
+                // 今いる章。押すと章の先頭へ戻る
+                <motion.button
+                  type="button"
+                  onClick={() => scrollTo(0)}
+                  data-testid="chapter-row-current"
+                  aria-current="page"
+                  whileTap={{ scale: 0.985 }}
+                  className={rowClass}
                 >
-                  {s.title}
-                </span>
-              </button>
-            </li>
+                  {row}
+                </motion.button>
+              ) : (
+                <motion.div whileHover={{ x: 2 }} transition={SLIDE}>
+                  <Link
+                    to={`/learn/${lesson.phase}`}
+                    data-testid="chapter-row"
+                    className={rowClass}
+                  >
+                    {row}
+                  </Link>
+                </motion.div>
+              )}
+
+              {/* 開くのは今いる章だけ。節は少し遅れて順に出る */}
+              <AnimatePresence initial={false}>
+                {current && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={COLLAPSE}
+                    className="overflow-hidden"
+                  >
+                    <motion.ol
+                      variants={STAGGER}
+                      initial="hidden"
+                      animate="shown"
+                      className="relative mt-0.5 mb-1 ml-[15px] border-l border-line pl-1.5"
+                    >
+                      {/* 読んだところまで罫を塗る。バネで滑らかに伸び縮みする */}
+                      <motion.span
+                        aria-hidden
+                        data-testid="chapter-nav-rail"
+                        className="absolute top-0 -left-px w-px origin-top bg-accent"
+                        style={{ height: '100%' }}
+                        initial={{ scaleY: 0 }}
+                        animate={{ scaleY: readRatio }}
+                        transition={SLIDE}
+                      />
+                      {sections.map((s, n) => {
+                        const on = s.id === active;
+                        return (
+                          <motion.li key={s.id} variants={RISE}>
+                            <button
+                              type="button"
+                              onClick={() => goTo(s.id)}
+                              data-testid={on ? 'chapter-nav-current' : 'section-link'}
+                              aria-current={on ? 'true' : undefined}
+                              className="relative flex w-full items-baseline gap-2 rounded-md px-1.5 py-1 text-left"
+                            >
+                              {/* 読んでいる節も 1 つの帯を使い回して滑らせる */}
+                              {on && (
+                                <motion.span
+                                  layoutId="chapter-nav-section"
+                                  transition={SLIDE}
+                                  className="absolute inset-0 rounded-md bg-accent-soft"
+                                />
+                              )}
+                              <span className="tnum relative font-mono text-[10px] text-subtle">
+                                {n + 1}.
+                              </span>
+                              <span
+                                className={`relative text-[12px] leading-snug ${
+                                  on ? 'font-medium text-accent' : 'text-muted hover:text-fg'
+                                }`}
+                              >
+                                {s.title}
+                              </span>
+                            </button>
+                          </motion.li>
+                        );
+                      })}
+                      <motion.li variants={RISE}>
+                        <Link
+                          to={`/problems?phase=${lesson.phase}`}
+                          className="flex items-center gap-1.5 px-1.5 py-1 text-[11px] text-subtle hover:text-accent"
+                        >
+                          <IconBook size={11} />
+                          この章の問題を解く
+                        </Link>
+                      </motion.li>
+                    </motion.ol>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           );
         })}
-      </ol>
+      </nav>
     </Card>
   );
 }

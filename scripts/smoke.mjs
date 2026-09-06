@@ -256,7 +256,7 @@ try {
   );
 
   await page.click('a[href*="#/learn/2"]');
-  await page.waitForSelector('text=この章の内容');
+  await page.waitForSelector('text=教材の目次');
   const chapterText = await page.locator('main').innerText();
   check('章に節の本文が表示される', chapterText.includes('UNBOUNDED PRECEDING'));
   check(
@@ -278,8 +278,14 @@ try {
       .locator('[data-testid="chapter-nav-current"] span')
       .first()
       .evaluate((el) => el.getBoundingClientRect().y);
+  // 節の罫は「読んだところまで」塗る（scaleY で伸ばしている）
+  const railScale = () =>
+    page
+      .locator('[data-testid="chapter-nav-rail"]')
+      .evaluate((el) => new DOMMatrixReadOnly(getComputedStyle(el).transform).m22);
   const tocFrom = await tocCurrent();
   const tocYFrom = await tocY();
+  const railFrom = await railScale();
   await page.mouse.wheel(0, 2500);
   await page.waitForTimeout(60);
   const tocYMid = await tocY();
@@ -310,6 +316,12 @@ try {
     tocFrom !== tocTo,
     `${tocFrom.replace(/\s+/g, ' ')} → ${tocTo.replace(/\s+/g, ' ')}`,
   );
+  const railTo = await railScale();
+  check(
+    '読んだところまで目次の罫が伸びる',
+    railTo > railFrom + 0.1,
+    `${railFrom.toFixed(2)} → ${railTo.toFixed(2)}`,
+  );
   check(
     '目次の帯が滑って移動する',
     Math.abs(tocYMid - tocYTo) > 3,
@@ -323,7 +335,7 @@ try {
   const scrollY = () => page.evaluate(() => window.scrollY);
   const hashOf = () => page.evaluate(() => location.hash);
   const jumpFrom = await scrollY();
-  await page.locator('[data-testid="chapter-nav"] button').nth(2).click();
+  await page.locator('[data-testid="chapter-nav"] [data-testid="section-link"]').last().click();
   await page.waitForTimeout(120);
   const jumpMid = await scrollY();
   await page.waitForTimeout(700);
@@ -338,10 +350,10 @@ try {
     Math.abs(jumpMid - jumpTo) > 50,
     `${jumpFrom.toFixed(0)} → 途中 ${jumpMid.toFixed(0)} → ${jumpTo.toFixed(0)}`,
   );
-  // 固定ヘッダに隠れない位置で止まる
+  // 固定ヘッダに隠れない位置で止まる（押したのは最後の節）
   const headTop = await page
     .locator('section[id]')
-    .nth(2)
+    .last()
     .evaluate((el) => el.getBoundingClientRect().top);
   check(
     '節の見出しがヘッダに隠れない',
@@ -349,6 +361,55 @@ try {
     `上端 ${headTop.toFixed(0)}px`,
   );
   await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(400);
+
+  // 目次には全 7 章が並び、開くのは今いる章だけ
+  const chapterRows = await page
+    .locator('[data-testid="chapter-row"], [data-testid="chapter-row-current"]')
+    .count();
+  const sectionButtons = () => page.locator('[data-testid="chapter-nav"] li button').count();
+  check(
+    '章ページの目次に全ての章が並ぶ',
+    chapterRows === LESSONS.length,
+    `${chapterRows} / ${LESSONS.length} 章`,
+  );
+  check(
+    '開いているのは今いる章だけ',
+    (await sectionButtons()) === LESSONS[1].sections.length,
+    `${await sectionButtons()} 節（第 2 章は ${LESSONS[1].sections.length} 節）`,
+  );
+
+  // 目次から別の章へ飛べる。今いる章の下地は滑って移動する
+  const rowY = () =>
+    page
+      .locator('[data-testid="chapter-row-current"]')
+      .evaluate((el) => el.getBoundingClientRect().y);
+  const chapFrom = await rowY();
+  await page.locator('[data-testid="chapter-nav"] a[href$="#/learn/7"]').click();
+  await page.waitForTimeout(150);
+  const chapMid = await rowY();
+  await page.waitForTimeout(900);
+  const chapTo = await rowY();
+  check(
+    '目次から別の章へ飛べる',
+    (await hashOf()).includes('/learn/7') &&
+      (await page.locator('main h1').innerText()).includes(LESSONS[6].title),
+    `${await hashOf()}`,
+  );
+  const openTitles = await page.locator('[data-testid="chapter-nav"] li button').allInnerTexts();
+  check(
+    '開く章が入れ替わる',
+    openTitles.length === LESSONS[6].sections.length &&
+      openTitles[0].includes(LESSONS[6].sections[0].title),
+    `${openTitles.length} 節（第 7 章は ${LESSONS[6].sections.length} 節）・先頭「${openTitles[0]?.replace(/\s+/g, ' ')}」`,
+  );
+  check(
+    '今いる章の下地が滑って移動する',
+    chapTo > chapFrom + 20 && Math.abs(chapMid - chapTo) > 5,
+    `${chapFrom.toFixed(0)} → 途中 ${chapMid.toFixed(0)} → ${chapTo.toFixed(0)}`,
+  );
+  await page.goto(`${base}#/learn/2`, { waitUntil: 'networkidle' });
+  await page.waitForSelector('text=教材の目次');
   await page.waitForTimeout(300);
 
   // 2. 問題一覧

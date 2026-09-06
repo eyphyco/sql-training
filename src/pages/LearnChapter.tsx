@@ -42,7 +42,7 @@ export default function LearnChapter() {
 
       <aside className="lg:col-start-1 lg:row-start-1">
         <div className="lg:sticky lg:top-20">
-          <ChapterNav sections={lesson.sections} />
+          <ChapterNav sections={lesson.sections} phase={lesson.phase} />
         </div>
       </aside>
 
