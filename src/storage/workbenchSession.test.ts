@@ -13,7 +13,7 @@ const res = (n: number): QueryResult => ({
 const session = (over: Partial<WorkbenchSession> = {}): WorkbenchSession => ({
   sql: 'SELECT 1',
   lastRun: null,
-  planText: null,
+  plan: null,
   tab: 'result',
   ...over,
 });
@@ -26,8 +26,21 @@ describe('saveSession / loadSession', () => {
   });
 
   it('書いたものを読み戻せる', () => {
-    saveSession('p1', session({ planText: 'SEQ_SCAN' }));
-    expect(loadSession('p1')).toEqual(session({ planText: 'SEQ_SCAN' }));
+    const plan = {
+      root: {
+        name: 'SEQ_SCAN',
+        info: [['Table', 'students']] as [string, string][],
+        rows: 13,
+        actualRows: null,
+        ms: null,
+        children: [],
+      },
+      analyzed: false,
+      totalMs: null,
+      scannedRows: null,
+    };
+    saveSession('p1', session({ plan }));
+    expect(loadSession('p1')).toEqual(session({ plan }));
   });
 
   it('問題ごとに別々に持つ', () => {
@@ -90,7 +103,7 @@ describe('loadSession — 壊れた内容', () => {
     expect(loadSession('p1')).toEqual({
       sql: 'SELECT 1',
       lastRun: null,
-      planText: null,
+      plan: null,
       tab: 'schema',
     });
   });

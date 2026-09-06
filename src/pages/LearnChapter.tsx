@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router-dom';
 import { LESSON_BY_PHASE } from '../data/lessons';
-import { PROBLEM_BY_ID } from '../data/problems';
+import { META_BY_ID } from '../data/problems';
 import { LEVEL_LABEL, LEVEL_TONE } from '../data/phases';
 import { useProgress } from '../storage/progressContext';
 import Markdown from '../components/Markdown';
@@ -75,7 +75,7 @@ export default function LearnChapter() {
               <p className="mb-2 text-[11.5px] font-medium text-muted">この節で解く問題</p>
               <ul className="space-y-1">
                 {s.problems.map((id) => {
-                  const p = PROBLEM_BY_ID.get(id);
+                  const p = META_BY_ID.get(id);
                   if (!p) return null;
                   return (
                     <li key={id}>

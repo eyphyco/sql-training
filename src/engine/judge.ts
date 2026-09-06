@@ -1,3 +1,4 @@
+import { splitStatements } from './duckdb';
 import type { QueryResult } from './duckdb';
 import type { JudgeSpec } from '../types';
 
@@ -206,6 +207,31 @@ interface ErrorHint {
 }
 
 /** よくあるエラーに日本語の簡易解説を添える（設計書 6-1 の 3） */
+/**
+ * DuckDB のエラーから、エディタ上の何行目かを割り出す。
+ *
+ * エラーは "LINE 3: ..." の形で行を教えてくれるが、これは
+ * 「DuckDB に渡した文の中での行」なので、そのままでは編集中の行と
+ * ずれることがある。
+ *   - 複数の文を書いていると、何文目かが分からない → 印を付けない
+ *   - 先頭に空行やコメントがあると、その分だけ下にずれる → 足して戻す
+ */
+export function errorLineOf(message: string, sql: string): number | null {
+  const found = /^LINE (\d+):/m.exec(message);
+  if (!found) return null;
+  const line = Number(found[1]);
+  if (!Number.isInteger(line) || line < 1) return null;
+
+  const statements = splitStatements(sql);
+  if (statements.length !== 1) return null;
+
+  const start = sql.indexOf(statements[0]);
+  if (start === -1) return null;
+  const skipped = sql.slice(0, start).split('\n').length - 1;
+  const editorLine = line + skipped;
+  return editorLine <= sql.split('\n').length ? editorLine : null;
+}
+
 const ERROR_HINTS: ErrorHint[] = [
   {
     pattern: /must appear in the GROUP BY clause|column .* must appear/i,

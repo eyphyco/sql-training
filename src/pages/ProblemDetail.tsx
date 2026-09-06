@@ -1,6 +1,7 @@
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { getProblem, nextProblemId, prevProblemId } from '../data/problems';
+import { loadProblem, META_BY_ID, nextProblemId, prevProblemId } from '../data/problems';
 import { LEVEL_FULL_LABEL, LEVEL_TONE, PHASE_BY_ID } from '../data/phases';
 import Markdown from '../components/Markdown';
 import { Card, Tag } from '../components/ui';
@@ -12,13 +13,48 @@ import ChoiceQuestion from '../components/ChoiceQuestion';
 import WrittenQuestion from '../components/WrittenQuestion';
 import { useProgress } from '../storage/progressContext';
 import { SLIDE } from '../components/motion';
+import type { Problem } from '../types';
+
+/**
+ * 問題の本文はこのページを開いたときに取りに行く（一覧に要るのはメタだけ）。
+ * 読み込み中は高さだけ確保して、着いたときに画面が跳ねないようにする。
+ */
+function useProblem(id: string): { problem: Problem | undefined; loading: boolean } {
+  const [state, setState] = useState<{ id: string; problem?: Problem; loading: boolean }>({
+    id,
+    loading: true,
+  });
+
+  // 別の問題へ移ったら描画中に読み込み中へ戻す。
+  // effect で戻すと 1 フレームだけ前の問題が残る（React が勧める形）
+  if (state.id !== id) setState({ id, loading: true });
+
+  useEffect(() => {
+    let alive = true;
+    void loadProblem(id).then((problem) => {
+      if (alive) setState({ id, problem, loading: false });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [id]);
+
+  return { problem: state.problem, loading: state.loading };
+}
 
 export default function ProblemDetail() {
   const { id = '' } = useParams();
-  const problem = getProblem(id);
-  const { isSolved } = useProgress();
+  const { problem, loading } = useProblem(id);
+  const { isSolved, attemptsOf, stateOf } = useProgress();
 
-  if (!problem) {
+  /*
+    見出し・タグ・サイドバーはメタだけで描ける。本文を待って画面ごと
+    差し替えると、問題を移るたびにサイドバーが作り直され、現在地の帯が
+    滑らずに飛ぶ（layoutId は同じ要素が残っている前提の仕組み）。
+  */
+  const meta = META_BY_ID.get(id);
+
+  if (!meta) {
     return (
       <Card className="p-6">
         <p className="text-[13.5px] text-fg">問題 {id} が見つかりません。</p>
@@ -29,9 +65,9 @@ export default function ProblemDetail() {
     );
   }
 
-  const phase = PHASE_BY_ID.get(problem.phase);
-  const prev = prevProblemId(problem.id);
-  const next = nextProblemId(problem.id);
+  const phase = PHASE_BY_ID.get(meta.phase);
+  const prev = prevProblemId(meta.id);
+  const next = nextProblemId(meta.id);
 
   return (
     <div className="space-y-5">
@@ -52,27 +88,34 @@ export default function ProblemDetail() {
                 問題
               </Link>
               <span className="text-subtle">/</span>
-              <Link to={`/problems?phase=${problem.phase}`} className="text-muted hover:text-fg">
+              <Link to={`/problems?phase=${meta.phase}`} className="text-muted hover:text-fg">
                 {phase?.name}
               </Link>
-              <span className="ml-auto font-mono text-[10.5px] text-subtle">{problem.id}</span>
+              <span className="ml-auto font-mono text-[10.5px] text-subtle">{meta.id}</span>
             </div>
 
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <h1 className="text-[19px] leading-snug font-semibold tracking-tight text-fg">
-                {problem.title}
+                {meta.title}
               </h1>
-              <Tag tone={LEVEL_TONE[problem.level]}>{LEVEL_FULL_LABEL[problem.level]}</Tag>
-              {isSolved(problem.id) && (
+              <Tag tone={LEVEL_TONE[meta.level]}>{LEVEL_FULL_LABEL[meta.level]}</Tag>
+              {isSolved(meta.id) && (
                 <Tag tone="success">
                   <IconCheck size={11} />
                   正解済み
                 </Tag>
               )}
+              {/* 挑戦回数はずっと記録していたのに、どこにも出していなかった */}
+              {attemptsOf(meta.id) > 0 && (
+                <Tag tone={stateOf(meta.id).solved ? 'neutral' : 'warning'}>
+                  {attemptsOf(meta.id)} 回挑戦
+                </Tag>
+              )}
+              {stateOf(meta.id).review && <Tag tone="warning">要復習</Tag>}
             </div>
 
             <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
-              {problem.tags.map((t) => (
+              {meta.tags.map((t) => (
                 <Link
                   key={t}
                   to={`/problems?tag=${encodeURIComponent(t)}`}
@@ -85,27 +128,36 @@ export default function ProblemDetail() {
           </div>
 
           {/* 教材 → 問題文 → 作業領域の順に読ませる */}
-          <LessonPanel problemId={problem.id} />
+          <LessonPanel problemId={meta.id} />
 
-          <Card className="p-5">
-            <Markdown>{problem.prompt_md}</Markdown>
-          </Card>
+          {/* 本文はこのページを開いてから取りに行く。待つのはここだけ */}
+          {problem ? (
+            <Card className="p-5">
+              <Markdown>{problem.prompt_md}</Markdown>
+            </Card>
+          ) : (
+            <Card className="min-h-[8rem] p-5" testId="problem-loading">
+              <span className="sr-only">問題を読み込んでいます</span>
+            </Card>
+          )}
 
           {/* 選択式と記述式は読み物なので、この列に収める */}
-          {problem.type === 'multiple_choice' && (
+          {problem?.type === 'multiple_choice' && (
             <ChoiceQuestion key={problem.id} problem={problem} />
           )}
-          {problem.type === 'written' && <WrittenQuestion key={problem.id} problem={problem} />}
+          {problem?.type === 'written' && <WrittenQuestion key={problem.id} problem={problem} />}
         </div>
 
         <aside className="hidden lg:col-start-1 lg:row-start-1 lg:block">
           <div className="sticky top-20">
-            <ProblemNav currentId={problem.id} />
+            <ProblemNav currentId={meta.id} />
           </div>
         </aside>
       </div>
 
-      {problem.type === 'sql_query' && <SqlWorkbench key={problem.id} problem={problem} />}
+      {problem?.type === 'sql_query' && <SqlWorkbench key={problem.id} problem={problem} />}
+      {/* 読み込み中も高さを取っておき、着いたときに画面が跳ねないようにする */}
+      {loading && meta.type === 'sql_query' && <div className="min-h-[520px]" />}
 
       {/* 前後送り。指すと矢印だけが進む向きへ 2px 動く */}
       <nav className="flex items-center justify-between border-t border-line pt-4">

@@ -1,43 +1,20 @@
+import { PROBLEM_METAS as METAS } from 'virtual:problem-meta';
 import type { PhaseId, Problem, ProblemMeta } from '../types';
 
 /**
- * 問題データはフェーズ単位の JSON 配列で管理する（phase1.json ... phase7.json）。
- * 1問1ファイルにするとファイル数が膨らみ、編集・レビューもしづらいため配列方式を採用した。
- * 総量が数百問規模になったら、ここを import.meta.glob の遅延ロードに切り替える。
+ * 問題データはフェーズ単位の JSON 配列（problems/phase1.json … phase7.json）。
+ * 1問1ファイルにするとファイル数が膨らみ、編集もしづらいため配列方式にしてある。
+ *
+ * 一覧に要る分（id・種別・フェーズ・レベル・題名・タグ）は仮想モジュールから
+ * すぐ読める形で持ち、本文・スキーマ・シード・解説は問題を開いたときに取りに行く。
+ * 全部を最初に読むと、ホームを開いただけで 52 問ぶん（gzip 66KB）掛かる。
  */
-const modules = import.meta.glob<{ default: Problem[] }>('./problems/*.json', { eager: true });
+export const PROBLEM_METAS: ProblemMeta[] = METAS;
 
-function collect(): Problem[] {
-  const all: Problem[] = [];
-  const seen = new Set<string>();
-  for (const key of Object.keys(modules).sort()) {
-    for (const problem of modules[key].default) {
-      if (seen.has(problem.id)) {
-        console.warn(`問題 ID が重複しています: ${problem.id} (${key})`);
-        continue;
-      }
-      seen.add(problem.id);
-      all.push(problem);
-    }
-  }
-  return all.sort((a, b) => a.id.localeCompare(b.id));
-}
-
-export const ALL_PROBLEMS: Problem[] = collect();
-
-export const PROBLEM_BY_ID = new Map<string, Problem>(ALL_PROBLEMS.map((p) => [p.id, p]));
-
-export const PROBLEM_METAS: ProblemMeta[] = ALL_PROBLEMS.map((p) => ({
-  id: p.id,
-  type: p.type,
-  phase: p.phase,
-  level: p.level,
-  title: p.title,
-  tags: p.tags,
-}));
+export const META_BY_ID = new Map<string, ProblemMeta>(PROBLEM_METAS.map((p) => [p.id, p]));
 
 /** タグごとの問題数 */
-export const TAG_COUNTS: Map<string, number> = ALL_PROBLEMS.reduce((m, p) => {
+export const TAG_COUNTS: Map<string, number> = PROBLEM_METAS.reduce((m, p) => {
   for (const t of p.tags) m.set(t, (m.get(t) ?? 0) + 1);
   return m;
 }, new Map<string, number>());
@@ -63,9 +40,46 @@ export const PHASE_TOTALS: Record<number, number> = PROBLEM_METAS.reduce<Record<
   {},
 );
 
-export function getProblem(id: string): Problem | undefined {
-  return PROBLEM_BY_ID.get(id);
+/* ここから下は本文つきの問題。必要になったときだけ読む */
+
+const files = import.meta.glob<{ default: Problem[] }>('./problems/*.json');
+const loaded = new Map<string, Problem>();
+const inFlight = new Map<string, Promise<void>>();
+
+function fileOf(phase: number): string | undefined {
+  return Object.keys(files).find((k) => k.endsWith(`/phase${phase}.json`));
 }
+
+/** そのフェーズの JSON を一度だけ読み、id で引ける形にする */
+async function ensurePhase(phase: number): Promise<void> {
+  const key = fileOf(phase);
+  if (!key) return;
+  const running = inFlight.get(key);
+  if (running) return running;
+  const task = files[key]().then((mod) => {
+    for (const problem of mod.default) loaded.set(problem.id, problem);
+  });
+  inFlight.set(key, task);
+  return task;
+}
+
+/** 本文つきの問題を 1 問返す。読み込み済みなら再取得しない */
+export async function loadProblem(id: string): Promise<Problem | undefined> {
+  const cached = loaded.get(id);
+  if (cached) return cached;
+  const meta = META_BY_ID.get(id);
+  if (!meta) return undefined;
+  await ensurePhase(meta.phase);
+  return loaded.get(id);
+}
+
+/** 全問の本文（テストとデータ検証で使う。画面からは呼ばない） */
+export async function loadAllProblems(): Promise<Problem[]> {
+  await Promise.all(PHASES_WITH_FILES.map(ensurePhase));
+  return PROBLEM_METAS.map((m) => loaded.get(m.id)).filter((p): p is Problem => p !== undefined);
+}
+
+const PHASES_WITH_FILES = [...new Set(PROBLEM_METAS.map((p) => p.phase))];
 
 /** 一覧上の並び順で「次の問題」を返す */
 export function nextProblemId(id: string): string | undefined {

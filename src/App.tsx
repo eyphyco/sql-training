@@ -4,6 +4,7 @@ import { MotionConfig, motion } from 'motion/react';
 import { PAGE, SLIDE } from './components/motion';
 import { ProgressProvider } from './storage/ProgressProvider';
 import ThemeToggle from './components/ThemeToggle';
+import ErrorBoundary from './components/ErrorBoundary';
 import { IconDatabase } from './components/icons';
 import Home from './pages/Home';
 
@@ -97,18 +98,21 @@ function Pages() {
   const section = location.pathname.split('/')[1] ?? '';
   return (
     <motion.div key={section} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={PAGE}>
-      {/* 読み込み中に高さを保って、着いたときに画面が飛び跳ねないようにする */}
-      <Suspense fallback={<div className="min-h-[60vh]" />}>
-        <Routes location={location}>
-          <Route path="/" element={<Home />} />
-          <Route path="/learn" element={<Learn />} />
-          <Route path="/learn/:phaseId" element={<LearnChapter />} />
-          <Route path="/problems" element={<ProblemList />} />
-          <Route path="/problems/:id" element={<ProblemDetail />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="*" element={<Home />} />
-        </Routes>
-      </Suspense>
+      {/* 画面ごとに受け止める。別の画面へ移ればエラー表示は消える */}
+      <ErrorBoundary resetKey={location.pathname}>
+        {/* 読み込み中に高さを保って、着いたときに画面が飛び跳ねないようにする */}
+        <Suspense fallback={<div className="min-h-[60vh]" />}>
+          <Routes location={location}>
+            <Route path="/" element={<Home />} />
+            <Route path="/learn" element={<Learn />} />
+            <Route path="/learn/:phaseId" element={<LearnChapter />} />
+            <Route path="/problems" element={<ProblemList />} />
+            <Route path="/problems/:id" element={<ProblemDetail />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="*" element={<Home />} />
+          </Routes>
+        </Suspense>
+      </ErrorBoundary>
     </motion.div>
   );
 }

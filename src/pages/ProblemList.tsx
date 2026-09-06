@@ -17,6 +17,7 @@ import {
   toggleValue,
   writeFilter,
   type Filter,
+  type ProblemState,
   type Status,
 } from './problemFilter';
 import type { LevelId, PhaseId, ProblemType } from '../types';
@@ -31,6 +32,9 @@ const LEVELS: LevelId[] = [1, 2, 3];
 const STATUSES: { id: Status; label: string }[] = [
   { id: 'unsolved', label: '未正解' },
   { id: 'solved', label: '正解済み' },
+  // 記録はしていたのに辿れなかったもの。復習はここから入る
+  { id: 'missed', label: '間違えた' },
+  { id: 'review', label: '要復習' },
 ];
 
 /**
@@ -98,7 +102,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 export default function ProblemList() {
   const [params, setParams] = useSearchParams();
-  const { isSolved } = useProgress();
+  const { isSolved, stateOf } = useProgress();
   const filter = useMemo(() => parseFilter(params), [params]);
 
   const [tagsOpen, setTagsOpen] = useState(false);
@@ -110,7 +114,7 @@ export default function ProblemList() {
   const toggleTag = (v: string) => commit({ ...filter, tags: toggleValue(filter.tags, v) });
   const toggleStatus = (v: Status) => commit({ ...filter, status: toggleValue(filter.status, v) });
 
-  const shown = useMemo(() => applyFilter(PROBLEM_METAS, filter, isSolved), [filter, isSolved]);
+  const shown = useMemo(() => applyFilter(PROBLEM_METAS, filter, stateOf), [filter, stateOf]);
 
   /*
     チップに出す件数は、その種類だけ外して数える。
@@ -118,22 +122,29 @@ export default function ProblemList() {
     何件増えるかを表す。自分の選択で 0 が並ぶと選び直せない。
   */
   const phaseCounts = useMemo(
-    () => countByPhase(applyFilter(PROBLEM_METAS, filter, isSolved, 'phases')),
-    [filter, isSolved],
+    () => countByPhase(applyFilter(PROBLEM_METAS, filter, stateOf, 'phases')),
+    [filter, stateOf],
   );
   const levelCounts = useMemo(
-    () => countByLevel(applyFilter(PROBLEM_METAS, filter, isSolved, 'levels')),
-    [filter, isSolved],
+    () => countByLevel(applyFilter(PROBLEM_METAS, filter, stateOf, 'levels')),
+    [filter, stateOf],
   );
   const tagCounts = useMemo(
-    () => countByTag(applyFilter(PROBLEM_METAS, filter, isSolved, 'tags')),
-    [filter, isSolved],
+    () => countByTag(applyFilter(PROBLEM_METAS, filter, stateOf, 'tags')),
+    [filter, stateOf],
   );
   const statusCounts = useMemo(() => {
-    const pool = applyFilter(PROBLEM_METAS, filter, isSolved, 'status');
-    const solved = pool.filter((p) => isSolved(p.id)).length;
-    return { solved, unsolved: pool.length - solved };
-  }, [filter, isSolved]);
+    const pool = applyFilter(PROBLEM_METAS, filter, stateOf, 'status');
+    const count = (hit: (s: ProblemState) => boolean) =>
+      pool.filter((p) => hit(stateOf(p.id))).length;
+    const counts: Record<Status, number> = {
+      solved: count((s) => s.solved),
+      unsolved: count((s) => !s.solved),
+      missed: count((s) => s.missed),
+      review: count((s) => s.review),
+    };
+    return counts;
+  }, [filter, stateOf]);
 
   /* 開いているときだけ一覧を作る（検索語で絞る） */
   const tagList = useMemo(() => {
@@ -220,6 +231,7 @@ export default function ProblemList() {
               testId="status-chip"
               active={filter.status.includes(s.id)}
               count={statusCounts[s.id]}
+              disabled={!filter.status.includes(s.id) && statusCounts[s.id] === 0}
               onClick={() => toggleStatus(s.id)}
             >
               {s.label}

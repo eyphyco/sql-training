@@ -636,6 +636,45 @@ try {
       (await page.locator('text=「実行」を押すと').count()) > 0,
   );
 
+  // 8j. 実行計画は木で出す（生の枠線図ではなく）
+  await typeSql('SELECT class, count(*) FROM students GROUP BY class ORDER BY 2 DESC');
+  await page.click('[data-testid="explain"]');
+  await rightPane.locator('[data-testid="plan-tree"]').waitFor({ timeout: 30000 });
+  const planText = await rightPane.locator('[data-testid="plan-tree"]').innerText();
+  check(
+    '実行計画が演算子の木として出る',
+    /SEQ_SCAN/.test(planText) && /GROUP_BY/.test(planText) && !planText.includes('┌'),
+    planText.split('\n')[0],
+  );
+
+  await page.click('[data-testid="plan-analyze"]');
+  await page.waitForTimeout(2000);
+  const analyzed = await rightPane.innerText();
+  check(
+    '実測（ANALYZE）で所要時間と実測行数が出る',
+    /全体 [\d.]+ ms/.test(analyzed) && /実測 \d+/.test(analyzed),
+    (analyzed.match(/全体 [\d.]+ ms/) ?? ['—'])[0],
+  );
+
+  // 8k. エラーの行がエディタで分かる
+  await typeSql('SELECT *\nFROM students\nWHERE nonexistent_column = 1');
+  await page.click('[data-testid="run"]');
+  await page.waitForSelector('.cm-error-line', { timeout: 30000 });
+  const markedLine = await page.evaluate(() => {
+    const marked = document.querySelector('.cm-error-line');
+    const lines = [...document.querySelectorAll('.cm-line')];
+    return lines.indexOf(marked) + 1;
+  });
+  check('エラーの行がエディタで示される', markedLine === 3, `${markedLine} 行目に印`);
+
+  await page.click('.cm-content');
+  await page.keyboard.type(' ');
+  await page.waitForTimeout(300);
+  check(
+    '書き換えると印は消える（行がずれるため）',
+    (await page.locator('.cm-error-line').count()) === 0,
+  );
+
   // 8i. 実行結果とスキーマの読みやすさ
   await typeSql("SELECT DATE '2024-03-05' AS d, 1234 AS n, 'x' AS s");
   await page.click('[data-testid="run"]');
@@ -909,6 +948,22 @@ try {
     `${activeBefore} → ${activeAfter} 件`,
   );
 
+  // 13d-2. 記録している「間違えた」から絞り込める
+  await page.goto(`${base}#/problems?status=missed`, { waitUntil: 'networkidle' });
+  await page.waitForSelector('[data-testid="status-chip"]');
+  await page.waitForTimeout(500);
+  const missedRows = await page.locator(ROW).count();
+  const missedIds = await page
+    .locator(ROW)
+    .evaluateAll((els) => els.map((a) => a.getAttribute('href')));
+  check(
+    '「間違えた」で絞り込める',
+    missedRows > 0 &&
+      missedRows < ALL_PROBLEMS.length &&
+      missedIds.some((h) => h.includes('phase1-lv1-001')),
+    `${missedRows} / ${ALL_PROBLEMS.length} 件`,
+  );
+
   // 13e. タグは既定で畳まれていて、開くと問題数の多い順に並ぶ
   await page.goto(`${base}#/problems`, { waitUntil: 'networkidle' });
   await page.waitForSelector('[data-testid="tag-toggle"]');
@@ -1004,6 +1059,49 @@ try {
       (await page.locator('[data-testid="active-chip"]').count()) === 2,
     `つまみ「${toggleLabel.trim()}」`,
   );
+
+  // 13i. ホームでは問題の本文を読まない（一覧に要るのはメタだけ）
+  const homeCtx = await browser.newContext();
+  const homePage = await homeCtx.newPage();
+  const fetched = [];
+  homePage.on('response', (r) => fetched.push(r.url()));
+  await homePage.goto(base, { waitUntil: 'networkidle' });
+  await homePage.waitForSelector('main h1');
+  const bodyChunks = fetched.filter((u) => /\/phase\d+-[A-Za-z0-9_-]+\.js/.test(u));
+  check(
+    'ホームでは問題の本文を読まない',
+    bodyChunks.length === 0,
+    bodyChunks.length ? bodyChunks.join(' ') : '本文チャンク 0 件',
+  );
+  await homeCtx.close();
+
+  // 13j. チャンクが取れなくても白い画面にしない（再デプロイ後の古いタブ）
+  const staleCtx = await browser.newContext();
+  const stalePage = await staleCtx.newPage();
+  await stalePage.goto(base, { waitUntil: 'networkidle' });
+  // 問題一覧のチャンクだけ落とす。古い版のタブで起きることと同じ
+  await stalePage.route(/ProblemList-.*\.js/, (route) => route.abort());
+  await stalePage.click('header nav a[href$="#/problems"]');
+  const caught = await stalePage
+    .waitForSelector('[data-testid="error-boundary"]', { timeout: 15000 })
+    .then(() => true)
+    .catch(() => false);
+  const staleText = caught
+    ? await stalePage.locator('[data-testid="error-boundary"]').innerText()
+    : '';
+  check(
+    'チャンクが取れないときに案内を出す（白い画面にしない）',
+    caught && staleText.includes('再読み込み'),
+    staleText.split('\n')[0],
+  );
+  // 別の画面へ移れば元に戻る
+  await stalePage.click('header nav a[href$="#/learn"]');
+  const recovered = await stalePage
+    .waitForSelector('main h1:has-text("教材")', { timeout: 15000 })
+    .then(() => true)
+    .catch(() => false);
+  check('別の画面へ移ればエラー表示は消える', recovered);
+  await staleCtx.close();
 
   // 14. 「視差効果を減らす」設定を尊重する（MotionConfig reducedMotion="user"）
   const reducedCtx = await browser.newContext({ reducedMotion: 'reduce' });

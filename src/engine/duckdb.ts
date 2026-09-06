@@ -1,4 +1,6 @@
 import * as duckdb from '@duckdb/duckdb-wasm';
+import { parsePlan } from './plan';
+import type { QueryPlan } from './plan';
 import type { Table, DataType } from 'apache-arrow';
 import { TimeUnit, Type } from 'apache-arrow';
 
@@ -275,6 +277,29 @@ export async function describeTables(conn: duckdb.AsyncDuckDBConnection): Promis
     result.push({ name, columns, rowCount: Number(count.getChildAt(0)?.get(0) ?? 0) });
   }
   return result;
+}
+
+/**
+ * 実行計画を木として取得する。
+ *
+ * `analyze` を立てると実際に実行して所要時間と実測行数まで返す
+ * （見積りと実測の差は、この教材でいちばん見せたいところ）。
+ */
+export async function explainPlan(
+  conn: duckdb.AsyncDuckDBConnection,
+  sql: string,
+  analyze = false,
+): Promise<QueryPlan> {
+  const statements = splitStatements(sql);
+  if (statements.length === 0) throw new Error('SQL が入力されていません。');
+  const target = statements[statements.length - 1];
+  const mode = analyze ? '(ANALYZE, FORMAT JSON)' : '(FORMAT JSON)';
+  const table = (await conn.query(`EXPLAIN ${mode} ${target}`)) as unknown as Table;
+  const key = String(table.getChildAt(0)?.get(0) ?? '');
+  const value = String(table.getChildAt(1)?.get(0) ?? '');
+  const plan = parsePlan(key, value);
+  if (!plan) throw new Error('実行計画を読み取れませんでした。');
+  return plan;
 }
 
 /** EXPLAIN の出力をプレーンテキストとして取得する */

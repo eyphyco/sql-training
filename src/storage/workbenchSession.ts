@@ -1,4 +1,5 @@
 import type { QueryResult } from '../engine/duckdb';
+import type { QueryPlan } from '../engine/plan';
 
 /** 右ペインのタブ */
 export type RightTab = 'result' | 'schema' | 'plan';
@@ -6,7 +7,7 @@ export type RightTab = 'result' | 'schema' | 'plan';
 export interface WorkbenchSession {
   sql: string;
   lastRun: { sql: string; result: QueryResult } | null;
-  planText: string | null;
+  plan: QueryPlan | null;
   tab: RightTab;
 }
 
@@ -38,6 +39,15 @@ export function saveSession(problemId: string, session: WorkbenchSession): void 
   }
 }
 
+/** 木の形だけ見る。壊れたものを渡すと描画で落ちるため */
+function isPlan(value: unknown): value is QueryPlan {
+  if (typeof value !== 'object' || value === null) return false;
+  const root = (value as { root?: unknown }).root;
+  if (typeof root !== 'object' || root === null) return false;
+  const r = root as { name?: unknown; children?: unknown; info?: unknown };
+  return typeof r.name === 'string' && Array.isArray(r.children) && Array.isArray(r.info);
+}
+
 function isLastRun(value: unknown): value is WorkbenchSession['lastRun'] {
   if (typeof value !== 'object' || value === null) return false;
   const v = value as { sql?: unknown; result?: { columns?: unknown; rows?: unknown } };
@@ -62,7 +72,7 @@ export function loadSession(problemId: string): WorkbenchSession | null {
       sql: v.sql,
       // 形の壊れた結果を返すと、復元後の ANSWER で落ちる
       lastRun: isLastRun(v.lastRun) ? v.lastRun : null,
-      planText: v.planText ?? null,
+      plan: isPlan(v.plan) ? v.plan : null,
       tab: v.tab === 'result' || v.tab === 'plan' ? v.tab : 'schema',
     };
   } catch {

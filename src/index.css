@@ -460,3 +460,9 @@ body {
   text-underline-offset: 2px;
 }
 .md :where(hr) { border: none; border-top: 1px solid var(--c-line); margin: 1.6em 0; }
+
+/* SQL のエラー行。エディタ側で「どの行か」が分かるようにする */
+.cm-error-line {
+  background-color: var(--c-danger-soft);
+  box-shadow: inset 2px 0 0 0 var(--c-danger);
+}

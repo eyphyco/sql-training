@@ -1,18 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ALL_PROBLEMS,
   ALL_TAGS,
   TAG_COUNTS,
-  getProblem,
+  loadAllProblems,
+  loadProblem,
+  META_BY_ID,
   nextProblemId,
   PHASE_TOTALS,
   prevProblemId,
-  PROBLEM_BY_ID,
   PROBLEM_METAS,
   problemsOfPhase,
 } from './problems';
 import { PHASES } from './phases';
 import type { PhaseId } from '../types';
+
+// 本文は必要になったときに読む作りなので、検査の前に一度だけ読み込む
+const ALL_PROBLEMS = await loadAllProblems();
 
 describe('読み込みの結果', () => {
   it('問題が 1 つ以上ある', () => {
@@ -29,9 +32,19 @@ describe('読み込みの結果', () => {
     expect(ids).toEqual([...ids].sort((a, b) => a.localeCompare(b)));
   });
 
-  it('PROBLEM_BY_ID は全問を引ける', () => {
-    expect(PROBLEM_BY_ID.size).toBe(ALL_PROBLEMS.length);
-    for (const p of ALL_PROBLEMS) expect(PROBLEM_BY_ID.get(p.id)?.id).toBe(p.id);
+  it('META_BY_ID は全問を引ける', () => {
+    expect(META_BY_ID.size).toBe(ALL_PROBLEMS.length);
+    for (const p of ALL_PROBLEMS) expect(META_BY_ID.get(p.id)?.id).toBe(p.id);
+  });
+
+  it('メタと本文で id・題名・タグが一致する', () => {
+    for (const p of ALL_PROBLEMS) {
+      const meta = META_BY_ID.get(p.id);
+      expect(meta?.title).toBe(p.title);
+      expect(meta?.tags).toEqual(p.tags);
+      expect(meta?.type).toBe(p.type);
+      expect(meta?.level).toBe(p.level);
+    }
   });
 
   it('PROBLEM_METAS は本体と同じ並び・同じ件数', () => {
@@ -65,13 +78,20 @@ describe('読み込みの結果', () => {
   });
 });
 
-describe('getProblem', () => {
-  it('ある問題を引ける', () => {
-    expect(getProblem(ALL_PROBLEMS[0].id)?.id).toBe(ALL_PROBLEMS[0].id);
+describe('loadProblem', () => {
+  it('ある問題を本文つきで引ける', async () => {
+    const p = await loadProblem(ALL_PROBLEMS[0].id);
+    expect(p?.id).toBe(ALL_PROBLEMS[0].id);
+    expect(p?.prompt_md.length).toBeGreaterThan(0);
   });
 
-  it.each(['', 'nope', 'phase9-lv9-999'])('知らない ID (%j) は undefined', (id) => {
-    expect(getProblem(id)).toBeUndefined();
+  it('二度目は同じものを返す（読み直さない）', async () => {
+    const id = ALL_PROBLEMS[0].id;
+    expect(await loadProblem(id)).toBe(await loadProblem(id));
+  });
+
+  it.each(['', 'nope', 'phase9-lv9-999'])('知らない ID (%j) は undefined', async (id) => {
+    expect(await loadProblem(id)).toBeUndefined();
   });
 });
 

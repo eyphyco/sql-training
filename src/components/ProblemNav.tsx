@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { PHASES } from '../data/phases';
-import { PROBLEM_BY_ID, problemsOfPhase } from '../data/problems';
+import { META_BY_ID, problemsOfPhase } from '../data/problems';
 import { useProgress } from '../storage/progressContext';
 import { Card } from './ui';
 import { IconBook, IconCheck, IconChevronDown, IconDash } from './icons';
@@ -19,7 +19,7 @@ import type { PhaseId } from '../types';
  */
 export default function ProblemNav({ currentId }: { currentId: string }) {
   const { isSolved, phaseStats } = useProgress();
-  const current = PROBLEM_BY_ID.get(currentId);
+  const current = META_BY_ID.get(currentId);
   const currentPhase = current?.phase ?? null;
 
   const [openPhase, setOpenPhase] = useState<PhaseId | null>(currentPhase);

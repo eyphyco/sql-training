@@ -12,7 +12,18 @@ import type { LevelId, PhaseId, ProblemMeta } from '../types';
  */
 
 export type Facet = 'phases' | 'levels' | 'tags' | 'status';
-export type Status = 'solved' | 'unsolved';
+/*
+  状態は 4 つ。解けたかどうかだけでなく、間違えた・要復習も選べる。
+  挑戦回数も自己採点も前から記録していたのに、絞り込みから辿れなかった。
+*/
+export type Status = 'solved' | 'unsolved' | 'missed' | 'review';
+
+/** 1 問の状態。progress から作る（この層は progress の形を知らない） */
+export interface ProblemState {
+  solved: boolean;
+  missed: boolean;
+  review: boolean;
+}
 
 export interface Filter {
   phases: number[];
@@ -54,8 +65,8 @@ export function parseFilter(params: URLSearchParams): Filter {
     phases: parseNumbers(params.get(PARAM.phases), [1, 2, 3, 4, 5, 6, 7]),
     levels: parseNumbers(params.get(PARAM.levels), [1, 2, 3]),
     tags: parseList(params.get(PARAM.tags)),
-    status: parseList(params.get(PARAM.status)).filter(
-      (s): s is Status => s === 'solved' || s === 'unsolved',
+    status: parseList(params.get(PARAM.status)).filter((s): s is Status =>
+      ['solved', 'unsolved', 'missed', 'review'].includes(s),
     ),
   };
 }
@@ -91,7 +102,7 @@ export function countSelected(filter: Filter): number {
 export function applyFilter(
   metas: readonly ProblemMeta[],
   filter: Filter,
-  isSolved: (id: string) => boolean,
+  stateOf: (id: string) => ProblemState,
   except?: Facet,
 ): ProblemMeta[] {
   const on = (facet: Facet) => facet !== except && filter[facet].length > 0;
@@ -100,8 +111,17 @@ export function applyFilter(
     if (on('levels') && !filter.levels.includes(p.level)) return false;
     if (on('tags') && !filter.tags.some((t) => p.tags.includes(t))) return false;
     if (on('status')) {
-      const solved = isSolved(p.id);
-      if (!filter.status.some((s) => (s === 'solved') === solved)) return false;
+      const state = stateOf(p.id);
+      const hit = filter.status.some((s) =>
+        s === 'solved'
+          ? state.solved
+          : s === 'unsolved'
+            ? !state.solved
+            : s === 'missed'
+              ? state.missed
+              : state.review,
+      );
+      if (!hit) return false;
     }
     return true;
   });

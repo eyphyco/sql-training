@@ -1,5 +1,7 @@
 /// <reference types="vitest/config" />
 import { createHash } from 'node:crypto';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { defineConfig } from 'vite';
 import type { Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -51,12 +53,61 @@ function cspMeta(): Plugin {
   };
 }
 
+/**
+ * 問題データの「一覧に要る分」だけを仮想モジュールとして切り出す。
+ *
+ * 一覧・目次・進捗が要るのは id / 種別 / フェーズ / レベル / 題名 / タグだけで
+ * 3KB（gzip）に収まる。本文・スキーマ・シード・解説まで合わせると 255KB
+ * （gzip 66KB）あり、これを最初のチャンクに入れるとホームを開いただけで
+ * 全 52 問を読むことになる。本文は問題を開いたときに取りに行く。
+ *
+ * 生成ファイルを git に置くと元データとずれるので、ビルド時に JSON から
+ * 作る（ずれようがない）。JSON を編集したら開発サーバでも作り直す。
+ */
+const PROBLEM_DIR = 'src/data/problems';
+const META_ID = 'virtual:problem-meta';
+
+function problemMeta(): Plugin {
+  const resolved = '\0' + META_ID;
+  const build = () => {
+    const metas = readdirSync(PROBLEM_DIR)
+      .filter((f) => f.endsWith('.json'))
+      .sort()
+      .flatMap(
+        (f) => JSON.parse(readFileSync(join(PROBLEM_DIR, f), 'utf8')) as Record<string, unknown>[],
+      )
+      .map((p) => ({
+        id: p.id,
+        type: p.type,
+        phase: p.phase,
+        level: p.level,
+        title: p.title,
+        tags: p.tags,
+      }))
+      .sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    return `export const PROBLEM_METAS = ${JSON.stringify(metas)};`;
+  };
+  return {
+    name: 'problem-meta',
+    resolveId: (id) => (id === META_ID ? resolved : null),
+    load: (id) => (id === resolved ? build() : null),
+    configureServer(server) {
+      server.watcher.add(PROBLEM_DIR);
+    },
+    handleHotUpdate({ file, server }) {
+      if (!file.includes('data/problems/')) return;
+      const mod = server.moduleGraph.getModuleById(resolved);
+      if (mod) server.moduleGraph.invalidateModule(mod);
+    },
+  };
+}
+
 // base は相対パスにしてある。GitHub Pages のプロジェクトページ
 // (https://<user>.github.io/<repo>/) でもリポジトリ名を設定に埋め込まずに動く。
 // ルーティングは HashRouter を使うので、Pages 側の 404 リライト設定も不要。
 export default defineConfig({
   base: './',
-  plugins: [react(), tailwindcss(), cspMeta()],
+  plugins: [react(), tailwindcss(), problemMeta(), cspMeta()],
   build: {
     // apache-arrow / duckdb-wasm が BigInt リテラルと top-level await を使うため
     target: 'esnext',

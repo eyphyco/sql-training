@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { LESSON_BY_PHASE, LESSONS, PHASE_BY_SECTION, sectionsForProblem } from './lessons';
-import { ALL_PROBLEMS, PROBLEM_BY_ID } from './problems';
+import { loadAllProblems, META_BY_ID } from './problems';
 import { PHASES } from './phases';
 import type { PhaseId } from '../types';
 
+const ALL_PROBLEMS = await loadAllProblems();
 const allSections = LESSONS.flatMap((l) => l.sections);
 
 describe('章', () => {
@@ -60,7 +61,7 @@ describe('問題 → 節の逆引き', () => {
   it('節が参照する問題はすべて実在する', () => {
     const dangling: string[] = [];
     for (const s of allSections) {
-      for (const id of s.problems) if (!PROBLEM_BY_ID.has(id)) dangling.push(`${s.id} → ${id}`);
+      for (const id of s.problems) if (!META_BY_ID.has(id)) dangling.push(`${s.id} → ${id}`);
     }
     expect(dangling).toEqual([]);
   });

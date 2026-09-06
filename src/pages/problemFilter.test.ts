@@ -22,7 +22,13 @@ const metas: ProblemMeta[] = [
 ];
 
 const solved = new Set(['a', 'c']);
-const isSolved = (id: string) => solved.has(id);
+const missed = new Set(['b']);
+const review = new Set(['d']);
+const stateOf = (id: string) => ({
+  solved: solved.has(id),
+  missed: missed.has(id),
+  review: review.has(id),
+});
 const ids = (list: ProblemMeta[]) => list.map((p) => p.id);
 const make = (f: Partial<Filter>): Filter => ({ ...EMPTY_FILTER, ...f });
 
@@ -97,32 +103,41 @@ describe('isEmptyFilter', () => {
 
 describe('applyFilter', () => {
   it('条件なしは全件', () => {
-    expect(ids(applyFilter(metas, EMPTY_FILTER, isSolved))).toEqual(['a', 'b', 'c', 'd']);
+    expect(ids(applyFilter(metas, EMPTY_FILTER, stateOf))).toEqual(['a', 'b', 'c', 'd']);
   });
 
   it('同じ種類の中は OR（Lv1 と Lv3 を同時に見られる）', () => {
-    expect(ids(applyFilter(metas, make({ levels: [1, 3] }), isSolved))).toEqual(['a', 'b', 'd']);
+    expect(ids(applyFilter(metas, make({ levels: [1, 3] }), stateOf))).toEqual(['a', 'b', 'd']);
   });
 
   it('種類どうしは AND', () => {
-    expect(ids(applyFilter(metas, make({ levels: [1, 3], phases: [1] }), isSolved))).toEqual([
+    expect(ids(applyFilter(metas, make({ levels: [1, 3], phases: [1] }), stateOf))).toEqual([
       'a',
       'b',
     ]);
   });
 
   it('タグは1つでも一致すれば残る', () => {
-    expect(ids(applyFilter(metas, make({ tags: ['NULL', 'group by'] }), isSolved))).toEqual([
+    expect(ids(applyFilter(metas, make({ tags: ['NULL', 'group by'] }), stateOf))).toEqual([
       'a',
       'b',
       'c',
     ]);
   });
 
+  it('間違えた・要復習でも絞れる（記録していたのに辿れなかった）', () => {
+    expect(ids(applyFilter(metas, make({ status: ['missed'] }), stateOf))).toEqual(['b']);
+    expect(ids(applyFilter(metas, make({ status: ['review'] }), stateOf))).toEqual(['d']);
+    expect(ids(applyFilter(metas, make({ status: ['missed', 'review'] }), stateOf))).toEqual([
+      'b',
+      'd',
+    ]);
+  });
+
   it('状態も OR。両方選べば条件なしと同じ', () => {
-    expect(ids(applyFilter(metas, make({ status: ['solved'] }), isSolved))).toEqual(['a', 'c']);
-    expect(ids(applyFilter(metas, make({ status: ['unsolved'] }), isSolved))).toEqual(['b', 'd']);
-    expect(ids(applyFilter(metas, make({ status: ['solved', 'unsolved'] }), isSolved))).toEqual([
+    expect(ids(applyFilter(metas, make({ status: ['solved'] }), stateOf))).toEqual(['a', 'c']);
+    expect(ids(applyFilter(metas, make({ status: ['unsolved'] }), stateOf))).toEqual(['b', 'd']);
+    expect(ids(applyFilter(metas, make({ status: ['solved', 'unsolved'] }), stateOf))).toEqual([
       'a',
       'b',
       'c',
@@ -132,8 +147,8 @@ describe('applyFilter', () => {
 
   it('except に渡した種類は無視する（チップの件数用）', () => {
     const f = make({ levels: [1], phases: [1] });
-    expect(ids(applyFilter(metas, f, isSolved, 'levels'))).toEqual(['a', 'b']);
-    expect(ids(applyFilter(metas, f, isSolved, 'phases'))).toEqual(['a']);
+    expect(ids(applyFilter(metas, f, stateOf, 'levels'))).toEqual(['a', 'b']);
+    expect(ids(applyFilter(metas, f, stateOf, 'phases'))).toEqual(['a']);
   });
 });
 
@@ -151,7 +166,7 @@ describe('件数の集計', () => {
 
   it('自分の種類を外して数えると、足したときの件数になる', () => {
     const f = make({ levels: [1] });
-    const counts = countByLevel(applyFilter(metas, f, isSolved, 'levels'));
+    const counts = countByLevel(applyFilter(metas, f, stateOf, 'levels'));
     expect(counts.get(3)).toBe(2);
   });
 });

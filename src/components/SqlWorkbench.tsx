@@ -5,16 +5,19 @@ import type { SqlQueryProblem } from '../types';
 import {
   connect,
   describeTables,
+  explainPlan,
   explainQuery,
   resetEnvironment,
   runQuery,
 } from '../engine/duckdb';
 import type { QueryResult, TableSchema } from '../engine/duckdb';
-import { checkPatterns, explainSqlError, judgeResultSet } from '../engine/judge';
+import type { QueryPlan } from '../engine/plan';
+import { checkPatterns, errorLineOf, explainSqlError, judgeResultSet } from '../engine/judge';
 import type { JudgeResult } from '../engine/judge';
 import QueryEditor from './QueryEditor';
 import ResultTable from './ResultTable';
 import SchemaPanel from './SchemaPanel';
+import PlanView from './PlanView';
 import Markdown from './Markdown';
 import { Button, Card } from './ui';
 import { RISE, SLIDE } from './motion';
@@ -55,7 +58,11 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
   const [sqlText, setSqlText] = useState(restored?.sql ?? problem.starter_sql ?? '');
   const [lastRun, setLastRun] = useState<LastRun | null>(restored?.lastRun ?? null);
   const [runError, setRunError] = useState<string | null>(null);
-  const [planText, setPlanText] = useState<string | null>(restored?.planText ?? null);
+  // どの SQL で失敗したか。書き換えたらエディタの印を消すために持つ
+  const [errorSql, setErrorSql] = useState<string | null>(null);
+  const [plan, setPlan] = useState<QueryPlan | null>(restored?.plan ?? null);
+  // 見積りだけか、実際に走らせて実測も出すか
+  const [analyze, setAnalyze] = useState(false);
   const [tab, setTab] = useState<RightTab>(restored?.tab ?? 'schema');
   const [reloadNotice, setReloadNotice] = useState(detectUnpreventedReload);
   const [judgement, setJudgement] = useState<JudgeResult | null>(null);
@@ -107,12 +114,14 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
     setRunError(null);
     try {
       const result = await runQuery(conn, sqlText);
+      setErrorSql(null);
       setLastRun({ sql: sqlText, result });
       setTab('result');
       setSchema(await describeTables(conn));
     } catch (e) {
       setLastRun(null);
       setRunError(e instanceof Error ? e.message : String(e));
+      setErrorSql(sqlText);
       setTab('result');
     } finally {
       runningRef.current = false;
@@ -120,23 +129,29 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
     }
   }, [sqlText]);
 
-  const handleExplain = useCallback(async () => {
-    const conn = connRef.current;
-    if (!conn || runningRef.current) return;
-    runningRef.current = true;
-    setBusy(true);
-    setRunError(null);
-    try {
-      setPlanText(await explainQuery(conn, sqlText));
-      setTab('plan');
-    } catch (e) {
-      setRunError(e instanceof Error ? e.message : String(e));
-      setTab('result');
-    } finally {
-      runningRef.current = false;
-      setBusy(false);
-    }
-  }, [sqlText]);
+  const handleExplain = useCallback(
+    async (withAnalyze = analyze) => {
+      const conn = connRef.current;
+      if (!conn || runningRef.current) return;
+      runningRef.current = true;
+      setBusy(true);
+      setRunError(null);
+      try {
+        setPlan(await explainPlan(conn, sqlText, withAnalyze));
+        setAnalyze(withAnalyze);
+        setErrorSql(null);
+        setTab('plan');
+      } catch (e) {
+        setRunError(e instanceof Error ? e.message : String(e));
+        setErrorSql(sqlText);
+        setTab('result');
+      } finally {
+        runningRef.current = false;
+        setBusy(false);
+      }
+    },
+    [analyze, sqlText],
+  );
 
   // ANSWER: 直近の「実行」結果を使って採点する（設計書 6-1）
   const handleAnswer = useCallback(async () => {
@@ -179,14 +194,15 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
           (problem.judge.explain_forbidden?.length ?? 0) >
         0;
       if (result.correct && hasPatternRules) {
-        let plan = '';
+        // 書き方の条件は文字列の計画に対する正規表現。木は画面に出すため
+        let planText = '';
         try {
-          plan = await explainQuery(conn, lastRun.sql);
-          setPlanText(plan);
+          planText = await explainQuery(conn, lastRun.sql);
+          setPlan(await explainPlan(conn, lastRun.sql));
         } catch {
-          plan = '';
+          planText = planText || '';
         }
-        const { ok, violations } = checkPatterns(lastRun.sql, plan, problem.judge);
+        const { ok, violations } = checkPatterns(lastRun.sql, planText, problem.judge);
         if (!ok) {
           result = {
             correct: false,
@@ -253,12 +269,14 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
   useEffect(() => {
     if (status !== 'ready') return;
     const timer = setTimeout(() => {
-      saveSession(problem.id, { sql: sqlText, lastRun, planText, tab });
+      saveSession(problem.id, { sql: sqlText, lastRun, plan, tab });
     }, 300);
     return () => clearTimeout(timer);
-  }, [problem.id, status, sqlText, lastRun, planText, tab]);
+  }, [problem.id, status, sqlText, lastRun, plan, tab]);
 
   const errorHint = runError ? explainSqlError(runError) : null;
+  // 印は「失敗したときのまま」のときだけ出す（書き換えたら行がずれる）
+  const errorLine = runError && errorSql === sqlText ? errorLineOf(runError, sqlText) : null;
   const hints = problem.hints_md ?? [];
   const canReveal = revealed || attempts >= 3;
 
@@ -320,7 +338,7 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={handleExplain}
+                onClick={() => void handleExplain()}
                 disabled={busy}
                 data-testid="explain"
               >
@@ -342,7 +360,12 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
             </div>
           </header>
           <div className="min-h-[480px] flex-1 bg-sunken">
-            <QueryEditor value={sqlText} onChange={setSqlText} schema={schema} />
+            <QueryEditor
+              value={sqlText}
+              onChange={setSqlText}
+              schema={schema}
+              errorLine={errorLine}
+            />
           </div>
         </Card>
 
@@ -379,10 +402,33 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
           <div className="flex-1 overflow-auto">
             {tab === 'schema' && <SchemaPanel schema={schema} />}
             {tab === 'plan' &&
-              (planText ? (
-                <pre className="p-3 font-mono text-[11px] leading-relaxed whitespace-pre text-fg">
-                  {planText}
-                </pre>
+              (plan ? (
+                <>
+                  {/* 見積りだけ見るか、実際に走らせて実測と比べるか */}
+                  <div className="flex items-center gap-1.5 border-b border-line px-3 py-1.5">
+                    {[
+                      { on: false, label: '見積り' },
+                      { on: true, label: '実測（ANALYZE）' },
+                    ].map((mode) => (
+                      <button
+                        key={mode.label}
+                        type="button"
+                        onClick={() => void handleExplain(mode.on)}
+                        disabled={busy}
+                        aria-pressed={analyze === mode.on}
+                        data-testid={mode.on ? 'plan-analyze' : 'plan-estimate'}
+                        className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors disabled:opacity-45 ${
+                          analyze === mode.on
+                            ? 'border-accent-line bg-accent-soft text-accent'
+                            : 'border-line bg-surface text-muted hover:text-fg'
+                        }`}
+                      >
+                        {mode.label}
+                      </button>
+                    ))}
+                  </div>
+                  <PlanView plan={plan} />
+                </>
               ) : (
                 <p className="p-4 text-[13px] leading-relaxed text-muted">
                   「EXPLAIN」を押すと、いまエディタにある SQL の実行計画を表示します。

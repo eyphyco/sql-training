@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkPatterns, displayCell, explainSqlError, judgeResultSet } from './judge';
+import { checkPatterns, displayCell, errorLineOf, explainSqlError, judgeResultSet } from './judge';
 import type { QueryResult } from './duckdb';
 import type { JudgeSpec } from '../types';
 
@@ -323,5 +323,37 @@ describe('displayCell', () => {
   it('無限大や NaN もそのまま見せる', () => {
     expect(displayCell(Infinity)).toBe('Infinity');
     expect(displayCell(NaN)).toBe('NaN');
+  });
+});
+
+describe('errorLineOf — エラーの行', () => {
+  const err = (line: number) => `Parser Error: syntax error\n\nLINE ${line}: SELECT\n        ^`;
+
+  it('LINE の番号をそのまま返す', () => {
+    expect(errorLineOf(err(1), 'SELECT bad')).toBe(1);
+    expect(errorLineOf(err(2), 'SELECT 1,\n  bad')).toBe(2);
+  });
+
+  it('先頭の空行やコメントのぶんだけ下にずらす', () => {
+    // DuckDB には trim した文を渡すので、その前の行数を足して戻す
+    expect(errorLineOf(err(2), '\n-- メモ\nSELECT bad')).toBe(3);
+  });
+
+  it('複数の文があるときは印を付けない（何文目の行か分からない）', () => {
+    expect(errorLineOf(err(1), 'SELECT 1; SELECT bad')).toBeNull();
+  });
+
+  it('LINE が無いエラーでは null', () => {
+    expect(
+      errorLineOf('Catalog Error: Table with name x does not exist!', 'SELECT * FROM x'),
+    ).toBeNull();
+  });
+
+  it('行数を超える番号は使わない', () => {
+    expect(errorLineOf(err(9), 'SELECT bad')).toBeNull();
+  });
+
+  it('入力が空なら null', () => {
+    expect(errorLineOf(err(1), '')).toBeNull();
   });
 });

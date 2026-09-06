@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { PHASES } from '../data/phases';
-import { PROBLEM_BY_ID, PROBLEM_METAS } from '../data/problems';
+import { META_BY_ID, PROBLEM_METAS } from '../data/problems';
 import { useProgress } from '../storage/progressContext';
 import { Button, Card, Meter, SectionTitle, Tag } from '../components/ui';
 import { IconCheck, IconChevronRight, IconX } from '../components/icons';
@@ -14,7 +14,7 @@ const TYPE_LABEL: Record<ProblemType, string> = {
 };
 
 export default function Home() {
-  const { phaseStats, progress, isSolved } = useProgress();
+  const { phaseStats, progress, isSolved, accuracy, weak } = useProgress();
 
   const totalSolved = Object.values(progress.solvedProblems).filter((r) => r.solved).length;
   const total = PROBLEM_METAS.length;
@@ -112,10 +112,21 @@ export default function Home() {
                         {phase.name}
                       </h3>
                       {done && <IconCheck size={13} className="text-success" />}
-                      {phase.focus === '弱点対応' && (
-                        <Tag className="ml-auto" tone="accent">
-                          弱点
+                      {/*
+                        「苦手」は自分の正答率から出す（実績が足りない章には出ない）。
+                        「弱点」はカリキュラムを組んだときに決めた固定の札。
+                        別物なので、実績が出たらそちらを優先して出す。
+                      */}
+                      {weak.includes(phase.id) ? (
+                        <Tag className="ml-auto" tone="warning">
+                          苦手 {Math.round((accuracy.get(phase.id)?.rate ?? 0) * 100)}%
                         </Tag>
+                      ) : (
+                        phase.focus === '弱点対応' && (
+                          <Tag className="ml-auto" tone="accent">
+                            弱点
+                          </Tag>
+                        )
                       )}
                     </div>
                     <p className="mt-1.5 mb-4 line-clamp-2 text-[12px] leading-relaxed text-muted">
@@ -148,7 +159,7 @@ export default function Home() {
         ) : (
           <ol className="space-y-px">
             {recent.map((h, i) => {
-              const p = PROBLEM_BY_ID.get(h.problemId);
+              const p = META_BY_ID.get(h.problemId);
               return (
                 <li key={`${h.problemId}-${h.at}-${i}`}>
                   <Link
