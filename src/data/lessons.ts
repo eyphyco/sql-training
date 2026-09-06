@@ -20,7 +20,7 @@ export const LESSONS: Lesson[] = [
 export const LESSON_BY_PHASE = new Map<PhaseId, Lesson>(LESSONS.map((l) => [l.phase, l]));
 
 /** 問題 → その問題を扱う節。教材側の problems だけが対応表なので、ここで反転させる */
-export const SECTIONS_BY_PROBLEM: Map<string, LessonSection[]> = (() => {
+const SECTIONS_BY_PROBLEM: Map<string, LessonSection[]> = (() => {
   const map = new Map<string, LessonSection[]>();
   for (const lesson of LESSONS) {
     for (const section of lesson.sections) {

@@ -33,7 +33,12 @@ export default function Home() {
   }, [isSolved]);
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_16rem] xl:gap-10 xl:grid-cols-[minmax(0,1fr)_19rem]">
+    /*
+      1 列に積む。右に細い列を置いていたが、そこに入るのは学習の記録だけで、
+      始めたばかりの間はほぼ空のまま画面の 3 割を占めていた。
+      カリキュラムに幅を渡し、記録はその下に横へ並べる。
+    */
+    <div className="space-y-8">
       <div className="space-y-8">
         {/* 進捗の概観 */}
         <Card className="overflow-hidden">
@@ -90,19 +95,12 @@ export default function Home() {
           >
             カリキュラム
           </SectionTitle>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
             {PHASES.map((phase, i) => {
               const stat = phaseStats[phase.id] ?? { solved: 0, total: 0 };
               const done = stat.total > 0 && stat.solved === stat.total;
               return (
-                <Link
-                  key={phase.id}
-                  to={`/problems?phase=${phase.id}`}
-                  // 7 フェーズは列数で割り切れないので、最終カードを全幅にして収める
-                  className={`group ${
-                    phase.id === PHASES[PHASES.length - 1].id ? 'sm:col-span-2 xl:col-span-3' : ''
-                  }`}
-                >
+                <Link key={phase.id} to={`/problems?phase=${phase.id}`} className="group">
                   <Card className="flex h-full flex-col p-4 transition-colors group-hover:border-line-strong group-hover:bg-raised">
                     <div className="flex items-center gap-2">
                       <span className="tnum font-mono text-tiny text-subtle">
@@ -147,8 +145,8 @@ export default function Home() {
         </section>
       </div>
 
-      {/* 学習の記録 */}
-      <aside>
+      {/* 学習の記録。横に並べて、狭い画面では 1 列に落ちる */}
+      <section>
         <SectionTitle>学習の記録</SectionTitle>
         {recent.length === 0 ? (
           <p className="rounded-lg border border-dashed border-line px-4 py-6 text-center text-small leading-relaxed text-subtle">
@@ -157,7 +155,7 @@ export default function Home() {
             上のボタンから始めましょう。
           </p>
         ) : (
-          <ol className="space-y-px">
+          <ol className="grid gap-x-4 gap-y-px sm:grid-cols-2 xl:grid-cols-4">
             {recent.map((h, i) => {
               const p = META_BY_ID.get(h.problemId);
               return (
@@ -190,7 +188,7 @@ export default function Home() {
             })}
           </ol>
         )}
-      </aside>
+      </section>
     </div>
   );
 }

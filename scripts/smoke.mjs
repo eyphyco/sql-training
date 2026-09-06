@@ -23,6 +23,19 @@ const check = (name, ok, extra = '') => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${extra ? ' — ' + extra : ''}`);
 };
 
+/*
+  独立した検査のまとまり。中で落ちても、その 1 件を失敗にして次へ進む。
+  1 本道の操作（問題を開く → 実行する → 採点する）は前の手順に依存するので
+  そのまま並べているが、自分の context を持つ検査はここで切り離す。
+*/
+const step = async (name, fn) => {
+  try {
+    await fn();
+  } catch (e) {
+    check(name, false, String(e).split('\n')[0]);
+  }
+};
+
 const browser = await chromium.launch();
 const page = await browser.newPage();
 const consoleErrors = [];
@@ -118,7 +131,13 @@ try {
     (await page.evaluate(() => localStorage.getItem('sql-training:theme'))) === null,
   );
 
-  // 配色は一瞬で入れ替えず、短く色をつなぐ
+  /*
+    配色は一瞬で入れ替えず、短く色をつなぐ。
+    Service Worker の登録と資産の保存が初回読み込みと重なるとコマが落ちるので、
+    落ち着いてから測る（見たいのは通常時の見え方）。
+  */
+  await page.evaluate(() => navigator.serviceWorker?.ready).catch(() => {});
+  await page.waitForTimeout(300);
   const fade = await page.evaluate(async () => {
     const lin = (c) => {
       const v = c / 255;
@@ -163,7 +182,8 @@ try {
   });
   check(
     '配色は一瞬で入れ替わらず、途中の色を通る',
-    fade.from > 0.6 && fade.to < 0.05 && fade.between >= 3,
+    // コマ数は機械の忙しさで前後する。ここで見たいのは「一瞬で入れ替わらない」こと
+    fade.from > 0.6 && fade.to < 0.05 && fade.between >= 2,
     `途中の色 ${fade.between} コマ`,
   );
   /*
@@ -1060,137 +1080,169 @@ try {
     `つまみ「${toggleLabel.trim()}」`,
   );
 
-  // 13i. ホームでは問題の本文を読まない（一覧に要るのはメタだけ）
-  const homeCtx = await browser.newContext();
-  const homePage = await homeCtx.newPage();
-  const fetched = [];
-  homePage.on('response', (r) => fetched.push(r.url()));
-  await homePage.goto(base, { waitUntil: 'networkidle' });
-  await homePage.waitForSelector('main h1');
-  const bodyChunks = fetched.filter((u) => /\/phase\d+-[A-Za-z0-9_-]+\.js/.test(u));
-  check(
-    'ホームでは問題の本文を読まない',
-    bodyChunks.length === 0,
-    bodyChunks.length ? bodyChunks.join(' ') : '本文チャンク 0 件',
-  );
-  await homeCtx.close();
-
-  // 13j. チャンクが取れなくても白い画面にしない（再デプロイ後の古いタブ）
-  const staleCtx = await browser.newContext();
-  const stalePage = await staleCtx.newPage();
-  await stalePage.goto(base, { waitUntil: 'networkidle' });
-  // 問題一覧のチャンクだけ落とす。古い版のタブで起きることと同じ
-  await stalePage.route(/ProblemList-.*\.js/, (route) => route.abort());
-  await stalePage.click('header nav a[href$="#/problems"]');
-  const caught = await stalePage
-    .waitForSelector('[data-testid="error-boundary"]', { timeout: 15000 })
-    .then(() => true)
-    .catch(() => false);
-  const staleText = caught
-    ? await stalePage.locator('[data-testid="error-boundary"]').innerText()
-    : '';
-  check(
-    'チャンクが取れないときに案内を出す（白い画面にしない）',
-    caught && staleText.includes('再読み込み'),
-    staleText.split('\n')[0],
-  );
-  // 別の画面へ移れば元に戻る
-  await stalePage.click('header nav a[href$="#/learn"]');
-  const recovered = await stalePage
-    .waitForSelector('main h1:has-text("教材")', { timeout: 15000 })
-    .then(() => true)
-    .catch(() => false);
-  check('別の画面へ移ればエラー表示は消える', recovered);
-  await staleCtx.close();
-
-  // 14. 「視差効果を減らす」設定を尊重する（MotionConfig reducedMotion="user"）
-  const reducedCtx = await browser.newContext({ reducedMotion: 'reduce' });
-  const reducedPage = await reducedCtx.newPage();
-  await reducedPage.goto(`${base}#/problems/phase1-lv1-001`, { waitUntil: 'domcontentloaded' });
-  await reducedPage.waitForSelector('[data-testid="lesson-toggle"]', { timeout: 60000 });
-  await reducedPage.waitForTimeout(500); // 描画が落ち着いてから押す
-  await reducedPage.click('[data-testid="lesson-toggle"]');
-  await reducedPage.waitForTimeout(60); // 通常なら 260ms かけて縮む
-  // 高さで見る。通常は 60ms 時点でまだ半分以上残っているが、
-  // 設定が効いていれば見出しの高さまで縮み切っている
-  const reducedHeight = await reducedPage
-    .locator('[data-testid="lesson"]')
-    .evaluate((el) => el.getBoundingClientRect().height);
-  check(
-    '視差効果を減らす設定では開閉が即座に終わる',
-    reducedHeight < 120,
-    `${reducedHeight.toFixed(0)}px`,
-  );
-  await reducedCtx.close();
-
-  // 15. 狭い画面でヘッダが崩れない
-  const narrowCtx = await browser.newContext({
-    viewport: { width: 390, height: 800 },
-    isMobile: true,
-    hasTouch: true,
+  await step('ホームの読み込み', async () => {
+    // 13i. ホームでは問題の本文を読まない（一覧に要るのはメタだけ）
+    const homeCtx = await browser.newContext();
+    const homePage = await homeCtx.newPage();
+    const fetched = [];
+    homePage.on('response', (r) => fetched.push(r.url()));
+    await homePage.goto(base, { waitUntil: 'networkidle' });
+    await homePage.waitForSelector('main h1');
+    const bodyChunks = fetched.filter((u) => /\/phase\d+-[A-Za-z0-9_-]+\.js/.test(u));
+    check(
+      'ホームでは問題の本文を読まない',
+      bodyChunks.length === 0,
+      bodyChunks.length ? bodyChunks.join(' ') : '本文チャンク 0 件',
+    );
+    await homeCtx.close();
   });
-  const narrowPage = await narrowCtx.newPage();
-  await narrowPage.goto(`${base}#/problems`, { waitUntil: 'networkidle' });
-  await narrowPage.waitForSelector('ul li a[href*="/problems/"]');
-  const narrow = await narrowPage.evaluate(() => {
-    // whitespace-nowrap なので、入り切らなければ中身がはみ出す
-    const items = [...document.querySelectorAll('header nav a')].map((a) => ({
-      t: a.textContent.trim(),
-      bad: a.scrollWidth > a.clientWidth + 1 || a.getBoundingClientRect().right > window.innerWidth,
-    }));
-    return {
-      // 版面が要求より広がっていたら、内容が入り切らず縮小されたということ
-      layout: window.innerWidth,
-      docW: document.documentElement.scrollWidth,
-      broken: items.filter((i) => i.bad).map((i) => i.t),
-    };
+  await step('古いタブの扱い', async () => {
+    // 13j. チャンクが取れなくても白い画面にしない（再デプロイ後の古いタブ）
+    // Service Worker はキャッシュから返してしまうので、この検査では止める
+    //（見たいのは「取りに行って失敗したとき」の振る舞い）
+    const staleCtx = await browser.newContext({ serviceWorkers: 'block' });
+    const stalePage = await staleCtx.newPage();
+    await stalePage.goto(base, { waitUntil: 'networkidle' });
+    // 問題一覧のチャンクだけ落とす。古い版のタブで起きることと同じ
+    await stalePage.route(/ProblemList-.*\.js/, (route) => route.abort());
+    await stalePage.click('header nav a[href$="#/problems"]');
+    const caught = await stalePage
+      .waitForSelector('[data-testid="error-boundary"]', { timeout: 15000 })
+      .then(() => true)
+      .catch(() => false);
+    const staleText = caught
+      ? await stalePage.locator('[data-testid="error-boundary"]').innerText()
+      : '';
+    check(
+      'チャンクが取れないときに案内を出す（白い画面にしない）',
+      caught && staleText.includes('再読み込み'),
+      staleText.split('\n')[0],
+    );
+    // 別の画面へ移れば元に戻る
+    await stalePage.click('header nav a[href$="#/learn"]');
+    const recovered = await stalePage
+      .waitForSelector('main h1:has-text("教材")', { timeout: 15000 })
+      .then(() => true)
+      .catch(() => false);
+    check('別の画面へ移ればエラー表示は消える', recovered);
+    await staleCtx.close();
   });
-  check(
-    '狭い画面（390px）でナビが折れも切れもしない',
-    narrow.broken.length === 0 && narrow.layout === 390,
-    `版面 ${narrow.layout}px${narrow.broken.length ? ' / ' + narrow.broken.join(',') : ''}`,
-  );
-  check(
-    '狭い画面で横スクロールが出ない',
-    narrow.docW <= narrow.layout,
-    `文書 ${narrow.docW}px / 画面 ${narrow.layout}px`,
-  );
-  // ナビの印は 1 つを使い回して滑る（layoutId）
-  await page.goto(`${base}#/learn`, { waitUntil: 'networkidle' });
-  // ハッシュだけの移動では画面が作り直されないので、目的の項目が現在地になるまで待つ
-  await page.waitForSelector('header nav a[href$="#/learn"][aria-current="page"] span');
-  await page.waitForTimeout(700); // 直前の移動で滑っている最中に測らない
-  const pillX = () =>
-    page
-      .locator('header nav a[aria-current="page"] span')
-      .first()
-      .evaluate((el) => el.getBoundingClientRect().x);
-  const pillFrom = await pillX();
-  await page.click('header nav a[href$="#/problems"]');
-  await page.waitForTimeout(80);
-  const pillMid = await pillX();
-  await page.waitForTimeout(700);
-  const pillTo = await pillX();
-  check(
-    'ナビの選択の印が滑って移動する',
-    pillTo > pillFrom + 20 && pillMid > pillFrom && pillMid < pillTo,
-    `${pillFrom.toFixed(0)} → 途中 ${pillMid.toFixed(0)} → ${pillTo.toFixed(0)}`,
-  );
+  await step('オフライン', async () => {
+    // 13k. 資産を持っておき、通信が無くても開ける
+    const swCtx = await browser.newContext();
+    const swPage = await swCtx.newPage();
+    await swPage.goto(base, { waitUntil: 'networkidle' });
+    const swReady = await swPage
+      .evaluate(() => navigator.serviceWorker?.ready.then(() => true))
+      .catch(() => false);
+    // 資産を拾わせてから通信を切る
+    await swPage.reload({ waitUntil: 'networkidle' });
+    await swCtx.setOffline(true);
+    await swPage.reload({ waitUntil: 'load' }).catch(() => {});
+    const offlineText = await swPage
+      .locator('main')
+      .innerText()
+      .catch(() => '');
+    check(
+      '通信が無くても開ける（Service Worker）',
+      swReady === true && offlineText.includes('学習の進捗'),
+      swReady ? (offlineText ? '本文が出た' : '本文が出ない') : 'SW が起動しない',
+    );
+    await swCtx.setOffline(false);
+    await swCtx.close();
+  });
+  await step('視差効果を減らす設定', async () => {
+    // 14. 「視差効果を減らす」設定を尊重する（MotionConfig reducedMotion="user"）
+    const reducedCtx = await browser.newContext({ reducedMotion: 'reduce' });
+    const reducedPage = await reducedCtx.newPage();
+    await reducedPage.goto(`${base}#/problems/phase1-lv1-001`, { waitUntil: 'domcontentloaded' });
+    await reducedPage.waitForSelector('[data-testid="lesson-toggle"]', { timeout: 60000 });
+    await reducedPage.waitForTimeout(500); // 描画が落ち着いてから押す
+    await reducedPage.click('[data-testid="lesson-toggle"]');
+    await reducedPage.waitForTimeout(60); // 通常なら 260ms かけて縮む
+    // 高さで見る。通常は 60ms 時点でまだ半分以上残っているが、
+    // 設定が効いていれば見出しの高さまで縮み切っている
+    const reducedHeight = await reducedPage
+      .locator('[data-testid="lesson"]')
+      .evaluate((el) => el.getBoundingClientRect().height);
+    check(
+      '視差効果を減らす設定では開閉が即座に終わる',
+      reducedHeight < 120,
+      `${reducedHeight.toFixed(0)}px`,
+    );
+    await reducedCtx.close();
+  });
+  await step('狭い画面', async () => {
+    // 15. 狭い画面でヘッダが崩れない
+    const narrowCtx = await browser.newContext({
+      viewport: { width: 390, height: 800 },
+      isMobile: true,
+      hasTouch: true,
+    });
+    const narrowPage = await narrowCtx.newPage();
+    await narrowPage.goto(`${base}#/problems`, { waitUntil: 'networkidle' });
+    await narrowPage.waitForSelector('ul li a[href*="/problems/"]');
+    const narrow = await narrowPage.evaluate(() => {
+      // whitespace-nowrap なので、入り切らなければ中身がはみ出す
+      const items = [...document.querySelectorAll('header nav a')].map((a) => ({
+        t: a.textContent.trim(),
+        bad:
+          a.scrollWidth > a.clientWidth + 1 || a.getBoundingClientRect().right > window.innerWidth,
+      }));
+      return {
+        // 版面が要求より広がっていたら、内容が入り切らず縮小されたということ
+        layout: window.innerWidth,
+        docW: document.documentElement.scrollWidth,
+        broken: items.filter((i) => i.bad).map((i) => i.t),
+      };
+    });
+    check(
+      '狭い画面（390px）でナビが折れも切れもしない',
+      narrow.broken.length === 0 && narrow.layout === 390,
+      `版面 ${narrow.layout}px${narrow.broken.length ? ' / ' + narrow.broken.join(',') : ''}`,
+    );
+    check(
+      '狭い画面で横スクロールが出ない',
+      narrow.docW <= narrow.layout,
+      `文書 ${narrow.docW}px / 画面 ${narrow.layout}px`,
+    );
+    // ナビの印は 1 つを使い回して滑る（layoutId）
+    await page.goto(`${base}#/learn`, { waitUntil: 'networkidle' });
+    // ハッシュだけの移動では画面が作り直されないので、目的の項目が現在地になるまで待つ
+    await page.waitForSelector('header nav a[href$="#/learn"][aria-current="page"] span');
+    await page.waitForTimeout(700); // 直前の移動で滑っている最中に測らない
+    const pillX = () =>
+      page
+        .locator('header nav a[aria-current="page"] span')
+        .first()
+        .evaluate((el) => el.getBoundingClientRect().x);
+    const pillFrom = await pillX();
+    await page.click('header nav a[href$="#/problems"]');
+    await page.waitForTimeout(80);
+    const pillMid = await pillX();
+    await page.waitForTimeout(700);
+    const pillTo = await pillX();
+    check(
+      'ナビの選択の印が滑って移動する',
+      pillTo > pillFrom + 20 && pillMid > pillFrom && pillMid < pillTo,
+      `${pillFrom.toFixed(0)} → 途中 ${pillMid.toFixed(0)} → ${pillTo.toFixed(0)}`,
+    );
 
-  // 狭い画面でタグを開いたとき、説明が縦に割れない
-  await narrowPage.getByTestId('tag-toggle').click();
-  await narrowPage.waitForSelector('[data-testid="tag-chip"]');
-  await narrowPage.waitForTimeout(400);
-  const hint = await narrowPage
-    .locator('text=問題数の多い順')
-    .evaluate((el) => el.getBoundingClientRect().height);
-  const narrowDoc = await narrowPage.evaluate(() => document.documentElement.scrollWidth);
-  check(
-    '狭い画面でタグを開いても説明が 1 行に収まる',
-    hint < 24 && narrowDoc <= 390,
-    `説明の高さ ${hint.toFixed(0)}px / 文書 ${narrowDoc}px`,
-  );
-  await narrowCtx.close();
+    // 狭い画面でタグを開いたとき、説明が縦に割れない
+    await narrowPage.getByTestId('tag-toggle').click();
+    await narrowPage.waitForSelector('[data-testid="tag-chip"]');
+    await narrowPage.waitForTimeout(400);
+    const hint = await narrowPage
+      .locator('text=問題数の多い順')
+      .evaluate((el) => el.getBoundingClientRect().height);
+    const narrowDoc = await narrowPage.evaluate(() => document.documentElement.scrollWidth);
+    check(
+      '狭い画面でタグを開いても説明が 1 行に収まる',
+      hint < 24 && narrowDoc <= 390,
+      `説明の高さ ${hint.toFixed(0)}px / 文書 ${narrowDoc}px`,
+    );
+    await narrowCtx.close();
+  });
 
   check(
     'コンソールエラーが無い',

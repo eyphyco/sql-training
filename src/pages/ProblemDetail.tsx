@@ -119,7 +119,9 @@ export default function ProblemDetail() {
               <Link to={`/problems?phase=${meta.phase}`} className="text-muted hover:text-fg">
                 {phase?.name}
               </Link>
-              <span className="ml-auto font-mono text-micro text-subtle">{meta.id}</span>
+              <span data-testid="problem-id" className="ml-auto font-mono text-micro text-subtle">
+                {meta.id}
+              </span>
             </div>
 
             <div className="mt-2 flex flex-wrap items-center gap-2">

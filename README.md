@@ -38,6 +38,8 @@ CI（`main` への push）では `lint` → `format:check` → `test` → `valid
 | `smoke` | ブラウザでの通し操作 |
 | `contrast` | 配色のコントラスト比 |
 
+`main` へ push すると、この 4 つが CI で全部走る（`smoke` と `contrast` は Chromium を入れて `vite preview` に当てる）。手元でしか動かないと、画面の後退がそのまま公開されるため。
+
 単体テストは `src/**/*.test.ts` に対象と同じ場所へ置く。`jsdom` 上で走るので `localStorage` などもそのまま試せる。**日付の丸めを確かめるため実行時のタイムゾーンは `Asia/Tokyo` に固定**してある（`vite.config.ts`）。
 
 重点は「間違えると黙って損をするところ」。採点（浮動小数の誤差・NULL と空文字・重複行の個数・並び順）、SQL 分割（文字列やコメントの中のセミコロン・閉じ忘れ・空入力）、進捗（一度正解したら下がらない・壊れた保存データ）、保存の復元（形の壊れた結果を返さない）。
@@ -62,9 +64,12 @@ CI（`main` への push）では `lint` → `format:check` → `test` → `valid
 
 一覧のチップで絞り込む。**同じ種類の中は OR、種類どうしは AND**。Lv2 を飛ばして「Lv1 と Lv3」だけ見たい場面があるので、単一選択にしていない。
 
+- **言葉でも引ける**（題名・ID・タグ。`?q=結合`）。分類だけでは「あの問題」に辿り着けない
+- **状態は 4 つ**。未正解 / 正解済み / 間違えた / 要復習。挑戦回数・自己採点・履歴の正誤はずっと記録していたのに、画面から辿れなかった
 - 選んだ条件は URL に載る（`?level=1,3&tag=NULL`）。値が 1 つだけの `?phase=6` も読めるので、問題ページから貼っているリンクはそのまま動く
 - チップの数字は**その種類だけ外して数えた件数**。「Lv3 も足したら何件になるか」を表す。自分の選択を含めて数えると 0 が並んで選び直せなくなる
 - 0 件になるチップは押せない（押しても結果が変わらないため）
+- **タグの語彙は決めてある**（[src/data/tags.ts](src/data/tags.ts)）。構文タグは SQL に書くとおりの大文字（`GROUP BY`）、概念タグは日本語（`結合`）。`validate` が語彙に無いタグを弾く。何となく増やすと `group by` と `結合` と `inner join` が同じ次元に並び、何の分類か読み取れなくなる
 - **タグは既定で畳んで 1 行**にしてある。72 種類あり、並べると絞り込み全体が読みにくくなる。開いたときも一覧に高さを決めて中で送る（パネルごと伸びると問題一覧が画面の外へ出る）。選んだタグは「絞り込み中」に出るので、畳んでも見失わない
 - **並びは問題数の多い順**、同数なら五十音順。既定の `sort()` では符号位置順（数字 → 英大 → 英小 → カタカナ → 漢字）に並んで何順か読み取れなかった。件数は各チップに出す
 
@@ -95,9 +100,11 @@ CI（`main` への push）では `lint` → `format:check` → `test` → `valid
 
 - **左ペイン**: SQL エディタ（CodeMirror。テーブル名・列名の補完が効く）
   - `実行` / `F5` / `Ctrl+Enter` … クエリを実行する。`F5` は SSMS や DBeaver と同じ「実行」に割り当て、SQL 問題を開いている間だけブラウザのリロードを抑止する（再読み込みは `Ctrl+R`）
-  - `EXPLAIN` … いまエディタにある SQL の実行計画を表示する
+  - `EXPLAIN` … 実行計画を**演算子の木**で表示する。「実測（ANALYZE）」に切り替えると、実際に走らせた所要時間と実測行数が見積りの隣に並ぶ
   - `Tab` / `Enter` で補完を確定、`Esc` で閉じる。**候補が出ていないときの `Tab` は通常どおりインデント**
 - **右ペイン**: `実行結果` / `スキーマ` / `実行計画` の 3 タブ
+  - **実行計画**は `EXPLAIN (FORMAT JSON)` を木にして出す。DuckDB の既定の出力は枠線で描いた図で、1 ノードが 7 行の箱になり木の形が読めない。内部処理の列（`__internal_*`）は落とし、結合だけ色を当てる
+  - **SQL のエラーは、その行をエディタで塗る**（`LINE 3:` と出るのに無反応だった）。複数の文があるときは印を付けない（何文目の行か決まらないため）
   - **スキーマ**はテーブル名を帯に貼り付け、列はその内側に字下げして並べる。同じ書体・同じ左端で並ぶとテーブルと列が混ざって見えるため、位置・太さ・色の 3 つで差を付けている
   - **実行結果**は見出しを太字にして罫を 1 段濃くし（どこからがデータか分かる）、数値だけの列は右に寄せる（桁が揃って大小を比べられる）
 - **`ANSWER`** … **直近の実行結果**を使って採点する
@@ -166,6 +173,21 @@ CI（`main` への push）では `lint` → `format:check` → `test` → `valid
 }
 ```
 
+### 記録から引き出すもの
+
+保存しているのは「解けたか」だけではない。挑戦回数・自己採点（要復習）・履歴（正誤つき 100 件）から、次のものを出す（[src/storage/review.ts](src/storage/review.ts)）。
+
+| 出すもの | 元 | どこに出るか |
+| --- | --- | --- |
+| 間違えた問題 | 履歴の不正解 + 挑戦したが未正解 | 一覧の絞り込み |
+| 要復習 | 記述式の自己採点 | 一覧の絞り込み、問題ページの札 |
+| 挑戦回数 | `attempts` | 問題ページの札 |
+| 苦手な章 | 章ごとの正答率（3 回以上挑戦した章だけ） | ホームのカリキュラム |
+
+「苦手」は自分の成績から出したもの、「弱点」はカリキュラムを組んだときに決めた固定の札。別物なので、成績が出たらそちらを優先して出す。
+
+**別のタブで解いた分は取り込む**（`storage` イベント）。2 つ開いていると、後から保存したほうで上書きされて消えていた。
+
 ## 表示
 
 ### 配色
@@ -195,6 +217,10 @@ Claude の配色に寄せた**暖かいニュートラル + テラコッタ**。
 **色は一瞬で入れ替えず、切り替えの間だけつなぐ**（`applyTheme()` が `:root` に `.theme-fading` を付けて外す）。常時 `*` に `transition` を掛けると操作のたびに重くなるため。`transform` と `opacity` は対象外（Motion と二重に効く）。
 
 **下地 200ms / 文字 140ms** と文字だけ短い。黒い文字と白い下地が入れ替わる以上、途中で必ず「どちらも中間の灰色」になる瞬間を通るので、文字を先に着地させて短く抜ける（実測で 3:1 を下回るのは約 40ms）。「視差効果を減らす」設定でも止めない。避けたいのは動きではなく明暗の急変のため。
+
+### 文字の大きさ
+
+**7 段だけ**（`text-micro` 10.5px / `text-tiny` 11.5 / `text-small` 12.5 / `text-body` 13.5 / `text-lead` 15 / `text-title` 17 / `text-display` 19）。段は `index.css` の `@theme` に置いてある。以前は直値（`text-[11.5px]` など）が 13 種類あり、新しい要素を足すときにどれを使うべきか決められなかった。色を 1 か所に集めたのと同じ理由で、文字も名前で呼ぶ。
 
 ### アイコン
 
@@ -259,9 +285,16 @@ DOM 上は本文を先に置き、サイドバーは `lg:col-start-1` で左へ�
 - `HashRouter` なのでリロード時の 404 対策（`404.html` など）は不要
 - **CSP をビルド時に `index.html` へ埋める**（Pages はヘッダを足せないため meta で入れる）。配色の先読みスクリプトはインラインなので、内容から sha256 を計算して許可する。`frame-ancestors` は meta では効かない（ヘッダ専用）
 
+**再デプロイすると資産の名前が変わる**ので、開いたままのタブは次の画面のチャンクが 404 になる。境界（[ErrorBoundary](src/components/ErrorBoundary.tsx)）で受け止めて、原因（新しい版が出た）と直しかた（再読み込み）を出す。`smoke` に「チャンクを落としても白い画面にならない」検査がある。
+
 ### ビルド成果物のサイズ
 
-初回に読むのは **gzip 193KB**。ホーム以外のルートは `React.lazy` で分けてあり、問題ページ（CodeMirror・DuckDB・Arrow）は開いたときに +203KB 取りに行く。
+初回に読むのは **gzip 127KB**。分けてあるのは 2 か所。
+
+- ホーム以外のルートは `React.lazy`。問題ページ（CodeMirror・DuckDB・Arrow）は開いたときに +204KB
+- **問題データは「一覧に要る分」と「本文」に分けてある**。一覧・目次・進捗が要るのは id / 種別 / フェーズ / レベル / 題名 / タグだけで gzip 3KB、本文まで入れると 66KB。前者は `vite.config.ts` の `problemMeta` プラグインが仮想モジュールとして作り（生成物を git に置かないので元データとずれない）、本文はフェーズ単位で開いたときに読む
+
+**Service Worker** で資産を持っておく（[public/sw.js](public/sw.js)）。ハッシュの付いた資産と wasm はキャッシュ優先、入口の HTML はネットワーク優先。再訪が速くなり、通信が無くても学習を続けられる。
 
 DuckDB の WebAssembly は `dist/` 上で約 77MB、配信時は gzip で約 8MB（`eh` 版のみ取得）。`mvp` 版は例外機能に対応しない古いブラウザ向けのフォールバックなので、外せば `dist/` を半減できる（[src/engine/duckdb.ts](src/engine/duckdb.ts) の `BUNDLES`）。
 
@@ -271,11 +304,17 @@ DuckDB の WebAssembly は `dist/` 上で約 77MB、配信時は gzip で約 8MB
 src/
 ├── components/   SqlWorkbench / QueryEditor / ResultTable / ChoiceQuestion / WrittenQuestion
 │                 ProblemNav / ChapterNav / LessonPanel / ThemeToggle
-│                 ui.tsx（Button・Card・Meter・Tag・AnimatedNumber）、icons.tsx、motion.ts
+│                 PlanView（実行計画の木）、NavPanel（目次の共通部分）
+│                 ErrorBoundary、useWorkbench.ts（DuckDB の用意とキー処理）
+│                 ui.tsx（Button・Card・Meter・Tag・AnimatedNumber・LiveMessage）
+│                 icons.tsx、motion.ts
 ├── theme/        ライト/ダーク切り替え
 ├── data/         problems/*.json、lessons/*.json、phases.ts、problems.ts、lessons.ts
-├── engine/       duckdb.ts（初期化・実行・EXPLAIN）、judge.ts（採点・エラー解説）
+│                 tags.ts（タグの語彙）
+├── engine/       duckdb.ts（初期化・実行・EXPLAIN）、plan.ts（実行計画の読み取り）
+│                 judge.ts（採点・エラー解説・エラー行の割り出し）
 ├── storage/      progress.ts（localStorage）、workbenchSession.ts（sessionStorage）
+│                 review.ts（間違えた問題・要復習・章ごとの正答率）
 ├── pages/        Home / Learn / LearnChapter / ProblemList / ProblemDetail / Settings
 │                 problemFilter.ts（一覧の絞り込み。URL ↔ 条件の変換と照合）
 └── types.ts      問題データと進捗の型定義

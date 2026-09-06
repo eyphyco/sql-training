@@ -447,6 +447,7 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
       {judgement && (
         <motion.div
           key={judgeSeq}
+          data-testid="judge-result"
           variants={RISE}
           initial="hidden"
           animate="shown"

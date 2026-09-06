@@ -89,9 +89,10 @@ for (const theme of ['light', 'dark']) {
   };
 
   await submit(NG);
-  await measure('不正解の見出し (danger)', 'text=不正解：結果セットが期待と一致しません');
+  // 読み上げ用の控えも同じ文言を持つので、見えている方を testid で名指しする
+  await measure('不正解の見出し (danger)', '[data-testid="judge-result"] p');
   await submit(OK);
-  await measure('正解の見出し (success)', 'text=正解！結果セットが完全に一致しました。');
+  await measure('正解の見出し (success)', '[data-testid="judge-result"] p');
 
   await page.goto(`${base}/#/problems/phase2-lv2-004`, { waitUntil: 'networkidle' });
   await page.waitForSelector('[data-testid="problem-nav"]', { timeout: 60000 });
@@ -101,7 +102,9 @@ for (const theme of ['light', 'dark']) {
   await measure('パンくずリンク (muted)', 'a:has-text("ウィンドウ関数")');
   await measure('実行ボタン (on-accent)', '[data-testid="run"]');
   await measure('サイドバー現在地 (accent)', '[data-testid="nav-current"] span', 2);
-  await measure('問題 ID (subtle)', 'span.font-mono');
+  await measure('問題 ID (subtle)', '[data-testid="problem-id"]');
+  // 目次の章番号。地が 1 段明るいので、本文と同じ色では足りない
+  await measure('目次の章番号 (subtle)', '[data-testid="problem-nav"] span.font-mono');
 
   // 右ペイン: 型のチップと、1 行おきに敷いた帯の上の値
   const pane = page.locator('[data-testid="result-pane"]');
