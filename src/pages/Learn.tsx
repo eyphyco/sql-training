@@ -59,9 +59,7 @@ export default function Learn() {
                       className="ml-auto text-subtle transition-colors group-hover:text-accent"
                     />
                   </div>
-                  <p className="mt-1.5 mb-3 text-small leading-relaxed text-muted">
-                    {lesson.lead}
-                  </p>
+                  <p className="mt-1.5 mb-3 text-small leading-relaxed text-muted">{lesson.lead}</p>
                   <ul className="mb-4 space-y-0.5">
                     {lesson.sections.map((s) => (
                       <li key={s.id} className="flex items-start gap-1.5 text-tiny text-subtle">

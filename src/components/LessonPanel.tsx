@@ -74,9 +74,7 @@ export default function LessonPanel({ problemId }: { problemId: string }) {
             <div className="divide-y divide-line">
               {sections.map((s) => (
                 <article key={s.id} className="p-5">
-                  <h3 className="mb-2 text-lead font-semibold tracking-tight text-fg">
-                    {s.title}
-                  </h3>
+                  <h3 className="mb-2 text-lead font-semibold tracking-tight text-fg">{s.title}</h3>
                   <Markdown>{s.body_md}</Markdown>
                 </article>
               ))}

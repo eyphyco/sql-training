@@ -75,9 +75,7 @@ export default function ResultTable({
               key={r}
               className="border-b border-line/60 transition-colors last:border-0 odd:bg-raised/40 hover:bg-accent-soft/60"
             >
-              <td className="px-2 py-1.5 text-right font-mono text-micro text-subtle">
-                {r + 1}
-              </td>
+              <td className="px-2 py-1.5 text-right font-mono text-micro text-subtle">{r + 1}</td>
               {row.map((cell, c) => (
                 <td
                   key={c}

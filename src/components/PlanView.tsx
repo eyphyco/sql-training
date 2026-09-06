@@ -53,11 +53,7 @@ function Row({ node }: { node: PlanNode }) {
           {node.name}
         </span>
         {node.info.map(([label, value]) => (
-          <span
-            key={label}
-            title={`${label}: ${value}`}
-            className="min-w-0 text-tiny text-muted"
-          >
+          <span key={label} title={`${label}: ${value}`} className="min-w-0 text-tiny text-muted">
             <span className="text-subtle">{label}: </span>
             <span className="font-mono">{value}</span>
           </span>
