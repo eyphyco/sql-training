@@ -3,8 +3,7 @@
  *
  * トークンの値だけで計算するとガラス（半透明の面＋背後のにじみ）を
  * 無視してしまうので、スクリーンショットを撮って読む。
- * 文字は面積が小さいので、1 パーセンタイルを前景、99 パーセンタイルを
- * 背景と見なしてアンチエイリアスの外れ値を落としている。
+ * 明暗の両端を前景・背景と見なし、アンチエイリアスの外れ値を落とす。
  *
  * 使い方: node scripts/contrast.mjs [base-url]
  */
@@ -39,8 +38,21 @@ function ratioOfRegion([base64, box]) {
       ls.push(0.2126 * lin(data[i]) + 0.7152 * lin(data[i + 1]) + 0.0722 * lin(data[i + 2]));
     }
     ls.sort((a, b) => a - b);
-    const lo = ls[Math.floor(ls.length * 0.01)];
-    const hi = ls[Math.floor(ls.length * 0.99)];
+    /*
+      端は「割合」ではなく「枚数」で取る。
+
+      文字が箱に占める面積は箱の大きさで変わるので、1 パーセンタイルの
+      ような割合だと、広い箱に短い文が載ったときにサンプルが文字の芯を
+      通り越してアンチエイリアスの傾斜に入り、実際より低く出る
+      （幅 1000px の判定パネルの見出しで、芯は rgb(176,38,54)=4.66:1
+      なのに、1% の位置は縁の rgb(190,79,90) で 3.32:1 に見えていた）。
+
+      枚数を決め打ちし、その中央値を取る。1 点だけの外れ値にも引かれない。
+    */
+    const edge = Math.min(400, Math.max(24, Math.round(ls.length * 0.002)));
+    const mid = (part) => part[Math.floor(part.length / 2)];
+    const lo = mid(ls.slice(0, edge));
+    const hi = mid(ls.slice(-edge));
     return (hi + 0.05) / (lo + 0.05);
   })();
 }
@@ -109,6 +121,9 @@ for (const theme of ['light', 'dark']) {
   // 右ペイン: 型のチップと、1 行おきに敷いた帯の上の値
   const pane = page.locator('[data-testid="result-pane"]');
   await pane.getByRole('button', { name: 'スキーマ' }).click();
+  // 選んだタブは面ごと accent になる。文字が白のままなので、ここは実測しておく
+  await page.waitForTimeout(500);
+  await measure('選んだタブ (on-accent)', '[data-testid="right-tabs"] button[data-active="true"]');
   await page.waitForTimeout(500);
   await measure('列の型チップ (subtle)', '[data-testid="schema-type"]');
   await pane.getByRole('button', { name: '実行結果' }).click();
@@ -131,6 +146,14 @@ for (const theme of ['light', 'dark']) {
   await page.waitForTimeout(900);
   await measure('目次の今いる章 (accent)', '[data-testid="chapter-row-current"]');
   await measure('目次の読んでいる節 (accent)', '[data-testid="chapter-nav-current"]');
+
+  // 右端の節目盛り。名前は指したときだけ浮く（1680px なので目盛りは出る）
+  const dash = page.locator('[data-testid="rail-dash"]').first();
+  if ((await dash.count()) > 0) {
+    await dash.hover();
+    await page.waitForTimeout(400);
+    await measure('目盛りの節名 (fg)', '[data-testid="rail-label"]');
+  }
 
   await ctx.close();
 }
