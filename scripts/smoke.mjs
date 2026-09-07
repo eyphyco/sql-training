@@ -105,23 +105,53 @@ try {
     Math.abs(thumbMid - thumbEnd) > 2,
     `途中 ${thumbMid.toFixed(0)} / 到達 ${thumbEnd.toFixed(0)}`,
   );
-  // 切り替えた瞬間、外れた側は沈み、選ばれた側は下から昇る
+  /*
+    切り替えた瞬間、外れた側は沈み、選ばれた側は下から昇る。
+
+    「ある瞬間の位置」を 1 点だけ測ると、その 1 コマが描かれた時刻しだいで
+    0 が返る（動き自体は 500ms あるのに、押してから最初のコマまでに 150ms
+    掛かることがある）。押すところから終わりまでを画面の中で毎コマ拾い、
+    位置の並び全体で形を見る。
+  */
   const iconY = (label) =>
     page
       .locator(`button[aria-label="${label}"] span`)
       .evaluate((el) => Math.round(new DOMMatrixReadOnly(getComputedStyle(el).transform).m42));
   await page.click('button[aria-label="ライト"]');
   await page.waitForTimeout(700);
-  await page.click('button[aria-label="ダーク"]');
-  await page.waitForTimeout(150);
-  const sinking = await iconY('ライト');
-  const rising = await iconY('ダーク');
-  await page.waitForTimeout(700);
-  check('外れた側のアイコンが沈む', sinking > 4, `y=${sinking}`);
+  const swing = await page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const y = (label) => {
+          const el = document.querySelector(`button[aria-label="${label}"] span`);
+          return new DOMMatrixReadOnly(getComputedStyle(el).transform).m42;
+        };
+        const light = [];
+        const dark = [];
+        const started = performance.now();
+        const tick = () => {
+          light.push(y('ライト'));
+          dark.push(y('ダーク'));
+          if (performance.now() - started < 900) requestAnimationFrame(tick);
+          else resolve({ light, dark });
+        };
+        document.querySelector('button[aria-label="ダーク"]').click();
+        requestAnimationFrame(tick);
+      }),
+  );
+  const peakAt = (series) => series.indexOf(Math.max(...series));
+  const lightPeak = Math.max(...swing.light);
+  const darkPeak = Math.max(...swing.dark);
+  const lastOf = (series) => series[series.length - 1];
+  check(
+    '外れた側のアイコンが沈んでから戻る',
+    lightPeak > 4 && peakAt(swing.light) > 0 && Math.abs(lastOf(swing.light)) < 1,
+    `頂点 ${lightPeak.toFixed(0)}px（${peakAt(swing.light)} コマ目 / 全 ${swing.light.length} コマ）`,
+  );
   check(
     '選ばれた側のアイコンが下から昇る',
-    rising > 4 && (await iconY('ダーク')) === 0,
-    `途中 y=${rising} → ${await iconY('ダーク')}`,
+    darkPeak > 4 && peakAt(swing.dark) < swing.dark.length / 2 && Math.abs(lastOf(swing.dark)) < 1,
+    `頂点 ${darkPeak.toFixed(0)}px（${peakAt(swing.dark)} コマ目）→ ${lastOf(swing.dark).toFixed(0)}`,
   );
   check('沈んだアイコンは元の位置に戻る', (await iconY('ライト')) === 0);
   await page.click('button[aria-label="システム設定に従う"]');
@@ -1242,6 +1272,207 @@ try {
       `説明の高さ ${hint.toFixed(0)}px / 文書 ${narrowDoc}px`,
     );
     await narrowCtx.close();
+  });
+
+  /*
+    9. Rare UI（rareui.com・MIT）から採り入れた動き。
+    「置いてある」ことではなく「実際に動いている」ことを見る。
+  */
+  await step('数字は桁の輪が回って入れ替わる', async () => {
+    await page.goto(`${base}#/problems`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('[data-testid="odometer-digit"]');
+    await page.waitForTimeout(600);
+    const digits = () =>
+      page
+        .locator('[data-testid="odometer-digit"]')
+        .evaluateAll((els) => els.map((e) => e.dataset.digit).join(''));
+    // 輪そのものの位置。桁の中で上下に動く
+    const wheelY = () =>
+      page
+        .locator('[data-testid="odometer-digit"] > span:last-child')
+        .last()
+        .evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).m42);
+
+    const before = await digits();
+    await page.locator('[data-testid="phase-chip"]').first().click();
+    await page.waitForTimeout(90);
+    const mid = await wheelY();
+    await page.waitForTimeout(900);
+    const after = await digits();
+    const settled = await wheelY();
+    check(
+      '数字は桁の輪が回って入れ替わる',
+      before !== after && Math.abs(mid - settled) > 2,
+      `${before} → ${after}・輪 ${mid.toFixed(0)} → ${settled.toFixed(0)}`,
+    );
+  });
+
+  await step('タブの継ぎ目がちぎれて離れる', async () => {
+    await page.goto(`${base}#/problems/phase1-lv1-001`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('[data-testid="right-tabs"]');
+    await page.waitForTimeout(800);
+    const tileX = (n) =>
+      page
+        .locator('[data-testid="right-tabs"] li')
+        .nth(n)
+        .evaluate((el) => el.getBoundingClientRect().x);
+    // スキーマ（真ん中）が選ばれている間は継ぎ目が両側とも開いている。
+    // 実行結果へ移すと右端の継ぎ目が閉じ、3 つ目の区画が左へ寄る
+    const from = await tileX(2);
+    await page.locator('[data-testid="right-tabs"] button').first().click();
+    await page.waitForTimeout(80);
+    const mid = await tileX(2);
+    await page.waitForTimeout(800);
+    const to = await tileX(2);
+    check(
+      'タブの継ぎ目がちぎれて離れる',
+      to < from - 8 && mid > to + 1 && mid < from,
+      `${from.toFixed(0)} → 途中 ${mid.toFixed(0)} → ${to.toFixed(0)}`,
+    );
+  });
+
+  await step('実行計画を実行順に 1 歩ずつ送れる', async () => {
+    await page.goto(`${base}#/problems/phase1-lv1-001`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('[data-testid="run"]', { timeout: 60000 });
+    await typeSql('SELECT class, COUNT(*) AS n FROM students GROUP BY class ORDER BY n DESC;');
+    await page.locator('[data-testid="explain"]').click();
+    await page.waitForSelector('[data-testid="step-player"]', { timeout: 30000 });
+    const nodeName = () =>
+      page.locator('[data-testid="plan-node-current"] [data-testid="plan-node-name"]').innerText();
+    check(
+      '再生前は全体が出ている（今いる行は無い）',
+      (await page.locator('[data-testid="plan-node-current"]').count()) === 0,
+    );
+    await page.locator('[data-testid="step-play"]').click();
+    await page.waitForSelector('[data-testid="plan-node-current"]');
+    const first = await nodeName();
+    await page.waitForTimeout(1400);
+    const second = await nodeName();
+    check(
+      '実行計画を実行順に 1 歩ずつ送れる',
+      first !== second,
+      `${first.trim()} → ${second.trim()}`,
+    );
+    // 木は上が最後の処理なので、送るほど上へ上がる
+    const upward = await page
+      .locator('[data-testid="plan-node-current"]')
+      .evaluate((el) => el.getBoundingClientRect().y);
+    check('送るほど木の上へ進む（下が先に動く）', upward > 0);
+  });
+
+  await step('模範解答をその場で写せる', async () => {
+    await page
+      .context()
+      .grantPermissions(['clipboard-read', 'clipboard-write'])
+      .catch(() => {});
+    await page.goto(`${base}#/problems/phase1-lv1-002`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('[data-testid="run"]', { timeout: 60000 });
+    const reveal = page.locator('button:has-text("解答・解説を見る")');
+    if ((await reveal.count()) > 0) await reveal.click();
+    await page.waitForSelector('[data-testid="copy-sql"]');
+    await page.locator('[data-testid="copy-sql"]').click();
+    await page.waitForSelector('[data-testid="copy-sql"][data-copied="true"]', { timeout: 5000 });
+    const copied = await page.evaluate(() => navigator.clipboard.readText()).catch(() => '');
+    check(
+      '模範解答をその場で写せる',
+      copied === '' || copied.toUpperCase().includes('SELECT'),
+      copied ? copied.split('\n')[0] : '印だけ確認（クリップボード読み取り不可）',
+    );
+  });
+
+  await step('学んだ日が枡で並ぶ', async () => {
+    await page.goto(base, { waitUntil: 'networkidle' });
+    await page.waitForSelector('[data-testid="activity-heatmap"]');
+    await page.waitForTimeout(700);
+    const cells = page.locator('[data-testid="activity-cell"]');
+    const total = await cells.count();
+    const lit = await cells.evaluateAll(
+      (els) => els.filter((e) => Number(e.dataset.level) > 0).length,
+    );
+    check(
+      '学んだ日が枡で並び、解いた日に色が付く',
+      total > 150 && lit > 0,
+      `${total} 枡・色つき ${lit} 日`,
+    );
+    // 触れるとその日の内訳が出る
+    const litCell = page.locator('[data-testid="activity-cell"][data-level="4"]').first();
+    await litCell.hover();
+    await page.waitForSelector('[data-testid="activity-tip"]', { timeout: 3000 });
+    const tip = await page.locator('[data-testid="activity-tip"]').innerText();
+    check('枡に触れるとその日の内訳が出る', /月.*日/.test(tip), tip);
+  });
+
+  await step('節の目盛りは近づいた所だけ伸びる', async () => {
+    // 目盛りは横に余白のある画面でだけ出す
+    const wideCtx = await browser.newContext({ viewport: { width: 1700, height: 1000 } });
+    const wide = await wideCtx.newPage();
+    await wide.goto(`${base}#/learn/2`, { waitUntil: 'networkidle' });
+    await wide.waitForSelector('[data-testid="section-rail"]');
+    await wide.waitForTimeout(600);
+    const dash = wide.locator('[data-testid="rail-dash"]').first();
+    const dashW = () =>
+      dash.locator('span[aria-hidden]').evaluate((el) => el.getBoundingClientRect().width);
+    const rest = await dashW();
+    const box = await dash.boundingBox();
+    await wide.mouse.move(box.x + box.width - 6, box.y + box.height / 2);
+    await wide.waitForTimeout(500);
+    const near = await dashW();
+    check(
+      '節の目盛りは近づいた所だけ伸びる',
+      near > rest + 6,
+      `${rest.toFixed(0)}px → ${near.toFixed(0)}px`,
+    );
+    await wide.waitForSelector('[data-testid="rail-label"]', { timeout: 3000 });
+    check('目盛りに触れるとその節の名前が出る', true);
+    await wideCtx.close();
+  });
+
+  await step('章の札は指すと節がずれる', async () => {
+    await page.goto(`${base}#/learn`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('[data-testid="chapter-card"]');
+    await page.waitForTimeout(700);
+    const card = page.locator('[data-testid="chapter-card"]').first();
+    const rowX = () =>
+      card
+        .locator('ul li')
+        .last()
+        .evaluate((el) => el.getBoundingClientRect().x);
+    const rest = await rowX();
+    await card.hover();
+    await page.waitForTimeout(500);
+    const fanned = await rowX();
+    check(
+      '章の札は指すと節が扇状にずれる',
+      fanned > rest + 2,
+      `${rest.toFixed(1)} → ${fanned.toFixed(1)}`,
+    );
+  });
+
+  await step('リセットは蓋が開いてから消える', async () => {
+    await page.goto(`${base}#/settings`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('[data-testid="confirm-delete"]');
+    await page.waitForTimeout(500);
+    const stored = () =>
+      page.evaluate(() => {
+        const raw = localStorage.getItem('sql-training:progress:v1');
+        return raw ? Object.keys(JSON.parse(raw).solvedProblems ?? {}).length : 0;
+      });
+    const had = await stored();
+    await page.locator('[data-testid="confirm-delete-trigger"]').click();
+    await page.waitForSelector('[data-testid="confirm-delete-panel"]');
+    check(
+      '押しただけでは消えない（蓋が開くだけ）',
+      (await stored()) === had && had > 0,
+      `記録 ${had} 件のまま`,
+    );
+    await page.locator('button[aria-label="やめる"]').click();
+    await page.waitForTimeout(500);
+    check('やめれば記録は残る', (await stored()) === had);
+    await page.locator('[data-testid="confirm-delete-trigger"]').click();
+    await page.waitForSelector('button[aria-label="進捗をすべて削除する"]');
+    await page.locator('button[aria-label="進捗をすべて削除する"]').click();
+    await page.waitForTimeout(600);
+    check('確かめてから消える', (await stored()) === 0, `${had} 件 → 0 件`);
   });
 
   check(

@@ -1,6 +1,9 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
+import { flattenExecution } from '../engine/plan';
 import type { PlanNode, QueryPlan } from '../engine/plan';
-import { RISE, STAGGER } from './motion';
+import { RISE, SLIDE, STAGGER } from './motion';
+import StepPlayer from './rare/StepPlayer';
 
 /*
   実行計画を木で見せる。
@@ -11,6 +14,9 @@ import { RISE, STAGGER } from './motion';
 
   結合と全件走査はこの教材の主題なので、そこだけ色を当てる
   （彩度の高い色は正誤の表示に取ってあるので、地の色との差で示す）。
+
+  木は「上が最後、下ほど先」に読む。この向きは慣れないと逆に見えるので、
+  実際に動く順へ 1 歩ずつ進める再生を付けてある。
 */
 
 type Kind = 'join' | 'scan' | 'group' | 'sort' | 'plain';
@@ -33,7 +39,13 @@ const TONE: Record<Kind, string> = {
 
 const nf = new Intl.NumberFormat('ja-JP');
 
-function Row({ node }: { node: PlanNode }) {
+interface Walk {
+  /** 何歩目まで進んだか。null なら再生していない（全部そのまま出す） */
+  step: number | null;
+  rank: Map<PlanNode, number>;
+}
+
+function Row({ node, walk }: { node: PlanNode; walk: Walk }) {
   const kind = kindOf(node.name);
   const estimate = node.rows;
   const actual = node.actualRows;
@@ -44,10 +56,37 @@ function Row({ node }: { node: PlanNode }) {
     estimate > 0 &&
     (actual / estimate >= 10 || (actual >= 10 && actual / estimate <= 0.1));
 
+  const rank = walk.rank.get(node) ?? 0;
+  const current = walk.step !== null && rank === walk.step;
+  const ahead = walk.step !== null && rank > walk.step;
+  const ref = useRef<HTMLDivElement>(null);
+
+  // いま動いている所がペインの外だと、再生しても何も見えない
+  useEffect(() => {
+    if (current) ref.current?.scrollIntoView({ block: 'nearest' });
+  }, [current]);
+
   return (
     <motion.li variants={RISE}>
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 py-[3px]">
+      <motion.div
+        ref={ref}
+        data-testid={current ? 'plan-node-current' : 'plan-node'}
+        animate={{ opacity: ahead ? 0.35 : 1 }}
+        transition={SLIDE}
+        className={`relative flex flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-sm py-[3px] ${
+          current ? 'pl-1.5' : ''
+        }`}
+      >
+        {/* 再生中の 1 行。帯は 1 つを使い回して滑らせる */}
+        {current && (
+          <motion.span
+            layoutId="plan-step"
+            transition={SLIDE}
+            className="absolute inset-y-0 -left-1 -z-10 w-[calc(100%+0.5rem)] rounded-sm bg-accent-soft ring-1 ring-accent-line"
+          />
+        )}
         <span
+          data-testid="plan-node-name"
           className={`shrink-0 rounded border px-1.5 py-0.5 font-mono text-micro font-medium ${TONE[kind]}`}
         >
           {node.name}
@@ -69,12 +108,12 @@ function Row({ node }: { node: PlanNode }) {
             <span className="ml-1.5 text-fg">{node.ms.toFixed(1)}ms</span>
           )}
         </span>
-      </div>
+      </motion.div>
       {node.children.length > 0 && (
         // 入れ子は 1 段ごとに罫 1 本。結合のように子が 2 つある所で形が見える
         <ul className="ml-2 border-l border-line pl-3">
           {node.children.map((child, i) => (
-            <Row key={`${child.name}-${i}`} node={child} />
+            <Row key={`${child.name}-${i}`} node={child} walk={walk} />
           ))}
         </ul>
       )}
@@ -83,6 +122,21 @@ function Row({ node }: { node: PlanNode }) {
 }
 
 export default function PlanView({ plan }: { plan: QueryPlan }) {
+  const order = useMemo(() => flattenExecution(plan.root), [plan]);
+  const rank = useMemo(() => new Map(order.map((n, i) => [n, i])), [order]);
+  const [step, setStep] = useState<number | null>(null);
+  const [playing, setPlaying] = useState(false);
+
+  // 計画が入れ替わったら、描画中に再生を畳む（古い木の位置が 1 フレーム残らない）
+  const [seen, setSeen] = useState(plan);
+  if (seen !== plan) {
+    setSeen(plan);
+    setStep(null);
+    setPlaying(false);
+  }
+
+  const current = step === null ? null : order[step];
+
   return (
     <div className="p-3">
       {plan.analyzed && (
@@ -96,11 +150,55 @@ export default function PlanView({ plan }: { plan: QueryPlan }) {
               <span className="tnum font-medium text-fg">{nf.format(plan.scannedRows)}</span>
             </span>
           )}
-          <span className="text-subtle">上が最後の処理、下へ行くほど先に動く</span>
         </p>
       )}
+
+      {/*
+        木は上が最後の処理。読む向きが逆なので、実際に動く順へ
+        1 歩ずつ送れるようにしてある（下から上へ光が移る）。
+      */}
+      {order.length > 1 && (
+        <div className="mb-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-line pb-2">
+          <StepPlayer
+            steps={order.length}
+            value={step ?? 0}
+            onValueChange={setStep}
+            playing={playing}
+            onPlayingChange={(p) => {
+              if (p && step === null) setStep(0);
+              setPlaying(p);
+            }}
+            label="番目"
+          />
+          <span className="text-tiny text-subtle">
+            {current ? (
+              <>
+                <span className="tnum font-medium text-fg">
+                  {(step ?? 0) + 1}/{order.length}
+                </span>{' '}
+                <span className="font-mono text-fg">{current.name}</span>
+              </>
+            ) : (
+              '上が最後の処理、下へ行くほど先に動く'
+            )}
+          </span>
+          {step !== null && (
+            <button
+              type="button"
+              onClick={() => {
+                setPlaying(false);
+                setStep(null);
+              }}
+              className="ml-auto shrink-0 text-tiny text-muted underline underline-offset-2 hover:text-fg"
+            >
+              全体に戻す
+            </button>
+          )}
+        </div>
+      )}
+
       <motion.ul variants={STAGGER} initial="hidden" animate="shown" data-testid="plan-tree">
-        <Row node={plan.root} />
+        <Row node={plan.root} walk={{ step, rank }} />
       </motion.ul>
     </div>
   );

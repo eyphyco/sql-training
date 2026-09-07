@@ -1,8 +1,10 @@
 import { useRef, useState } from 'react';
 import { useProgress } from '../storage/progressContext';
 import { useTheme } from '../theme/themeContext';
-import { AnimatedNumber, Button, Card, SectionTitle } from '../components/ui';
-import { IconDownload, IconTrash, IconUpload } from '../components/icons';
+import { Button, Card, SectionTitle } from '../components/ui';
+import Odometer from '../components/rare/Odometer';
+import ConfirmDelete from '../components/rare/ConfirmDelete';
+import { IconDownload, IconUpload } from '../components/icons';
 import type { ThemeChoice } from '../theme/theme';
 import { PROBLEM_METAS } from '../data/problems';
 
@@ -83,8 +85,8 @@ export default function Settings() {
             ].map(([label, value]) => (
               <div key={label} className="px-4 py-3">
                 <p className="text-tiny text-muted">{label}</p>
-                <p className="mt-0.5 text-title font-medium text-fg">
-                  <AnimatedNumber value={Number(value)} />
+                <p className="mt-0.5 flex text-title font-medium text-fg">
+                  <Odometer value={Number(value)} />
                 </p>
               </div>
             ))}
@@ -115,19 +117,19 @@ export default function Settings() {
                   e.target.value = '';
                 }}
               />
-              <Button
-                variant="danger"
-                className="ml-auto"
-                onClick={() => {
-                  if (confirm('進捗をすべて削除します。よろしいですか？')) {
+              {/* 確認はブラウザの窓ではなくこの場で。蓋が開いてから消える */}
+              <div className="ml-auto">
+                <ConfirmDelete
+                  label="リセット"
+                  question="すべて消す"
+                  confirmLabel="進捗をすべて削除する"
+                  doneLabel="消しました"
+                  onConfirm={() => {
                     reset();
                     setMessage({ tone: 'ok', text: '進捗をリセットしました。' });
-                  }
-                }}
-              >
-                <IconTrash size={14} />
-                リセット
-              </Button>
+                  }}
+                />
+              </div>
             </div>
             {message && (
               <p

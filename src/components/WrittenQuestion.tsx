@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import type { WrittenProblem } from '../types';
 import Markdown from './Markdown';
 import { Button, Card } from './ui';
+import RatingChoice from './rare/RatingChoice';
 import { IconBook, IconBulb, IconCheck } from './icons';
 import { useProgress } from '../storage/progressContext';
 import { RISE, STAGGER } from './motion';
@@ -123,28 +124,26 @@ export default function WrittenQuestion({ problem }: { problem: WrittenProblem }
           <motion.div variants={RISE}>
             <Card className="flex flex-wrap items-center gap-3 p-4">
               <span className="text-body text-muted">自己採点</span>
-              <Button
-                onClick={() => rate(problem.id, 'understood')}
-                className={
-                  rating === 'understood' ? 'border-success-line bg-success-soft text-success' : ''
-                }
-              >
-                <IconCheck size={13} />
-                理解できた
-              </Button>
-              <Button
-                onClick={() => rate(problem.id, 'review')}
-                className={
-                  rating === 'review' ? 'border-warning-line bg-warning-soft text-warning' : ''
-                }
-              >
-                要復習
-              </Button>
-              {rating && (
-                <span className="text-tiny text-subtle">
-                  {rating === 'understood' ? '正解として記録しました' : '要復習として記録しました'}
-                </span>
-              )}
+              <RatingChoice
+                testId="self-rating"
+                value={rating}
+                onChange={(key) => rate(problem.id, key)}
+                options={[
+                  {
+                    key: 'understood',
+                    label: '理解できた',
+                    tone: 'success',
+                    icon: <IconCheck size={13} />,
+                    note: '正解として記録しました',
+                  },
+                  {
+                    key: 'review',
+                    label: '要復習',
+                    tone: 'warning',
+                    note: '要復習として記録しました',
+                  },
+                ]}
+              />
             </Card>
           </motion.div>
         </motion.div>

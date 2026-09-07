@@ -18,9 +18,11 @@ import { useDuckDb, useRunShortcuts } from './useWorkbench';
 import ResultTable from './ResultTable';
 import SchemaPanel from './SchemaPanel';
 import PlanView from './PlanView';
+import GooeySegments from './rare/GooeySegments';
+import CodePanel from './rare/CodePanel';
 import Markdown from './Markdown';
 import { Button, Card } from './ui';
-import { RISE, SLIDE } from './motion';
+import { RISE } from './motion';
 import { IconBook, IconBulb, IconCheck, IconLayers, IconPlay, IconX } from './icons';
 import { useProgress } from '../storage/progressContext';
 import { detectUnpreventedReload, loadSession, saveSession } from '../storage/workbenchSession';
@@ -31,10 +33,16 @@ interface LastRun {
   result: QueryResult;
 }
 
-const TABS: [RightTab, string][] = [
-  ['result', '実行結果'],
-  ['schema', 'スキーマ'],
-  ['plan', '実行計画'],
+const TABS = [
+  { key: 'result', label: '実行結果' },
+  { key: 'schema', label: 'スキーマ' },
+  { key: 'plan', label: '実行計画' },
+];
+
+/* 見積りだけ見るか、実際に走らせて実測と比べるか */
+const PLAN_MODES = [
+  { key: 'estimate', label: '見積り', testId: 'plan-estimate' },
+  { key: 'analyze', label: '実測（ANALYZE）', testId: 'plan-analyze' },
 ];
 
 export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) {
@@ -320,25 +328,15 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
           testId="result-pane"
           className="flex min-h-[520px] flex-col overflow-hidden lg:h-[clamp(460px,calc(100vh-34rem),820px)]"
         >
-          <header className="flex h-9 shrink-0 items-stretch gap-4 border-b border-line bg-raised px-3">
-            {TABS.map(([key, label]) => (
-              <button
-                key={key}
-                onClick={() => setTab(key)}
-                className={`relative text-tiny font-medium transition-colors ${
-                  tab === key ? 'text-fg' : 'text-subtle hover:text-muted'
-                }`}
-              >
-                {label}
-                {tab === key && (
-                  <motion.span
-                    layoutId="tab-underline"
-                    transition={SLIDE}
-                    className="absolute inset-x-0 -bottom-px h-0.5 bg-accent"
-                  />
-                )}
-              </button>
-            ))}
+          <header className="flex h-9 shrink-0 items-center gap-3 border-b border-line bg-raised px-2">
+            {/* 選んだ区画が隣からちぎれて離れる。下線 1px より現在地が強く出る */}
+            <GooeySegments
+              testId="right-tabs"
+              items={TABS}
+              value={tab}
+              onChange={(key) => setTab(key as RightTab)}
+              className="h-[26px]"
+            />
             {lastRun && tab === 'result' && !runError && (
               <span className="tnum ml-auto self-center text-tiny text-subtle">
                 {lastRun.result.rows.length} 行 · {lastRun.result.elapsedMs.toFixed(1)} ms
@@ -350,28 +348,15 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
             {tab === 'plan' &&
               (plan ? (
                 <>
-                  {/* 見積りだけ見るか、実際に走らせて実測と比べるか */}
-                  <div className="flex items-center gap-1.5 border-b border-line px-3 py-1.5">
-                    {[
-                      { on: false, label: '見積り' },
-                      { on: true, label: '実測（ANALYZE）' },
-                    ].map((mode) => (
-                      <button
-                        key={mode.label}
-                        type="button"
-                        onClick={() => void handleExplain(mode.on)}
-                        disabled={busy}
-                        aria-pressed={analyze === mode.on}
-                        data-testid={mode.on ? 'plan-analyze' : 'plan-estimate'}
-                        className={`rounded-full border px-2.5 py-0.5 text-tiny font-medium transition-colors disabled:opacity-45 ${
-                          analyze === mode.on
-                            ? 'border-accent-line bg-accent-soft text-accent'
-                            : 'border-line bg-surface text-muted hover:text-fg'
-                        }`}
-                      >
-                        {mode.label}
-                      </button>
-                    ))}
+                  <div className="flex items-center border-b border-line px-2 py-1.5">
+                    <GooeySegments
+                      testId="plan-modes"
+                      items={PLAN_MODES}
+                      value={analyze ? 'analyze' : 'estimate'}
+                      onChange={(key) => void handleExplain(key === 'analyze')}
+                      disabled={busy}
+                      className="h-[24px]"
+                    />
                   </div>
                   <PlanView plan={plan} />
                 </>
@@ -532,12 +517,8 @@ export default function SqlWorkbench({ problem }: { problem: SqlQueryProblem }) 
           className="max-w-prose-wide space-y-3"
         >
           <Card className="overflow-hidden">
-            <p className="border-b border-line bg-raised px-4 py-2 text-tiny font-medium text-muted">
-              模範解答
-            </p>
-            <pre className="overflow-x-auto bg-sunken p-4 font-mono text-small leading-relaxed text-fg">
-              {problem.expected_query.trim()}
-            </pre>
+            {/* 行ごとに少し遅れて出る。手元に写せるようコピーも置く */}
+            <CodePanel code={problem.expected_query} title="模範解答" />
             {problem.alternative_md && (
               <div className="border-t border-line p-4">
                 <Markdown>{problem.alternative_md}</Markdown>

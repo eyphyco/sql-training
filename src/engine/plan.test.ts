@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { countNodes, parsePlan } from './plan';
+import { countNodes, flattenExecution, parsePlan } from './plan';
+import type { PlanNode } from './plan';
 
 /*
   実データの形をそのまま縮めたもの（DuckDB-WASM から採取）。
@@ -134,5 +135,42 @@ describe('parsePlan — 読み取れないとき', () => {
     ['中身が空', 'physical_plan', 'null'],
   ])('%s は null を返す（呼び出し側が落ちないように）', (_name, key, json) => {
     expect(parsePlan(key, json)).toBeNull();
+  });
+});
+
+describe('flattenExecution', () => {
+  const node = (name: string, children: PlanNode[] = []): PlanNode => ({
+    name,
+    info: [],
+    rows: null,
+    actualRows: null,
+    ms: null,
+    children,
+  });
+
+  it('葉から根へ、後行順に並べる', () => {
+    const tree = node('ORDER_BY', [
+      node('HASH_JOIN', [node('SEQ_SCAN customers'), node('SEQ_SCAN orders')]),
+    ]);
+    expect(flattenExecution(tree).map((n) => n.name)).toEqual([
+      'SEQ_SCAN customers',
+      'SEQ_SCAN orders',
+      'HASH_JOIN',
+      'ORDER_BY',
+    ]);
+  });
+
+  it('子が無ければ自分だけ', () => {
+    expect(flattenExecution(node('SEQ_SCAN')).map((n) => n.name)).toEqual(['SEQ_SCAN']);
+  });
+
+  it('ノード数は countNodes と一致する', () => {
+    const tree = node('A', [node('B', [node('C')]), node('D')]);
+    expect(flattenExecution(tree)).toHaveLength(countNodes(tree));
+  });
+
+  it('同じ物を返す（画面側が参照で今いる所を判定するため）', () => {
+    const leaf = node('SEQ_SCAN');
+    expect(flattenExecution(node('ORDER_BY', [leaf]))[0]).toBe(leaf);
   });
 });

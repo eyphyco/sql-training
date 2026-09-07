@@ -4,6 +4,8 @@ import { PHASES } from '../data/phases';
 import { META_BY_ID, PROBLEM_METAS } from '../data/problems';
 import { useProgress } from '../storage/progressContext';
 import { Button, Card, Meter, SectionTitle, Tag } from '../components/ui';
+import Odometer from '../components/rare/Odometer';
+import ActivityHeatmap from '../components/rare/ActivityHeatmap';
 import { IconCheck, IconChevronRight, IconX } from '../components/icons';
 import type { ProblemType } from '../types';
 
@@ -46,10 +48,12 @@ export default function Home() {
             <div className="min-w-[14rem] flex-1">
               {/* このページの見出し。他ページと同じく h1 を 1 つ置く */}
               <h1 className="text-tiny font-medium tracking-tight text-muted">学習の進捗</h1>
-              <div className="mt-2 mb-3 flex items-baseline gap-1.5">
-                <span className="tnum text-[2.5rem] leading-none font-semibold tracking-tight text-fg">
-                  {totalSolved}
-                </span>
+              {/* 解いた数は桁の輪を回して出す。1 問増えたことがその場で分かる */}
+              <div className="mt-2 mb-3 flex items-center gap-1.5">
+                <Odometer
+                  value={totalSolved}
+                  className="text-[2.5rem] font-semibold tracking-tight text-fg"
+                />
                 <span className="tnum text-lead text-subtle">/ {total} 問</span>
               </div>
               <Meter value={totalSolved} total={total} />
@@ -74,9 +78,9 @@ export default function Home() {
               return (
                 <div key={type} className="px-5 py-3">
                   <p className="text-tiny text-muted">{TYPE_LABEL[type]}</p>
-                  <p className="tnum mt-0.5 text-lead font-medium text-fg">
-                    {s.solved}
-                    <span className="text-small text-subtle"> / {s.total}</span>
+                  <p className="mt-0.5 flex items-center gap-1 text-lead font-medium text-fg">
+                    <Odometer value={s.solved} />
+                    <span className="tnum text-small text-subtle">/ {s.total}</span>
                   </p>
                 </div>
               );
@@ -145,49 +149,60 @@ export default function Home() {
         </section>
       </div>
 
-      {/* 学習の記録。横に並べて、狭い画面では 1 列に落ちる */}
+      {/*
+        学習の記録。左に「いつ」、右に「何を」。
+        枡は幅が決まっているので、余った幅は履歴の側に渡す。
+      */}
       <section>
         <SectionTitle>学習の記録</SectionTitle>
-        {recent.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-line px-4 py-6 text-center text-small leading-relaxed text-subtle">
-            まだ記録がありません。
-            <br />
-            上のボタンから始めましょう。
-          </p>
-        ) : (
-          <ol className="grid gap-x-4 gap-y-px sm:grid-cols-2 xl:grid-cols-4">
-            {recent.map((h, i) => {
-              const p = META_BY_ID.get(h.problemId);
-              return (
-                <li key={`${h.problemId}-${h.at}-${i}`}>
-                  <Link
-                    to={`/problems/${h.problemId}`}
-                    className="flex items-start gap-2 rounded-sm px-2 py-1.5 hover:bg-raised"
-                  >
-                    <span
-                      className={`mt-0.5 shrink-0 ${h.correct ? 'text-success' : 'text-subtle'}`}
-                    >
-                      {h.correct ? <IconCheck size={12} /> : <IconX size={12} />}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-small text-fg">
-                        {p?.title ?? h.problemId}
-                      </span>
-                      <span className="tnum text-micro text-subtle">
-                        {new Date(h.at).toLocaleString('ja-JP', {
-                          month: 'numeric',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </span>
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ol>
-        )}
+        <div className="grid items-start gap-3 xl:grid-cols-[auto_minmax(0,1fr)]">
+          {/* いつ学んだかを枡で。続いているか、空いているかが一目で分かる */}
+          <Card className="min-w-0 p-4">
+            <ActivityHeatmap progress={progress} />
+          </Card>
+          {recent.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-line px-4 py-6 text-center text-small leading-relaxed text-subtle">
+              まだ記録がありません。
+              <br />
+              上のボタンから始めましょう。
+            </p>
+          ) : (
+            <Card className="p-2">
+              <ol className="grid gap-x-4 gap-y-px sm:grid-cols-2">
+                {recent.map((h, i) => {
+                  const p = META_BY_ID.get(h.problemId);
+                  return (
+                    <li key={`${h.problemId}-${h.at}-${i}`}>
+                      <Link
+                        to={`/problems/${h.problemId}`}
+                        className="flex items-start gap-2 rounded-sm px-2 py-1.5 hover:bg-raised"
+                      >
+                        <span
+                          className={`mt-0.5 shrink-0 ${h.correct ? 'text-success' : 'text-subtle'}`}
+                        >
+                          {h.correct ? <IconCheck size={12} /> : <IconX size={12} />}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-small text-fg">
+                            {p?.title ?? h.problemId}
+                          </span>
+                          <span className="tnum text-micro text-subtle">
+                            {new Date(h.at).toLocaleString('ja-JP', {
+                              month: 'numeric',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ol>
+            </Card>
+          )}
+        </div>
       </section>
     </div>
   );

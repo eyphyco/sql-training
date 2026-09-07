@@ -163,3 +163,22 @@ export function parsePlan(key: string, json: string): QueryPlan | null {
 export function countNodes(node: PlanNode): number {
   return 1 + node.children.reduce((n, c) => n + countNodes(c), 0);
 }
+
+/**
+ * 実行される順に並べ直す。
+ *
+ * 木の根は最後の演算子で、子が入力。つまり動く順は葉から根への後行順になる。
+ * 表示は根を上に置くので、この並びは画面では下から上へ進む。
+ *
+ * 兄弟の間の順序までは JSON から決められない（結合の左右がどちらから
+ * 動くかは実装しだい）。ここでは書かれている順をそのまま使う。
+ */
+export function flattenExecution(node: PlanNode): PlanNode[] {
+  const order: PlanNode[] = [];
+  const walk = (n: PlanNode) => {
+    n.children.forEach(walk);
+    order.push(n);
+  };
+  walk(node);
+  return order;
+}

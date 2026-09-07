@@ -8,6 +8,7 @@ import { Card, Tag } from '../components/ui';
 import CurriculumProgress from '../components/CurriculumProgress';
 import ReadingProgress from '../components/ReadingProgress';
 import ChapterNav from '../components/ChapterNav';
+import SectionRail from '../components/rare/SectionRail';
 import { IconCheck, IconChevronLeft, IconChevronRight } from '../components/icons';
 import type { PhaseId } from '../types';
 
@@ -39,6 +40,8 @@ export default function LearnChapter() {
     */
     <div className="grid gap-6 lg:grid-cols-[minmax(14rem,17rem)_minmax(0,62rem)]">
       <ReadingProgress />
+      {/* 右端の節目盛り。横に余白のある画面でだけ出る（情報は左の目次にもある） */}
+      <SectionRail sections={lesson.sections} />
 
       <aside className="lg:col-start-1 lg:row-start-1">
         <div className="lg:sticky lg:top-20">

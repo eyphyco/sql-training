@@ -5,7 +5,8 @@ import { ALL_TAGS, PROBLEM_METAS, TAG_COUNTS } from '../data/problems';
 import { isSyntaxTag } from '../data/tags';
 import { LEVEL_FULL_LABEL, LEVEL_LABEL, LEVEL_TONE, PHASES, PHASE_BY_ID } from '../data/phases';
 import { useProgress } from '../storage/progressContext';
-import { AnimatedNumber, Tag } from '../components/ui';
+import { Tag } from '../components/ui';
+import Odometer from '../components/rare/Odometer';
 import { IconCheck, IconChevronDown, IconDash, IconSearch, IconX } from '../components/icons';
 import { COLLAPSE, EASE_OUT, SLIDE } from '../components/motion';
 import {
@@ -191,8 +192,8 @@ export default function ProblemList() {
     <div className="space-y-5">
       <div className="flex items-baseline justify-between gap-4">
         <h1 className="text-lg font-semibold tracking-tight text-fg">問題</h1>
-        <span className="tnum text-small text-subtle">
-          <AnimatedNumber value={shown.length} className="text-fg" /> / {PROBLEM_METAS.length} 問
+        <span className="tnum flex items-center gap-1 text-small text-subtle">
+          <Odometer value={shown.length} className="text-fg" /> / {PROBLEM_METAS.length} 問
         </span>
       </div>
 
