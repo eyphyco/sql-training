@@ -18,7 +18,7 @@ npm run dev        # http://localhost:5173
 | コマンド | 内容 |
 |---|---|
 | `npm run dev` / `build` / `preview` | 開発サーバ / 型チェック付きビルド / ビルド結果の配信（4173 番） |
-| `npm run test` | 単体テスト（vitest・324 件・約 2 秒） |
+| `npm run test` | 単体テスト（vitest・305 件・約 2 秒） |
 | `npm run validate` | **問題データの検証**。全問の SQL を Node の DuckDB で実際に実行する |
 | `npm run smoke` | ブラウザでの通し操作（要 `preview`・約 1 分） |
 | `npm run contrast` | 配色のコントラスト比を実描画のピクセルから測る（要 `preview`） |
@@ -279,7 +279,6 @@ DOM 上は本文を先に置き、サイドバーは `lg:col-start-1` で左へ�
 | --- | --- | --- |
 | Animated Counter | 解いた問数、種類ごとの数、一覧の件数、進捗データの 3 値 | 小数・桁区切り・符号を落として 0 以上の整数だけに。輪は読み上げに載せず、最終値だけ `sr-only` で渡す |
 | Gooey Nav | 右ペインのタブ（実行結果／スキーマ／実行計画）、実行計画の見積り／実測 | 下線 1px を置き換え。色は文字列ではなく CSS 変数を直接使う |
-| GitHub Activity | ホームの学習ヒートマップ | 濃さは絶対値ではなく「いちばん多い日」を基準にした相対評価。枡 180 個は Motion ではなく CSS の遅延で出す（ヘッダの動きからコマを奪うため） |
 | Step Player | 実行計画を実行順に 1 歩ずつ送る | 再生 ⇄ 停止の変形は flubber を入れず、2 つの四角形が三角形の左右半分になるよう頂点を手で合わせて `d` を補間する |
 | Delete Button | 進捗のリセット | `window.confirm()` を置き換え。蓋の角度と本体の上端を別々に動かすのは元のまま |
 | Proximity Sidebar | 章ページ右端の節目盛り（2xl 以上） | 近づいた罫の名前も出す（Scroll Progress の考え）。左の目次と役割が重ならないよう、章ではなく節だけを持たせた |
@@ -287,7 +286,7 @@ DOM 上は本文を先に置き、サイドバーは `lg:col-start-1` で左へ�
 | Emoji Reaction | 記述式の自己採点 | 択が 2 つなので盆は開かない。押した手応え（沈んで戻る・輪が広がる）だけ |
 | Folder | 教材の目次の章カード | フォルダは描かない。紙が扇状にずれるバネと 1 枚ずつの遅れだけを、節の一覧に当てる |
 
-採らなかったもの: Fluid Orb（WebGL のシェーダ。1〜2 秒の初期化表示に対して重い）、Grid Reveal（画像の読み込み用でこのサイトに画像が無い）、OTP Input / Duration Picker / Gravity Letters / Family Drawer / 各種サイドバー（置き場所が無い）。
+採らなかったもの: GitHub Activity（学習ヒートマップとして一度入れたが、日ごとの濃淡は「次に何を解くか」の判断に使えず、ホームの一等地を取るだけだった）、Fluid Orb（WebGL のシェーダ。1〜2 秒の初期化表示に対して重い）、Grid Reveal（画像の読み込み用でこのサイトに画像が無い）、OTP Input / Duration Picker / Gravity Letters / Family Drawer / 各種サイドバー（置き場所が無い）。
 
 ### ガラス（半透明の面）
 

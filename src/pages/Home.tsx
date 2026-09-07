@@ -5,7 +5,6 @@ import { META_BY_ID, PROBLEM_METAS } from '../data/problems';
 import { useProgress } from '../storage/progressContext';
 import { Button, Card, Meter, SectionTitle, Tag } from '../components/ui';
 import Odometer from '../components/rare/Odometer';
-import ActivityHeatmap from '../components/rare/ActivityHeatmap';
 import { IconCheck, IconChevronRight, IconX } from '../components/icons';
 import type { ProblemType } from '../types';
 
@@ -149,60 +148,49 @@ export default function Home() {
         </section>
       </div>
 
-      {/*
-        学習の記録。左に「いつ」、右に「何を」。
-        枡は幅が決まっているので、余った幅は履歴の側に渡す。
-      */}
+      {/* 学習の記録。横に並べて、狭い画面では 1 列に落ちる */}
       <section>
         <SectionTitle>学習の記録</SectionTitle>
-        <div className="grid items-start gap-3 xl:grid-cols-[auto_minmax(0,1fr)]">
-          {/* いつ学んだかを枡で。続いているか、空いているかが一目で分かる */}
-          <Card className="min-w-0 p-4">
-            <ActivityHeatmap progress={progress} />
-          </Card>
-          {recent.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-line px-4 py-6 text-center text-small leading-relaxed text-subtle">
-              まだ記録がありません。
-              <br />
-              上のボタンから始めましょう。
-            </p>
-          ) : (
-            <Card className="p-2">
-              <ol className="grid gap-x-4 gap-y-px sm:grid-cols-2">
-                {recent.map((h, i) => {
-                  const p = META_BY_ID.get(h.problemId);
-                  return (
-                    <li key={`${h.problemId}-${h.at}-${i}`}>
-                      <Link
-                        to={`/problems/${h.problemId}`}
-                        className="flex items-start gap-2 rounded-sm px-2 py-1.5 hover:bg-raised"
-                      >
-                        <span
-                          className={`mt-0.5 shrink-0 ${h.correct ? 'text-success' : 'text-subtle'}`}
-                        >
-                          {h.correct ? <IconCheck size={12} /> : <IconX size={12} />}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-small text-fg">
-                            {p?.title ?? h.problemId}
-                          </span>
-                          <span className="tnum text-micro text-subtle">
-                            {new Date(h.at).toLocaleString('ja-JP', {
-                              month: 'numeric',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </span>
-                        </span>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ol>
-            </Card>
-          )}
-        </div>
+        {recent.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-line px-4 py-6 text-center text-small leading-relaxed text-subtle">
+            まだ記録がありません。
+            <br />
+            上のボタンから始めましょう。
+          </p>
+        ) : (
+          <ol className="grid gap-x-4 gap-y-px sm:grid-cols-2 xl:grid-cols-4">
+            {recent.map((h, i) => {
+              const p = META_BY_ID.get(h.problemId);
+              return (
+                <li key={`${h.problemId}-${h.at}-${i}`}>
+                  <Link
+                    to={`/problems/${h.problemId}`}
+                    className="flex items-start gap-2 rounded-sm px-2 py-1.5 hover:bg-raised"
+                  >
+                    <span
+                      className={`mt-0.5 shrink-0 ${h.correct ? 'text-success' : 'text-subtle'}`}
+                    >
+                      {h.correct ? <IconCheck size={12} /> : <IconX size={12} />}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-small text-fg">
+                        {p?.title ?? h.problemId}
+                      </span>
+                      <span className="tnum text-micro text-subtle">
+                        {new Date(h.at).toLocaleString('ja-JP', {
+                          month: 'numeric',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ol>
+        )}
       </section>
     </div>
   );

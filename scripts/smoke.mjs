@@ -1380,28 +1380,6 @@ try {
     );
   });
 
-  await step('学んだ日が枡で並ぶ', async () => {
-    await page.goto(base, { waitUntil: 'networkidle' });
-    await page.waitForSelector('[data-testid="activity-heatmap"]');
-    await page.waitForTimeout(700);
-    const cells = page.locator('[data-testid="activity-cell"]');
-    const total = await cells.count();
-    const lit = await cells.evaluateAll(
-      (els) => els.filter((e) => Number(e.dataset.level) > 0).length,
-    );
-    check(
-      '学んだ日が枡で並び、解いた日に色が付く',
-      total > 150 && lit > 0,
-      `${total} 枡・色つき ${lit} 日`,
-    );
-    // 触れるとその日の内訳が出る
-    const litCell = page.locator('[data-testid="activity-cell"][data-level="4"]').first();
-    await litCell.hover();
-    await page.waitForSelector('[data-testid="activity-tip"]', { timeout: 3000 });
-    const tip = await page.locator('[data-testid="activity-tip"]').innerText();
-    check('枡に触れるとその日の内訳が出る', /月.*日/.test(tip), tip);
-  });
-
   await step('節の目盛りは近づいた所だけ伸びる', async () => {
     // 目盛りは横に余白のある画面でだけ出す
     const wideCtx = await browser.newContext({ viewport: { width: 1700, height: 1000 } });

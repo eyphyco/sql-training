@@ -480,38 +480,3 @@ body {
   box-shadow: inset 2px 0 0 0 var(--c-danger);
 }
 
-/*
-  学習の記録の枡が出るときの動き。
-
-  枡は 180 個ある。1 つずつ Motion の要素にすると、ホームを開いた瞬間に
-  180 個ぶんの初期化が走り、同じフレームで動いている他のもの（ヘッダの
-  テーマ切り替えなど）からコマを奪う。見た目は同じなので CSS で出す。
-
-  fill-mode は backwards。終わったあとは素の状態に戻すので、
-  そのあとの hover の拡大がアニメーションに上書きされない。
-*/
-@keyframes cell-in {
-  from {
-    opacity: 0;
-    transform: scale(0.6);
-  }
-}
-
-.activity-cell {
-  animation: cell-in 0.2s cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
-  transition: transform 0.15s cubic-bezier(0.22, 0.61, 0.36, 1);
-}
-
-.activity-cell:hover {
-  transform: scale(1.35);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .activity-cell {
-    animation: none;
-    transition: none;
-  }
-  .activity-cell:hover {
-    transform: none;
-  }
-}
